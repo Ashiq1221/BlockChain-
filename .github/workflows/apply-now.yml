@@ -1,0 +1,33 @@
+name: Submit Applications
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/x-automation-66itrv
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install playwright python-dotenv
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      - name: Run applications
+        run: python apply_ci.py
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-screenshots
+          path: screenshots/
