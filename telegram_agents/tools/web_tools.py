@@ -39,6 +39,8 @@ async def grok_search(prompt: str, sources: list[str] | None = None) -> str:
                 },
                 timeout=_TIMEOUT,
             ) as r:
+                if r.status == 403:
+                    return ""  # no credits — fall back to web scraping silently
                 if r.status != 200:
                     return ""
                 data = await r.json()
