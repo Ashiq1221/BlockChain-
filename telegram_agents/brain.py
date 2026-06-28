@@ -43,24 +43,28 @@ HARD RULES (never break):
 
 # Web search queries for discovering opportunities
 DISCOVERY_QUERIES = [
-    "new web3 blockchain project hiring developer ambassador 2026",
-    "DeFi NFT gaming AI project community manager moderator 2026",
-    "blockchain startup expanding team remote developer python 2026",
-    "site:twitter.com web3 project hiring ambassador open applications 2026",
-    "crypto project team we are looking for 2026",
-    "web3 AI project content creator role open 2026",
+    "web3 blockchain project hiring ambassador community manager 2026",
+    "DeFi NFT AI project we are hiring moderator content creator 2026",
+    "blockchain startup hiring remote developer python engineer 2026",
+    "crypto project open roles ambassador social media manager 2026",
+    "web3 AI project community lead content creator opening 2026",
+    "site:t.me web3 project hiring community manager ambassador 2026",
+    "telegram web3 group hiring team member 2026",
+    "new crypto project launch team community builder 2026",
 ]
 
 
 class AgentBrain:
     def __init__(self, tools: ToolRegistry, db: Database, memory: Memory, user_client=None):
-        self.tools       = tools
-        self.db          = db
-        self.memory      = memory
-        self.client      = user_client or tools.client
-        self.cycle       = 0
+        self.tools        = tools
+        self.db           = db
+        self.memory       = memory
+        self.client       = user_client or tools.client
+        self.cycle        = 0
         self.action_log: list[str] = []
-        self._contacted: set[str]  = set()  # project+person keys — avoid duplicate DMs
+        self._contacted: set[str]  = set()
+        self._paused      = False   # set True/False via bot /pause /resume
+        self._hunt_every  = 2       # run smart hunt every N cycles (default: every 2nd)
 
     # ══════════════════════════════════════════════════════════════════════════
     #  500 IQ SMART HUNT PIPELINE
@@ -86,7 +90,7 @@ class AgentBrain:
         # ── SECONDARY: Tavily web search ─────────────────────────────────────
         console.print("    [dim]Tavily web search...[/dim]")
         snippets = []
-        for q in DISCOVERY_QUERIES[:4]:
+        for q in DISCOVERY_QUERIES[:6]:
             results = await web_tools.web_search(q, num=6)
             for r in results:
                 snippets.append(
@@ -337,7 +341,7 @@ RULES — ALL must be followed:
         console.print(f"[cyan]→ {len(projects)} candidate projects[/cyan]")
 
         contacted = 0
-        for project in projects[:5]:  # cap at 5 per cycle to stay safe
+        for project in projects[:8]:  # up to 8 per cycle
             name = project.get("name", "unknown")
             role = project.get("role", "role")
             console.print(f"\n  [bold]◆ {name}[/bold] — {role}")
@@ -397,7 +401,7 @@ RULES — ALL must be followed:
                 continue
 
         # Mark all projects seen this cycle so we don't re-process next cycle
-        for p in projects[:5]:
+        for p in projects[:8]:
             self._contacted.add(p.get("name", ""))
 
         console.print(f"\n[bold green]Hunt done: {contacted} DMs sent[/bold green]")
@@ -548,15 +552,18 @@ RULES — ALL must be followed:
             border_style="magenta",
         ))
 
-        hunt_every = 3  # run smart hunt every N cycles
-
         while True:
+            # Respect pause flag — check every 10s while paused
+            if self._paused:
+                await asyncio.sleep(10)
+                continue
+
             self.cycle += 1
             console.print(Rule(f"[bold]CYCLE {self.cycle} — {datetime.now().strftime('%H:%M:%S')}[/bold]"))
 
             try:
-                # Smart hunt pipeline on every 3rd cycle
-                if self.cycle % hunt_every == 0:
+                # Smart hunt on every Nth cycle (default every 2nd)
+                if self.cycle % self._hunt_every == 0:
                     await self.smart_hunt_cycle()
 
                 # General loop — always runs
