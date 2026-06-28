@@ -145,22 +145,21 @@ async def main():
         ))
 
         async def opportunity_loop():
-            """Find and save roles every 3 hours — no auto-sending."""
+            """Hunt and apply to roles every 3 hours autonomously."""
             while True:
                 try:
-                    await opp_hunter.run(max_apply=0)  # find only, never DM
+                    await opp_hunter.run(max_apply=10)
                 except Exception as e:
                     console.print(f"[red]OpportunityHunter error: {e}[/red]")
                 await asyncio.sleep(3 * 60 * 60)
 
         async def keep_alive():
-            """Keep the event loop alive (no autonomous actions)."""
             while True:
                 await asyncio.sleep(60)
 
         await asyncio.gather(
-            keep_alive(),       # bot stays online, waits for your commands
-            opportunity_loop(), # silently finds roles every 3 hrs, no DMs
+            keep_alive(),
+            opportunity_loop(),  # autonomous: finds + applies every 3 hrs
         )
 
     await db.close()
