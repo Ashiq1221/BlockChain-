@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
 from telegram_agents.tools import ai_tools, web_tools, telegram_tools
+from telegram_agents.config import Config as _Cfg
 from telegram_agents.tools.memory import Memory
 from telegram_agents.tools.tool_registry import ToolRegistry
 from telegram_agents.database import Database
@@ -69,37 +70,59 @@ class AgentBrain:
 
     async def discover_opportunities(self) -> list[dict]:
         """
-        Run multiple web searches, then use AI to extract structured project data.
+        PRIMARY: Grok live X/Twitter + web search → real-time project discovery.
+        FALLBACK: Traditional web scraping with DISCOVERY_QUERIES.
         Returns: [{"name","role","tg_username","website","description"}, ...]
         """
-        snippets = []
-        for q in DISCOVERY_QUERIES[:4]:
-            results = await web_tools.web_search(q, num=5)
-            for r in results:
-                snippets.append(
-                    f"Title: {r.get('title','')}\n"
-                    f"Snippet: {r.get('snippet','')}\n"
-                    f"URL: {r.get('url','')}"
-                )
+        raw_text = ""
 
-        if not snippets:
+        # ── PRIMARY: Grok live search ────────────────────────────────────────
+        if _Cfg.XAI_API_KEY:
+            console.print("    [dim cyan]Grok live X/Twitter search...[/dim cyan]")
+            # Run both project + job searches in parallel
+            grok_projects, grok_jobs = await asyncio.gather(
+                web_tools.grok_find_projects(),
+                web_tools.grok_find_jobs(),
+            )
+            combined = "\n\n".join(filter(None, [grok_projects, grok_jobs]))
+            if combined and len(combined) > 100:
+                raw_text = combined
+                console.print(f"    [cyan]Grok: {len(grok_projects)} project chars + {len(grok_jobs)} job chars[/cyan]")
+
+        # ── FALLBACK: Web scraping ────────────────────────────────────────────
+        if not raw_text:
+            console.print("    [dim]Grok unavailable — falling back to web scraping...[/dim]")
+            snippets = []
+            for q in DISCOVERY_QUERIES[:4]:
+                results = await web_tools.web_search(q, num=5)
+                for r in results:
+                    snippets.append(
+                        f"Title: {r.get('title','')}\n"
+                        f"Snippet: {r.get('snippet','')}\n"
+                        f"URL: {r.get('url','')}"
+                    )
+            raw_text = "\n---\n".join(snippets[:20])
+
+        if not raw_text:
             return []
 
-        raw = ai_tools.think(
+        # ── AI structures the raw data ────────────────────────────────────────
+        structured = ai_tools.think(
             system_addon="""Extract Web3/AI/blockchain projects that are ACTIVELY hiring or seeking roles.
-Return ONLY valid JSON array (no markdown, no explanation):
-[{"name":"ProjectName","role":"developer|ambassador|CM|moderator|creator","tg_username":"@handle_or_empty","website":"url_or_empty","description":"one sentence about the project and the role"}]
+Return ONLY valid JSON array (no markdown, no extra text):
+[{"name":"ProjectName","role":"developer|ambassador|CM|moderator|creator","tg_username":"@handle_or_empty","website":"url_or_empty","description":"one sentence about project + role"}]
 Rules:
-- Include only if there is a clear hiring/role signal in the text
-- Max 8 entries, no duplicates
-- tg_username: only include if you see t.me/ or @handle clearly in the text, else leave empty""",
-            user_prompt="Search results:\n" + "\n---\n".join(snippets[:20]),
-            max_tokens=1000,
+- Only include projects with a clear, real hiring/role signal
+- Max 10 entries, no duplicates
+- tg_username: only if you see t.me/ or @handle clearly mentioned, else leave empty string
+- description: include the SOURCE URL or tweet link if available""",
+            user_prompt=f"Data (from live Grok search + web):\n{raw_text[:4000]}",
+            max_tokens=1200,
         )
+
         try:
-            m = re.search(r'\[.*?\]', raw, re.DOTALL)
+            m = re.search(r'\[.*?\]', structured, re.DOTALL)
             projects = json.loads(m.group()) if m else []
-            # Filter already contacted this session
             return [p for p in projects if isinstance(p, dict) and p.get("name") not in self._contacted]
         except Exception:
             return []

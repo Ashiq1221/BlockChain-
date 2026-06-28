@@ -1,8 +1,91 @@
-"""Web search — multiple engines with automatic fallback."""
+"""Web search — Grok live X/Twitter search + multi-engine fallback."""
+import json
 import re
 import aiohttp
 from bs4 import BeautifulSoup
 from telegram_agents.config import Config
+
+_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+
+# ── Grok xAI live search (primary — real-time X/Twitter + web) ───────────────
+
+async def grok_search(prompt: str, sources: list[str] | None = None) -> str:
+    """
+    Query Grok with live X/Twitter + web search enabled.
+    Returns Grok's full answer text (synthesized from real-time data).
+    Falls back to empty string if key not set or call fails.
+    """
+    if not Config.XAI_API_KEY:
+        return ""
+    if sources is None:
+        sources = ["x", "web"]
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {Config.XAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": Config.XAI_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "search_parameters": {
+                        "mode": "on",
+                        "sources": [{"type": src} for src in sources],
+                        "max_search_results": 15,
+                    },
+                },
+                timeout=_TIMEOUT,
+            ) as r:
+                if r.status != 200:
+                    return ""
+                data = await r.json()
+                text = data["choices"][0]["message"]["content"]
+                # Append citation URLs so downstream code can extract them
+                citations = data.get("citations", [])
+                if citations:
+                    urls = "\n".join(f"SOURCE: {c.get('url', c)}" for c in citations[:10])
+                    text = text + "\n\n" + urls
+                return text
+    except Exception:
+        return ""
+
+
+async def grok_find_projects() -> str:
+    """Ask Grok to find the latest Web3/AI/blockchain projects that are hiring."""
+    return await grok_search(
+        "Search X/Twitter and the web RIGHT NOW and find me 10 brand-new Web3, AI, or blockchain "
+        "projects from 2026 that are actively hiring or seeking: developers, ambassadors, community "
+        "managers, moderators, or content creators.\n\n"
+        "For each project provide:\n"
+        "- Project name\n"
+        "- What they do (1 sentence)\n"
+        "- The role(s) they need\n"
+        "- Their Telegram username (t.me/...) if you can find it\n"
+        "- Source URL or tweet\n\n"
+        "Focus on REAL recent announcements, not generic job boards. "
+        "Include DeFi, NFT, gaming, L1/L2 chains, AI x Web3 projects.",
+        sources=["x", "web"],
+    )
+
+
+async def grok_find_jobs() -> str:
+    """Ask Grok to find the latest blockchain/remote developer job postings."""
+    return await grok_search(
+        "Search X/Twitter and job sites RIGHT NOW for the latest blockchain developer, "
+        "Python developer, and Web3 remote job postings from 2026.\n\n"
+        "For each job include:\n"
+        "- Company/Project name\n"
+        "- Role title\n"
+        "- Key requirements (2-3 bullet points)\n"
+        "- How to apply (Telegram, email, link)\n"
+        "- Source URL\n\n"
+        "Focus on remote positions. Include crypto exchanges, DeFi protocols, "
+        "AI x Web3 startups, and blockchain infrastructure companies.",
+        sources=["x", "web"],
+    )
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

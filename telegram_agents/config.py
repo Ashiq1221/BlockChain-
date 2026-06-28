@@ -37,6 +37,10 @@ class Config:
     GROQ_API_KEY:   str = os.getenv("GROQ_API_KEY", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+    # xAI Grok — real-time X/Twitter + web search (primary opportunity finder)
+    XAI_API_KEY:    str = os.getenv("XAI_API_KEY", "")
+    XAI_MODEL:      str = "grok-3-latest"
+
     # Bot
     BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     OWNER_ID:  int = int(os.getenv("TELEGRAM_OWNER_ID", "0"))

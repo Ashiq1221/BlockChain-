@@ -112,11 +112,39 @@ def _gemini(system: str, prompt: str, max_tokens: int) -> str:
 
 # ── Auto-fallback core ────────────────────────────────────────────────────────
 
+def _grok_xai(system: str, prompt: str, max_tokens: int) -> str:
+    """xAI Grok — fast, real-time knowledge, X/Twitter access."""
+    if not Config.XAI_API_KEY:
+        raise ValueError("No xAI key")
+    import httpx as _httpx
+    resp = _httpx.post(
+        "https://api.x.ai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {Config.XAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": Config.XAI_MODEL,
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ],
+        },
+        timeout=60,
+    )
+    if resp.status_code == 429:
+        raise RuntimeError("Grok rate limit")
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
 _PROVIDERS = [
-    ("Anthropic", _anthropic),
-    ("ChatGPT",   _openai),
-    ("Groq",      _groq),      # FREE — 14,400 req/day
-    ("Gemini",    _gemini),
+    ("Grok (xAI)",  _grok_xai),   # primary — latest knowledge, X/Twitter awareness
+    ("Anthropic",   _anthropic),
+    ("ChatGPT",     _openai),
+    ("Groq",        _groq),        # FREE — 14,400 req/day
+    ("Gemini",      _gemini),
 ]
 
 _active_provider = 0   # start with Anthropic
