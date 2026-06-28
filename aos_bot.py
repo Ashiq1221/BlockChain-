@@ -184,79 +184,111 @@ HEADERS = {
 
 # ── AGENT 1: SCOUT — Find raw opportunities ───────────────────────────────────
 
+SCOUT_QUERIES = [
+    "new web3 AI blockchain project hiring ambassador community manager 2026",
+    "DeFi NFT crypto startup hiring developer moderator telegram 2026",
+    "blockchain python developer remote job opening 2026",
+    "web3 project open roles content creator ambassador apply telegram 2026",
+    "AI crypto startup team expansion hiring 2026 telegram",
+]
+
+async def _tavily_search(query: str, max_results: int = 8) -> list[dict]:
+    """Tavily API — works through cloud proxy, no scraping needed."""
+    if not C.TAVILY_KEY:
+        return []
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": C.TAVILY_KEY,
+                    "query": query,
+                    "search_depth": "advanced",
+                    "max_results": max_results,
+                    "include_answer": True,
+                },
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as r:
+                if r.status == 200:
+                    d = await r.json()
+                    results = d.get("results", [])
+                    answer  = d.get("answer", "")
+                    return [{"title": x.get("title",""), "url": x.get("url",""),
+                             "snip": x.get("content","")[:300], "answer": answer}
+                            for x in results]
+    except Exception as e:
+        console.print(f"[yellow]  Tavily error: {e}[/yellow]")
+    return []
+
+
+async def _grok_search(prompt: str) -> str:
+    """Grok live X/Twitter + web search."""
+    if not C.XAI_KEY:
+        return ""
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                "https://api.x.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {C.XAI_KEY}",
+                         "Content-Type": "application/json"},
+                json={
+                    "model": C.XAI_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "search_parameters": {
+                        "mode": "on",
+                        "sources": [{"type": "x"}, {"type": "web"}],
+                        "max_search_results": 20,
+                    },
+                },
+                timeout=aiohttp.ClientTimeout(total=35),
+            ) as r:
+                if r.status == 200:
+                    d = await r.json()
+                    return d["choices"][0]["message"]["content"]
+                console.print(f"[yellow]  Grok status {r.status}[/yellow]")
+    except Exception as e:
+        console.print(f"[yellow]  Grok error: {e}[/yellow]")
+    return ""
+
+
 async def agent_scout() -> str:
-    """Searches Grok (X/Twitter live) + Bing + DDG for Web3/AI opportunities."""
+    """PRIMARY: Tavily API | SECONDARY: Grok live search | both via HTTPS."""
     console.print("[cyan]Agent 1 Scout: Searching...[/cyan]")
     chunks = []
 
-    # PRIMARY: Grok live X/Twitter + web
-    if C.XAI_KEY:
-        try:
-            async with aiohttp.ClientSession() as s:
-                async with s.post(
-                    "https://api.x.ai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {C.XAI_KEY}",
-                             "Content-Type": "application/json"},
-                    json={
-                        "model": C.XAI_MODEL,
-                        "messages": [{"role": "user", "content":
-                            "Search X/Twitter and web RIGHT NOW (2026) for Web3, AI, blockchain projects "
-                            "that are ACTIVELY hiring or seeking: developers, ambassadors, community "
-                            "managers, moderators, content creators.\n\n"
-                            "For each project:\n- Name\n- What they do\n- Role(s) needed\n"
-                            "- Telegram handle (t.me/xxx)\n- Source URL/tweet\n\n"
-                            "Focus on REAL announcements. Include DeFi, NFT, AI x Web3, L1/L2. "
-                            "Find at least 10 projects."}],
-                        "search_parameters": {
-                            "mode": "on",
-                            "sources": [{"type": "x"}, {"type": "web"}],
-                            "max_search_results": 20,
-                        },
-                    },
-                    timeout=aiohttp.ClientTimeout(total=35),
-                ) as r:
-                    if r.status == 200:
-                        d = await r.json()
-                        grok_text = d["choices"][0]["message"]["content"]
-                        chunks.append(f"[GROK LIVE X/TWITTER + WEB]\n{grok_text}")
-                        console.print(f"[green]  Grok: {len(grok_text)} chars[/green]")
-        except Exception as e:
-            console.print(f"[yellow]  Grok unavailable: {e}[/yellow]")
+    # ── PRIMARY: Tavily (reliable HTTPS API, works in cloud) ─────────────────
+    tavily_hits = []
+    tasks = [_tavily_search(q, max_results=6) for q in SCOUT_QUERIES]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for r in results:
+        if isinstance(r, list):
+            tavily_hits.extend(r)
 
-    # FALLBACK: Bing + DDG scraping
-    queries = [
-        "new web3 AI blockchain project hiring ambassador 2026 telegram",
-        "DeFi NFT gaming crypto startup hiring community manager 2026",
-        "blockchain python developer remote job 2026 telegram apply",
-        "web3 project looking moderator content creator 2026",
-        "AI x web3 startup team open roles telegram 2026",
-        'site:twitter.com "we are hiring" web3 crypto 2026',
-    ]
-    web_hits = []
-    async with aiohttp.ClientSession(headers=HEADERS) as s:
-        for q in queries:
-            try:
-                async with s.get("https://www.bing.com/search",
-                                 params={"q": q, "count": 5},
-                                 timeout=aiohttp.ClientTimeout(total=12)) as resp:
-                    soup = BeautifulSoup(await resp.text(), "html.parser")
-                    for r in soup.select(".b_algo")[:5]:
-                        a = r.select_one("h2 a")
-                        p = r.select_one(".b_caption p, .b_algoSlug")
-                        if a:
-                            web_hits.append({
-                                "title": a.get_text(strip=True),
-                                "url":   a.get("href", ""),
-                                "snip":  p.get_text(strip=True) if p else "",
-                            })
-                await asyncio.sleep(0.4)
-            except Exception:
-                pass
+    if tavily_hits:
+        # Deduplicate by URL
+        seen, unique = set(), []
+        for h in tavily_hits:
+            if h["url"] not in seen:
+                seen.add(h["url"])
+                unique.append(h)
+        lines = [f"- {h['title']}: {h['snip']} | {h['url']}" for h in unique[:30]]
+        chunks.append(f"[TAVILY SEARCH — {len(unique)} results]\n" + "\n".join(lines))
+        console.print(f"[green]  Tavily: {len(unique)} results[/green]")
 
-    if web_hits:
-        lines = [f"- {h['title']}: {h['snip']} | {h['url']}" for h in web_hits[:25]]
-        chunks.append(f"[WEB SEARCH — {len(web_hits)} results]\n" + "\n".join(lines))
-        console.print(f"[green]  Web: {len(web_hits)} results[/green]")
+    # ── SECONDARY: Grok live X/Twitter (if credits available) ────────────────
+    grok_text = await _grok_search(
+        "Search X/Twitter and web RIGHT NOW (2026) for Web3, AI, blockchain projects "
+        "ACTIVELY hiring or seeking developers, ambassadors, community managers, "
+        "moderators, content creators.\n\n"
+        "For each: Name | What they do | Role needed | Telegram handle | Source URL\n"
+        "Find at least 10 real projects with actual hiring signals."
+    )
+    if grok_text:
+        chunks.append(f"[GROK LIVE X/TWITTER]\n{grok_text}")
+        console.print(f"[green]  Grok: {len(grok_text)} chars[/green]")
+
+    if not chunks:
+        console.print("[red]  Scout: all sources failed[/red]")
 
     return "\n\n".join(chunks)[:8000]
 
