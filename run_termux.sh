@@ -8,6 +8,7 @@ pgrep -f "python.*bot.py" | grep -v $$ | xargs kill -15 2>/dev/null; sleep 1
 
 # Remove ALL stale SQLite lock files (DB recreates itself on start)
 rm -f telegram_agents.db-shm telegram_agents.db-wal telegram_agents.db-journal
+rm -f tg_memory.db-shm tg_memory.db-wal tg_memory.db-journal
 rm -f aos_memory.db-shm aos_memory.db-wal aos_memory.db-journal
 # If DB is stuck locked, wipe it — data recreates automatically
 python3 -c "
