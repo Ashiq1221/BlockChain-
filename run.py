@@ -31,6 +31,7 @@ from telegram_agents.tools.memory import Memory
 from telegram_agents.tools.tool_registry import ToolRegistry
 from telegram_agents.brain import AgentBrain
 from telegram_agents.commander_channel import CommanderChannel
+from telegram_agents.agents.opportunity_hunter import OpportunityHunterAgent
 
 console = Console()
 
@@ -74,13 +75,15 @@ async def main():
     async with Client(Config.SESSION_NAME, api_id=Config.API_ID,
                       api_hash=Config.API_HASH, phone_number=Config.PHONE) as client:
 
-        tools   = ToolRegistry(client, db)
-        brain   = AgentBrain(tools, db, memory)
-        channel = CommanderChannel(client, tools, db)
+        tools    = ToolRegistry(client, db)
+        brain    = AgentBrain(tools, db, memory)
+        channel  = CommanderChannel(client, tools, db)
+        opp_hunter = OpportunityHunterAgent(client, db)
 
         console.print(Panel(
             "[bold magenta]1000 IQ AUTONOMOUS AGENT — ONLINE[/bold magenta]\n\n"
             "[white]• Autonomous brain runs in background forever\n"
+            "• 🎯 Opportunity Hunter: finds ambassador/CM/mod/creator roles\n"
             "• Send commands via your [bold]Telegram Saved Messages[/bold]\n"
             "• Or give a prompt in Claude chat — I relay it instantly[/white]\n\n"
             "[dim]Saved Messages = message yourself in Telegram app[/dim]",
@@ -90,10 +93,20 @@ async def main():
         # Start command channels (GitHub + Saved Messages)
         await channel.start()
 
-        # Run autonomous brain + command channel in parallel
+        async def opportunity_loop():
+            """Hunt for ambassador/CM/moderator/content creator roles every 3 hours."""
+            while True:
+                try:
+                    await opp_hunter.run(max_opportunities=15)
+                except Exception as e:
+                    console.print(f"[red]OpportunityHunter error: {e}[/red]")
+                await asyncio.sleep(3 * 60 * 60)  # every 3 hours
+
+        # Run all loops in parallel
         await asyncio.gather(
             brain.run_forever(),       # 1000 IQ autonomous loop
             channel.poll_github(),     # GitHub command polling
+            opportunity_loop(),        # Ambassador/CM/Mod/Creator hunter
         )
 
     await db.close()
