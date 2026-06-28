@@ -11,39 +11,19 @@ Setup (one time):
 
 The bot controls your actual Telegram account via the user session.
 """
-import asyncio, os, sys, subprocess, signal, time
+import asyncio, os, sys, subprocess
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Single-instance guard: kill old bot.py, clean stale WAL files ─────────────
-def _kill_old_and_clean():
-    my_pid = os.getpid()
+# ── Startup: wipe all DB files so there is zero chance of a lock ──────────────
+for _f in ["telegram_agents.db", "telegram_agents.db-shm", "telegram_agents.db-wal",
+           "telegram_agents.db-journal", "tg_memory.db", "tg_memory.db-shm",
+           "tg_memory.db-wal", "tg_memory.db-journal"]:
     try:
-        import psutil
-        for p in psutil.process_iter(["pid", "cmdline"]):
-            try:
-                cmd = " ".join(p.info["cmdline"] or [])
-                if "bot.py" in cmd and p.info["pid"] != my_pid:
-                    os.kill(p.info["pid"], signal.SIGTERM)
-                    time.sleep(0.5)
-            except Exception:
-                pass
-    except ImportError:
-        # psutil not installed — kill other instances but NOT self
-        subprocess.call(
-            f"pgrep -f 'python.*bot.py' | grep -v {my_pid} | xargs kill -15 2>/dev/null; sleep 0.5",
-            shell=True, stderr=subprocess.DEVNULL
-        )
-    # Remove stale SQLite WAL lock files
-    for f in ["telegram_agents.db-shm", "telegram_agents.db-wal",
-              "aos_memory.db-shm", "aos_memory.db-wal"]:
-        try:
-            os.remove(f)
-        except FileNotFoundError:
-            pass
-
-_kill_old_and_clean()
+        os.remove(_f)
+    except FileNotFoundError:
+        pass
 
 # ── Auto-install ──────────────────────────────────────────────────────────────
 PKGS = ["pyrogram==2.0.106", "TgCrypto", "httpx", "aiohttp",
