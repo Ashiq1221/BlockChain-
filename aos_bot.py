@@ -32,6 +32,29 @@ HUNT_INTERVAL = 3600   # autonomous hunt every 60 min
 _hunt_running = False
 _last_hunt    = 0.0
 
+# ── Ashiq's profile — used by Writer agent for every DM ──────────────────────
+MY_PROFILE = """
+NAME: Ashiq (Telegram: @ashiq80 | Email: naveeddurfi@gmail.com | Twitter: @Ganaie__suhail)
+LOCATION: Kashmir, India (fully remote)
+
+TOP ACHIEVEMENTS:
+- Grew a Web3 Twitter/X account to 16,000+ followers — 100% organic, zero paid
+- Built & operated a 6,000+ member community across Telegram, Discord, OpenChat, DSCVR
+- Served as public voice & growth engine for EMC Protocol (AI compute), ICPepeworld, Network3, LingoAI, RIDO, JarvisBot_AI
+- Owned strategy, writing, design, analytics solo — founder-level accountability
+
+CORE SKILLS:
+- Community Manager / Moderator (Telegram, Discord, X) — 2+ years
+- Content Creator: threads, announcements, AI-generated visuals, short-form video
+- Social Media Manager: full strategy, daily cadence, brand voice, analytics
+- AI expertise: prompt engineering, data annotation, chatbot testing, AI workflow automation
+- UNIQUE EDGE: builds autonomous + agentic AI systems — can automate growth, outreach, and community ops
+- Multilingual: English, Hindi, Urdu, Kashmiri
+
+TARGET ROLES: Community Manager, Social Media Manager, Content Creator, Ambassador,
+  Ecosystem Growth Lead, AI Data Annotator, Moderator, UGC Creator
+"""
+
 # ── Action Queue DB ───────────────────────────────────────────────────────────
 QUEUE_DB = "action_queue.db"
 
@@ -383,32 +406,40 @@ async def agent_strategist(leads: list[dict]) -> list[dict]:
 # ── AGENT 4: WRITER — Craft personalized DMs ─────────────────────────────────
 
 async def agent_writer(lead: dict) -> tuple[str, str]:
-    """Crafts a human-sounding personalized DM and CEO identification hint."""
+    """Crafts a hyper-personalized DM using Ashiq's real profile."""
     console.print(f"[cyan]Agent 4 Writer: Crafting DM for {lead['project']}...[/cyan]")
 
-    dm_prompt = f"""You are a brilliant career strategist writing a Telegram DM.
+    dm_prompt = f"""You are writing a Telegram DM on behalf of Ashiq — a Web3/AI community & content specialist.
 
-Target: {lead['project']} — {lead.get('what_they_do', '')}
-Role they need: {lead.get('role', 'developer/community')}
-Telegram: @{lead.get('tg_username', '')}
+ASHIQ'S PROFILE:
+{MY_PROFILE}
 
-Write a SHORT (3-4 sentences max), human-sounding, non-robotic DM to the CEO/founder.
-- Reference something specific about their project
-- Briefly mention relevant skills (Python developer, Web3 experience, blockchain)
-- End with a clear question (not just "please hire me")
-- Sound like a real person, not a job application template
-- NO emojis, NO "Dear Sir/Madam", NO generic phrases
+TARGET PROJECT: {lead['project']}
+What they do: {lead.get('what_they_do', '')}
+Role they need: {lead.get('role', 'community/content')}
+Source: {lead.get('source', '')}
 
-Return ONLY the message text, nothing else."""
+Write a SHORT (3-4 sentences), human, non-robotic DM to the founder/CEO of {lead['project']}.
 
-    ceo_prompt = f"""For the project "{lead['project']}" with Telegram @{lead.get('tg_username', '')},
-what keywords or patterns would identify the CEO/founder in a Telegram group?
-(e.g. "founder", "CEO", "creator", pinned messages, admin with no tag, etc.)
-Give 3-5 specific signals to look for. Be brief."""
+RULES:
+- Open with something SPECIFIC about {lead['project']} — not generic praise
+- Drop ONE concrete stat from Ashiq's profile that matches what THEY need (e.g. "16K followers" for social roles, "6K community" for CM roles, "agentic AI systems" for tech roles)
+- Mention he can hit the ground running — no onboarding needed
+- End with a soft, specific question — NOT "are you hiring?"
+- Sound like a human who did research, not a bot
+- NO emojis, NO "Dear", NO "I came across your project", NO hashtags
+- Sign off: Ashiq | @ashiq80
+
+Return ONLY the message text."""
+
+    ceo_prompt = f"""For the Telegram group of "{lead['project']}", what signals identify the CEO/founder?
+Look for: admin badges, pinned post author, username with "founder/ceo/lead/core",
+first person to post announcements, name matching project name.
+List 3 quick signals. Be brief."""
 
     dm_msg, ceo_hint = await asyncio.gather(
-        _ai_call(dm_prompt, max_tokens=300),
-        _ai_call(ceo_prompt, max_tokens=150),
+        _ai_call(dm_prompt, max_tokens=350),
+        _ai_call(ceo_prompt, max_tokens=120),
     )
     return dm_msg.strip(), ceo_hint.strip()
 
