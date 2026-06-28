@@ -185,11 +185,11 @@ HEADERS = {
 # ── AGENT 1: SCOUT — Find raw opportunities ───────────────────────────────────
 
 SCOUT_QUERIES = [
-    "new web3 AI blockchain project hiring ambassador community manager 2026",
-    "DeFi NFT crypto startup hiring developer moderator telegram 2026",
-    "blockchain python developer remote job opening 2026",
-    "web3 project open roles content creator ambassador apply telegram 2026",
-    "AI crypto startup team expansion hiring 2026 telegram",
+    "web3 blockchain project hiring telegram 2026 t.me ambassador developer",
+    "crypto AI project community manager moderator telegram group apply 2026",
+    "DeFi NFT gaming startup open roles telegram t.me hiring 2026",
+    "blockchain python developer remote job telegram contact 2026",
+    "web3 AI ambassador program apply telegram 2026 open",
 ]
 
 async def _tavily_search(query: str, max_results: int = 8) -> list[dict]:
@@ -301,25 +301,31 @@ async def agent_analyst(raw_data: str) -> list[dict]:
     if not raw_data.strip():
         return []
 
-    prompt = f"""You are a 500 IQ talent agent analyzing raw intelligence data.
+    prompt = f"""You are a 500 IQ talent agent analyzing raw search data about Web3/AI hiring.
 
 RAW DATA:
 {raw_data[:6000]}
 
-Extract up to 10 REAL hiring opportunities. For each, return a JSON object:
+Extract up to 10 REAL hiring opportunities. For each return a JSON object:
 {{
   "project": "Project Name",
-  "what_they_do": "One sentence",
+  "what_they_do": "One sentence description",
   "role": "Specific role they need",
-  "tg_username": "username (without @, or empty string if not found)",
-  "website": "URL if found",
-  "source": "tweet URL or webpage URL",
+  "tg_username": "telegram username WITHOUT @ (look for t.me/xxx or @xxx patterns — very important)",
+  "website": "project website URL",
+  "source": "source URL where you found this",
   "score": 8,
-  "reason": "Why this is worth pursuing"
+  "reason": "Why this is a good opportunity"
 }}
 
-Score 1-10 based on: recency, specificity of need, quality of project, likelihood of response.
-Return ONLY a valid JSON array. No markdown. No explanation. Just the array."""
+CRITICAL: Scan ALL text carefully for ANY Telegram patterns:
+- t.me/username → extract just the username
+- @username near words like "join", "apply", "telegram", "community"
+- telegram.me/username
+If NO Telegram handle found, still include the entry with tg_username as empty string.
+
+Score 1-10: higher for recent 2026 posts, specific role needs, Web3/AI quality projects.
+Return ONLY a valid JSON array. No markdown. No explanation."""
 
     result = await _ai_call(prompt, max_tokens=2000)
 
@@ -343,12 +349,28 @@ Return ONLY a valid JSON array. No markdown. No explanation. Just the array."""
 async def agent_strategist(leads: list[dict]) -> list[dict]:
     """Filters already-contacted leads, selects top 5, decides approach per target."""
     console.print("[cyan]Agent 3 Strategist: Planning approach...[/cyan]")
-    existing = {r['tg_username'] for r in _get_queue(status='pending')}
-    existing |= {r['tg_username'] for r in _get_queue(status='done')}
-    existing |= {r['tg_username'] for r in _get_queue(status='skipped')}
+    existing_names = {r['project'].lower() for r in _get_queue(status='pending')}
+    existing_names |= {r['project'].lower() for r in _get_queue(status='done')}
+    existing_names |= {r['project'].lower() for r in _get_queue(status='skipped')}
+    existing_tg = {r['tg_username'] for r in _get_queue(status='pending') if r['tg_username']}
+    existing_tg |= {r['tg_username'] for r in _get_queue(status='done') if r['tg_username']}
 
-    fresh = [l for l in leads if l.get("tg_username") and
-             l["tg_username"] not in existing and len(l["tg_username"]) > 2][:5]
+    fresh = []
+    for l in leads:
+        name   = l.get("project", "").lower()
+        tg     = l.get("tg_username", "").strip().lstrip("@")
+        # Skip if already contacted by name or tg handle
+        if name in existing_names:
+            continue
+        if tg and tg in existing_tg:
+            continue
+        # Must have either a tg handle OR a website to reach them
+        if not tg and not l.get("website") and not l.get("source"):
+            continue
+        l["tg_username"] = tg  # normalise
+        fresh.append(l)
+        if len(fresh) == 5:
+            break
 
     if not fresh:
         console.print("[yellow]  Strategist: no fresh leads[/yellow]")
