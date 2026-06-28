@@ -1,6 +1,14 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# Quick launcher for Termux — installs deps if missing, then starts bot.py
+# Quick launcher for Termux — kills old instances, installs deps, starts bot.py
 cd "$(dirname "$0")"
+
+# Kill any previous bot instances to avoid "database is locked"
+echo "🔄 Stopping any previous bot instances..."
+pkill -f "python.*bot.py" 2>/dev/null; sleep 1
+
+# Remove stale WAL lock files
+rm -f telegram_agents.db-shm telegram_agents.db-wal
+rm -f aos_memory.db-shm aos_memory.db-wal
 
 python3 -c "import pyrogram" 2>/dev/null || pip install -q pyrogram==2.0.106 TgCrypto
 python3 -c "import aiohttp" 2>/dev/null   || pip install -q aiohttp

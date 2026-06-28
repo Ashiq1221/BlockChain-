@@ -1,4 +1,5 @@
 import aiosqlite
+import asyncio
 import json
 from datetime import datetime
 from telegram_agents.config import Config
@@ -10,10 +11,13 @@ class Database:
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self):
-        self._db = await aiosqlite.connect(self.path, timeout=30)
+        self._db = await aiosqlite.connect(self.path, timeout=60)
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
-        await self._db.execute("PRAGMA busy_timeout=10000")
+        await self._db.execute("PRAGMA busy_timeout=30000")
+        await self._db.execute("PRAGMA synchronous=NORMAL")
+        await self._db.execute("PRAGMA cache_size=10000")
+        await self._db.execute("PRAGMA wal_checkpoint(PASSIVE)")
         await self._db.commit()
         await self._create_tables()
 
@@ -92,16 +96,31 @@ class Database:
 
     # ── Groups ────────────────────────────────────────────────────────
 
+    async def _exec(self, sql: str, params=None, retries: int = 5):
+        """Execute with retry on database locked."""
+        for i in range(retries):
+            try:
+                if params is None:
+                    await self._db.execute(sql)
+                else:
+                    await self._db.execute(sql, params)
+                await self._db.commit()
+                return
+            except Exception as e:
+                if "locked" in str(e).lower() and i < retries - 1:
+                    await asyncio.sleep(0.3 * (i + 1))
+                else:
+                    raise
+
     async def upsert_group(self, tg_id: int, **kwargs):
         cols = ", ".join(["tg_id"] + list(kwargs.keys()))
         placeholders = ", ".join(["?"] * (1 + len(kwargs)))
         updates = ", ".join(f"{k}=excluded.{k}" for k in kwargs)
-        await self._db.execute(
+        await self._exec(
             f"INSERT INTO groups ({cols}) VALUES ({placeholders}) "
             f"ON CONFLICT(tg_id) DO UPDATE SET {updates}",
             [tg_id, *kwargs.values()],
         )
-        await self._db.commit()
 
     async def get_groups(self, category: str | None = None, joined: bool | None = None):
         q, params = "SELECT * FROM groups WHERE 1=1", []
@@ -118,12 +137,11 @@ class Database:
         cols = ", ".join(["tg_id"] + list(kwargs.keys()))
         placeholders = ", ".join(["?"] * (1 + len(kwargs)))
         updates = ", ".join(f"{k}=excluded.{k}" for k in kwargs)
-        await self._db.execute(
+        await self._exec(
             f"INSERT INTO contacts ({cols}) VALUES ({placeholders}) "
             f"ON CONFLICT(tg_id) DO UPDATE SET {updates}",
             [tg_id, *kwargs.values()],
         )
-        await self._db.commit()
 
     async def get_contacts(self, tags: str | None = None):
         q, params = "SELECT * FROM contacts WHERE 1=1", []
@@ -137,11 +155,10 @@ class Database:
     async def save_job(self, **kwargs):
         cols = ", ".join(kwargs.keys())
         placeholders = ", ".join(["?"] * len(kwargs))
-        await self._db.execute(
+        await self._exec(
             f"INSERT OR IGNORE INTO jobs ({cols}) VALUES ({placeholders})",
             list(kwargs.values()),
         )
-        await self._db.commit()
 
     async def get_jobs(self, applied: bool | None = None):
         q, params = "SELECT * FROM jobs WHERE 1=1", []
@@ -151,36 +168,41 @@ class Database:
             return [dict(r) for r in await cur.fetchall()]
 
     async def mark_job_applied(self, job_id: int, response: str = ""):
-        await self._db.execute(
+        await self._exec(
             "UPDATE jobs SET applied=1, applied_at=datetime('now'), response=? WHERE id=?",
             [response, job_id],
         )
-        await self._db.commit()
 
     # ── Messages ──────────────────────────────────────────────────────
 
     async def log_message(self, direction: str, peer_id: int, peer_type: str, text: str, msg_id: int = 0):
-        await self._db.execute(
+        await self._exec(
             "INSERT INTO messages (direction, peer_id, peer_type, text, msg_id) VALUES (?,?,?,?,?)",
             [direction, peer_id, peer_type, text, msg_id],
         )
-        await self._db.commit()
 
     # ── Tasks ─────────────────────────────────────────────────────────
 
     async def create_task(self, agent: str, goal: str) -> int:
-        cur = await self._db.execute(
-            "INSERT INTO tasks (agent, goal) VALUES (?,?)", [agent, goal]
-        )
-        await self._db.commit()
-        return cur.lastrowid
+        for i in range(5):
+            try:
+                cur = await self._db.execute(
+                    "INSERT INTO tasks (agent, goal) VALUES (?,?)", [agent, goal]
+                )
+                await self._db.commit()
+                return cur.lastrowid
+            except Exception as e:
+                if "locked" in str(e).lower() and i < 4:
+                    await asyncio.sleep(0.3 * (i + 1))
+                else:
+                    raise
+        return 0
 
     async def update_task(self, task_id: int, status: str, result: str = ""):
-        await self._db.execute(
+        await self._exec(
             "UPDATE tasks SET status=?, result=?, updated_at=datetime('now') WHERE id=?",
             [status, result, task_id],
         )
-        await self._db.commit()
 
     async def get_tasks(self, status: str | None = None):
         q, params = "SELECT * FROM tasks WHERE 1=1", []
@@ -192,11 +214,10 @@ class Database:
     # ── Analytics ─────────────────────────────────────────────────────
 
     async def log_event(self, event: str, data: dict):
-        await self._db.execute(
+        await self._exec(
             "INSERT INTO analytics (event, data) VALUES (?,?)",
             [event, json.dumps(data)],
         )
-        await self._db.commit()
 
     async def get_stats(self) -> dict:
         stats = {}
