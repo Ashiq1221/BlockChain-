@@ -1,7 +1,7 @@
 """
-Agent 11 — Opportunity Hunter (robust rewrite)
-Finds ambassador / CM / moderator / content creator / Web3 & AI roles,
-locates their Telegram, and sends a personalized application DM.
+Agent 11 — Opportunity Hunter
+Finds ambassador / CM / moderator / content creator / Web3 & AI roles
+on the web AND on X/Twitter, locates their Telegram, sends personalized DMs.
 """
 import asyncio
 import re
@@ -9,20 +9,43 @@ from datetime import datetime
 from telegram_agents.base_agent import BaseAgent
 from telegram_agents.tools import ai_tools, web_tools, telegram_tools
 
-# ── What to search ────────────────────────────────────────────────────────────
-SEARCHES = [
-    ("ambassador",        "web3 crypto ambassador program 2025 apply telegram"),
-    ("ambassador",        "blockchain AI ambassador program hiring 2025 telegram contact"),
-    ("community_manager", "web3 crypto community manager CM hiring 2025 telegram"),
-    ("community_manager", "AI project community manager role 2025 apply telegram"),
-    ("moderator",         "telegram moderator wanted crypto web3 2025 apply"),
-    ("moderator",         "web3 project moderator hiring 2025 telegram DM"),
-    ("content_creator",   "web3 crypto content creator collab 2025 telegram"),
-    ("content_creator",   "AI blockchain content creator partnership apply 2025"),
-    ("ambassador",        "new DeFi project ambassador program open 2025"),
-    ("ambassador",        "new AI crypto project ambassador apply telegram 2025"),
-    ("community_manager", "new web3 startup community team hiring telegram 2025"),
-    ("moderator",         "new crypto project telegram moderator open role 2025"),
+# ── Regular web searches (2026) ───────────────────────────────────────────────
+WEB_SEARCHES = [
+    ("ambassador",        "web3 crypto ambassador program 2026 apply telegram"),
+    ("ambassador",        "blockchain AI ambassador program hiring 2026 telegram contact"),
+    ("ambassador",        "new DeFi project ambassador program open 2026 telegram"),
+    ("ambassador",        "new AI crypto project ambassador apply telegram 2026"),
+    ("community_manager", "web3 crypto community manager CM hiring 2026 telegram"),
+    ("community_manager", "AI project community manager role 2026 apply telegram"),
+    ("community_manager", "new web3 startup community team hiring telegram 2026"),
+    ("moderator",         "telegram moderator wanted crypto web3 2026 apply"),
+    ("moderator",         "web3 project moderator hiring 2026 telegram DM"),
+    ("moderator",         "new crypto project telegram moderator open role 2026"),
+    ("content_creator",   "web3 crypto content creator collab 2026 telegram"),
+    ("content_creator",   "AI blockchain content creator partnership apply 2026"),
+]
+
+# ── X / Twitter searches (via search engines) ─────────────────────────────────
+X_SEARCHES = [
+    ("ambassador",        'site:twitter.com "ambassador program" web3 crypto 2026 telegram'),
+    ("ambassador",        'site:x.com "looking for ambassadors" AI crypto 2026'),
+    ("ambassador",        'site:twitter.com "ambassador" web3 AI "apply" 2026'),
+    ("community_manager", 'site:twitter.com "community manager" web3 crypto hiring 2026'),
+    ("community_manager", 'site:x.com "CM" OR "community manager" web3 AI 2026 telegram'),
+    ("moderator",         'site:twitter.com "moderator" crypto telegram 2026 apply'),
+    ("content_creator",   'site:twitter.com "content creator" web3 crypto collab 2026'),
+    ("ambassador",        '"ambassador program" web3 AI 2026 site:twitter.com'),
+]
+
+# ── New 2026 project discovery ────────────────────────────────────────────────
+NEW_PROJECT_SEARCHES = [
+    ("ambassador",        "new web3 project launched 2026 ambassador program telegram"),
+    ("ambassador",        "new AI crypto startup 2026 looking for ambassadors telegram"),
+    ("community_manager", "new DeFi project 2026 community manager needed telegram"),
+    ("moderator",         "new blockchain project 2026 moderator wanted telegram"),
+    ("ambassador",        'site:twitter.com "new project" "ambassador" web3 2026'),
+    ("ambassador",        'site:twitter.com "just launched" web3 crypto 2026 community'),
+    ("community_manager", 'site:twitter.com "hiring" "community" web3 AI 2026'),
 ]
 
 # ── Message templates ─────────────────────────────────────────────────────────
@@ -58,25 +81,30 @@ TEMPLATES = {
     ),
 }
 
+# Combine all search lists
+ALL_SEARCHES = WEB_SEARCHES + X_SEARCHES + NEW_PROJECT_SEARCHES
+
 
 class OpportunityHunterAgent(BaseAgent):
     name = "OpportunityHunter"
     emoji = "🎯"
 
     async def run(self, goal: str = "", max_apply: int = 15, **kwargs):
-        self.log(f"Hunting ambassador/CM/mod/creator roles in Web3 & AI...")
-        total_found = 0
+        self.log("Hunting ambassador/CM/mod/creator roles in Web3 & AI (web + X/Twitter + new 2026 projects)...")
+        total_found   = 0
         total_applied = 0
+        seen_projects: set[str] = set()
 
-        for role, query in SEARCHES:
+        for role, query in ALL_SEARCHES:
             if total_applied >= max_apply:
                 break
 
-            self.log(f"[{role}] Searching: {query[:55]}...")
+            source = "X" if "site:twitter" in query or "site:x.com" in query else "web"
+            self.log(f"[{role}|{source}] {query[:60]}...")
             results = await web_tools.web_search(query, num=6)
 
             if not results:
-                self.log_warn(f"  No results for query — skipping")
+                self.log_warn("  No results — skipping")
                 await asyncio.sleep(2)
                 continue
 
@@ -91,9 +119,13 @@ class OpportunityHunterAgent(BaseAgent):
                 url     = result.get("url", "")
                 text    = f"{title} {snippet} {url}"
 
-                # Extract project name
-                project = await self._extract_project_name(title, snippet)
+                project = await self._extract_project_name(title, snippet, url)
                 if not project or len(project) < 2:
+                    continue
+
+                # Skip duplicate projects we already applied to this session
+                proj_key = project.lower()
+                if proj_key in seen_projects:
                     continue
 
                 total_found += 1
@@ -101,7 +133,12 @@ class OpportunityHunterAgent(BaseAgent):
                 # Find Telegram links directly in search result
                 tg_usernames = self._extract_tg_links(text)
 
-                # If none found, search specifically for project TG
+                # If none, try fetching the page itself
+                if not tg_usernames and url and "twitter.com" not in url and "x.com" not in url:
+                    page_text = await web_tools.fetch_page(url)
+                    tg_usernames = self._extract_tg_links(page_text)
+
+                # Final fallback: search for project's Telegram
                 if not tg_usernames:
                     tg_usernames = await self._search_project_telegram(project)
 
@@ -109,9 +146,9 @@ class OpportunityHunterAgent(BaseAgent):
                     self.log(f"  No TG found for {project}")
                     continue
 
+                seen_projects.add(proj_key)
                 self.log(f"  → {project} [{role}] TG: {tg_usernames[:2]}")
 
-                # Save to DB
                 await self.db.save_job(
                     title=f"{role.upper()} @ {project}",
                     company=project,
@@ -119,7 +156,6 @@ class OpportunityHunterAgent(BaseAgent):
                     source=url,
                 )
 
-                # Apply via Telegram
                 applied = await self._apply(project, role, tg_usernames[:2])
                 if applied:
                     total_applied += 1
@@ -131,48 +167,51 @@ class OpportunityHunterAgent(BaseAgent):
 
         self.log_success(f"Done. Found {total_found} opportunities, applied to {total_applied}.")
         await self.db.log_event("opportunity_hunt", {
-            "found": total_found,
+            "found":   total_found,
             "applied": total_applied,
-            "ts": str(datetime.now()),
+            "ts":      str(datetime.now()),
         })
         return {"found": total_found, "applied": total_applied}
 
     def _extract_tg_links(self, text: str) -> list[str]:
         """Extract @username or t.me/username from any text."""
         found = []
-        # t.me/username links
         for m in re.findall(r't\.me/([\w]{4,})', text):
-            if m not in ("joinchat","s","share","addstickers"):
+            if m not in ("joinchat", "s", "share", "addstickers", "iv"):
                 found.append(m)
-        # @username mentions
         for m in re.findall(r'@([\w]{5,})', text):
-            found.append(m)
-        return list(dict.fromkeys(found))  # deduplicate preserving order
+            if m.lower() not in ("twitter", "instagram", "youtube", "facebook"):
+                found.append(m)
+        return list(dict.fromkeys(found))
 
-    async def _extract_project_name(self, title: str, snippet: str) -> str:
+    async def _extract_project_name(self, title: str, snippet: str, url: str = "") -> str:
         """Use AI to extract the project/company name."""
         result = ai_tools.think(
-            system_addon="Extract the crypto/Web3/AI project or company name from text. Return ONLY the name, nothing else. Max 4 words.",
-            user_prompt=f"Title: {title}\nSnippet: {snippet[:200]}\n\nProject name:",
+            system_addon=(
+                "Extract the crypto/Web3/AI project or company name from text. "
+                "Return ONLY the name, nothing else. Max 4 words. "
+                "If from a tweet URL, extract the account name or project mentioned."
+            ),
+            user_prompt=f"Title: {title}\nSnippet: {snippet[:200]}\nURL: {url}\n\nProject name:",
             max_tokens=20,
         )
-        name = result.strip().strip('"').strip("'")
-        # Reject generic words
-        if any(w in name.lower() for w in ["unknown","none","n/a","error","project","crypto","web3"]):
+        name = result.strip().strip('"').strip("'").strip()
+        if any(w in name.lower() for w in ["unknown", "none", "n/a", "error", "project", "crypto", "web3", "twitter", "tweet"]):
             return ""
         return name[:50]
 
     async def _search_project_telegram(self, project: str) -> list[str]:
         """Find a project's Telegram via web search."""
         queries = [
-            f"{project} official telegram",
-            f"{project} telegram group t.me",
+            f"{project} official telegram 2026",
+            f"{project} telegram t.me group",
+            f'site:t.me "{project}"',
         ]
         found = []
         for q in queries:
             results = await web_tools.web_search(q, num=3)
             for r in results:
-                text = r.get("url","") + " " + r.get("snippet","") + " " + r.get("title","")
+                text = r.get("url", "") + " " + r.get("snippet", "") + " " + r.get("title", "")
                 found.extend(self._extract_tg_links(text))
             if found:
                 break
@@ -183,9 +222,8 @@ class OpportunityHunterAgent(BaseAgent):
         template = TEMPLATES.get(role, TEMPLATES["general"])
         base_msg = template.format(project=project)
 
-        # Personalize with AI
         message = ai_tools.think(
-            system_addon="Rewrite this Telegram outreach message to sound more natural and human. Keep it under 120 words. No hashtags.",
+            system_addon="Rewrite this Telegram outreach message to sound natural and human. Under 120 words. No hashtags.",
             user_prompt=f"Base message:\n{base_msg}\n\nNatural version:",
             max_tokens=200,
         )
@@ -195,7 +233,6 @@ class OpportunityHunterAgent(BaseAgent):
             if not username or len(username) < 4:
                 continue
             try:
-                # Try joining as group first
                 joined = await telegram_tools.join_chat(self.client, username)
                 await asyncio.sleep(3)
                 if joined:
@@ -207,7 +244,6 @@ class OpportunityHunterAgent(BaseAgent):
                 pass
 
             try:
-                # Try as direct user DM
                 msg = await telegram_tools.send_dm(self.client, f"@{username}", message)
                 if msg:
                     await self.db.log_message("out", hash(username), "user", message, msg.id)
