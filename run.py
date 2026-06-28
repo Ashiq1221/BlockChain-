@@ -97,7 +97,7 @@ async def main():
             """Hunt for ambassador/CM/moderator/content creator roles every 3 hours."""
             while True:
                 try:
-                    await opp_hunter.run(max_opportunities=15)
+                    await opp_hunter.run(max_apply=15)
                 except Exception as e:
                     console.print(f"[red]OpportunityHunter error: {e}[/red]")
                 await asyncio.sleep(3 * 60 * 60)  # every 3 hours
