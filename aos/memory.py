@@ -29,10 +29,12 @@ class Memory:
         self._max_short   = 20
 
     def connect(self):
-        self._db = sqlite3.connect(C.DB_PATH, check_same_thread=False)
+        self._db = sqlite3.connect(C.DB_PATH, check_same_thread=False, timeout=30)
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA journal_mode=WAL")
-        self._db.execute("PRAGMA busy_timeout=5000")
+        self._db.execute("PRAGMA busy_timeout=30000")
+        self._db.execute("PRAGMA synchronous=NORMAL")
+        self._db.execute("PRAGMA cache_size=10000")
         self._init_schema()
 
     def _init_schema(self):
@@ -79,19 +81,31 @@ class Memory:
 
     # ── Long-term (SQLite) ────────────────────────────────────────────────────
 
+    def _commit_with_retry(self, retries: int = 5):
+        for i in range(retries):
+            try:
+                self._db.commit()
+                return
+            except sqlite3.OperationalError:
+                time.sleep(0.2 * (i + 1))
+        self._db.rollback()
+
     def store(self, category: str, key: str, value: str, score: float = 0.0):
-        self._db.execute(
-            "INSERT INTO memory (category, key, value, score) VALUES (?,?,?,?)",
-            (category, key, value[:2000], score)
-        )
         try:
             self._db.execute(
-                "INSERT INTO memory_fts (rowid, key, value) "
-                "VALUES (last_insert_rowid(), ?, ?)", (key, value[:2000])
+                "INSERT INTO memory (category, key, value, score) VALUES (?,?,?,?)",
+                (category, key, value[:2000], score)
             )
+            try:
+                self._db.execute(
+                    "INSERT INTO memory_fts (rowid, key, value) "
+                    "VALUES (last_insert_rowid(), ?, ?)", (key, value[:2000])
+                )
+            except Exception:
+                pass
+            self._commit_with_retry()
         except Exception:
             pass
-        self._db.commit()
 
     def retrieve(self, query: str, limit: int = 5, category: str = "") -> list[MemoryItem]:
         try:
@@ -123,19 +137,25 @@ class Memory:
         ]
 
     def store_response(self, question: str, answer: str, confidence: int) -> int:
-        cur = self._db.execute(
-            "INSERT INTO responses (question, answer, confidence) VALUES (?,?,?)",
-            (question[:500], answer[:3000], confidence)
-        )
-        self._db.commit()
-        return cur.lastrowid
+        try:
+            cur = self._db.execute(
+                "INSERT INTO responses (question, answer, confidence) VALUES (?,?,?)",
+                (question[:500], answer[:3000], confidence)
+            )
+            self._commit_with_retry()
+            return cur.lastrowid
+        except Exception:
+            return 0
 
     def record_feedback(self, response_id: int, useful: bool):
-        self._db.execute(
-            "UPDATE responses SET feedback=? WHERE id=?",
-            (1 if useful else -1, response_id)
-        )
-        self._db.commit()
+        try:
+            self._db.execute(
+                "UPDATE responses SET feedback=? WHERE id=?",
+                (1 if useful else -1, response_id)
+            )
+            self._commit_with_retry()
+        except Exception:
+            pass
         # Store insight for learning
         val = "positive" if useful else "negative"
         self.store("feedback", f"response_{response_id}", val, 1.0 if useful else -1.0)
