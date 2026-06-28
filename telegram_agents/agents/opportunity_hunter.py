@@ -90,13 +90,15 @@ class OpportunityHunterAgent(BaseAgent):
     emoji = "🎯"
 
     async def run(self, goal: str = "", max_apply: int = 15, **kwargs):
-        self.log("Hunting ambassador/CM/mod/creator roles in Web3 & AI (web + X/Twitter + new 2026 projects)...")
+        send_enabled = max_apply > 0
+        mode = "find+apply" if send_enabled else "find-only (no DMs)"
+        self.log(f"Hunting ambassador/CM/mod/creator roles [{mode}]...")
         total_found   = 0
         total_applied = 0
         seen_projects: set[str] = set()
 
         for role, query in ALL_SEARCHES:
-            if total_applied >= max_apply:
+            if send_enabled and total_applied >= max_apply:
                 break
 
             source = "X" if "site:twitter" in query or "site:x.com" in query else "web"
@@ -156,10 +158,13 @@ class OpportunityHunterAgent(BaseAgent):
                     source=url,
                 )
 
-                applied = await self._apply(project, role, tg_usernames[:2])
-                if applied:
-                    total_applied += 1
-                    self.log_success(f"  ✅ Applied for {role} at {project}")
+                if send_enabled:
+                    applied = await self._apply(project, role, tg_usernames[:2])
+                    if applied:
+                        total_applied += 1
+                        self.log_success(f"  ✅ Applied for {role} at {project}")
+                else:
+                    self.log(f"  💾 Saved {role} at {project} (no auto-DM)")
 
                 await asyncio.sleep(4)
 
