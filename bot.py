@@ -16,10 +16,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Startup: wipe all DB files so there is zero chance of a lock ──────────────
-for _f in ["telegram_agents.db", "telegram_agents.db-shm", "telegram_agents.db-wal",
-           "telegram_agents.db-journal", "tg_memory.db", "tg_memory.db-shm",
-           "tg_memory.db-wal", "tg_memory.db-journal"]:
+# ── Startup: wipe DB files + Pyrogram session WAL files ──────────────────────
+import glob as _glob
+_to_clean = (
+    ["telegram_agents.db", "telegram_agents.db-shm", "telegram_agents.db-wal",
+     "telegram_agents.db-journal", "tg_memory.db", "tg_memory.db-shm",
+     "tg_memory.db-wal", "tg_memory.db-journal"]
+    + _glob.glob("*.session-shm")
+    + _glob.glob("*.session-wal")
+    + _glob.glob("*.session-journal")
+)
+for _f in _to_clean:
     try:
         os.remove(_f)
     except FileNotFoundError:

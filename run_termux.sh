@@ -2,14 +2,16 @@
 # Quick launcher for Termux — kills old instances, installs deps, starts bot.py
 cd "$(dirname "$0")"
 
-# Kill any previous bot instances (exclude self)
-echo "🔄 Stopping any previous bot instances..."
-pgrep -f "python.*bot.py" | grep -v $$ | xargs kill -15 2>/dev/null; sleep 1
+# Kill ALL python3 processes (the only way to release Pyrogram's session lock)
+echo "🔄 Stopping all Python processes..."
+killall -9 python3 python 2>/dev/null; sleep 2
 
-# Wipe all DB files — they recreate automatically, zero chance of lock
+# Wipe DB files (recreate automatically)
 rm -f telegram_agents.db telegram_agents.db-shm telegram_agents.db-wal telegram_agents.db-journal
 rm -f tg_memory.db tg_memory.db-shm tg_memory.db-wal tg_memory.db-journal
 rm -f aos_memory.db-shm aos_memory.db-wal aos_memory.db-journal
+# Clean Pyrogram session WAL/lock files (NOT the session file itself)
+rm -f *.session-shm *.session-wal *.session-journal
 
 python3 -c "import pyrogram" 2>/dev/null || pip install -q pyrogram==2.0.106 TgCrypto
 python3 -c "import aiohttp" 2>/dev/null   || pip install -q aiohttp
