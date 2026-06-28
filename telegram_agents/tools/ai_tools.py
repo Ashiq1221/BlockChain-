@@ -71,7 +71,7 @@ def _gemini(system: str, prompt: str, max_tokens: int) -> str:
     if not Config.GEMINI_API_KEY:
         raise ValueError("No Gemini key")
     resp = httpx.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={Config.GEMINI_API_KEY}",
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={Config.GEMINI_API_KEY}",
         headers={"Content-Type": "application/json"},
         json={
             "contents": [{"parts": [{"text": f"{system}\n\n{prompt}"}]}],
