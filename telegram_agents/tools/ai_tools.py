@@ -1,19 +1,14 @@
-"""Claude AI via direct HTTP — no anthropic SDK needed, works on Android."""
+"""
+Multi-provider AI with automatic fallback.
+Order: Anthropic → OpenAI (ChatGPT) → Google Gemini (free)
+If one runs out of credits or fails, instantly switches to the next.
+"""
 import httpx
 from telegram_agents.config import Config
-
-_API_URL = "https://api.anthropic.com/v1/messages"
-_MODEL   = "claude-3-5-sonnet-20241022"
-_HEADERS = {
-    "x-api-key": Config.ANTHROPIC_API_KEY,
-    "anthropic-version": "2023-06-01",
-    "content-type": "application/json",
-}
 
 SYSTEM_BASE = f"""You are an elite AI operating as part of a 10-agent autonomous Telegram management system.
 Persona: {Config.AGENT_PERSONA}
 Language: {Config.AGENT_LANGUAGE}
-
 Core principles:
 - Always respond with clear, actionable intelligence.
 - Imitate natural human communication — never sound automated.
@@ -21,21 +16,114 @@ Core principles:
 - Be strategic, efficient, and precise.
 """
 
+# ── Provider implementations ──────────────────────────────────────────────────
+
+def _anthropic(system: str, prompt: str, max_tokens: int) -> str:
+    if not Config.ANTHROPIC_API_KEY:
+        raise ValueError("No Anthropic key")
+    resp = httpx.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": Config.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        },
+        json={
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=60,
+    )
+    if resp.status_code in (429, 529):
+        raise RuntimeError(f"Anthropic credits exhausted ({resp.status_code})")
+    resp.raise_for_status()
+    return resp.json()["content"][0]["text"].strip()
+
+
+def _openai(system: str, prompt: str, max_tokens: int) -> str:
+    if not Config.OPENAI_API_KEY:
+        raise ValueError("No OpenAI key")
+    resp = httpx.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {Config.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "gpt-4o-mini",
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ],
+        },
+        timeout=60,
+    )
+    if resp.status_code in (429, 402):
+        raise RuntimeError(f"OpenAI credits exhausted ({resp.status_code})")
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+def _gemini(system: str, prompt: str, max_tokens: int) -> str:
+    if not Config.GEMINI_API_KEY:
+        raise ValueError("No Gemini key")
+    resp = httpx.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={Config.GEMINI_API_KEY}",
+        headers={"Content-Type": "application/json"},
+        json={
+            "contents": [{"parts": [{"text": f"{system}\n\n{prompt}"}]}],
+            "generationConfig": {"maxOutputTokens": max_tokens},
+        },
+        timeout=60,
+    )
+    if resp.status_code == 429:
+        raise RuntimeError("Gemini rate limit")
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
+# ── Auto-fallback core ────────────────────────────────────────────────────────
+
+_PROVIDERS = [
+    ("Anthropic", _anthropic),
+    ("ChatGPT",   _openai),
+    ("Gemini",    _gemini),
+]
+
+_active_provider = 0   # start with Anthropic
+
 
 def _call(system_addon: str, user_prompt: str, max_tokens: int = 1024) -> str:
-    body = {
-        "model": _MODEL,
-        "max_tokens": max_tokens,
-        "system": SYSTEM_BASE + "\n" + system_addon,
-        "messages": [{"role": "user", "content": user_prompt}],
-    }
-    try:
-        resp = httpx.post(_API_URL, headers=_HEADERS, json=body, timeout=60)
-        resp.raise_for_status()
-        return resp.json()["content"][0]["text"].strip()
-    except Exception as e:
-        return f"[AI error: {e}]"
+    global _active_provider
+    system = SYSTEM_BASE + "\n" + system_addon
+    errors = []
 
+    # Try from current active provider, then fall through
+    for i in range(_active_provider, len(_PROVIDERS)):
+        name, fn = _PROVIDERS[i]
+        try:
+            result = fn(system, user_prompt, max_tokens)
+            if i != _active_provider:
+                print(f"[AI] Switched to {name}")
+                _active_provider = i
+            return result
+        except Exception as e:
+            errors.append(f"{name}: {e}")
+            print(f"[AI] {name} failed — trying next... ({e})")
+
+    # All providers failed — reset to Anthropic for next call
+    _active_provider = 0
+    return f"[All AI providers failed: {' | '.join(errors)}]"
+
+
+def current_provider() -> str:
+    return _PROVIDERS[_active_provider][0]
+
+
+# ── Public API (same as before — nothing else needs to change) ────────────────
 
 def think(system_addon: str, user_prompt: str, max_tokens: int = 1024) -> str:
     return _call(system_addon, user_prompt, max_tokens)

@@ -32,6 +32,10 @@ class Config:
         ).split(",")
     ]
 
+    # AI Providers — system uses whichever has credits, in order
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+
     # Optional
     SERPAPI_KEY: str = os.getenv("SERPAPI_KEY", "")
     DB_PATH: str = "telegram_agents.db"
