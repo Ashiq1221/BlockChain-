@@ -1,6 +1,13 @@
 """
-1000 IQ Agent Brain — True Agentic Loop
-Reason → Plan → Act → Observe → Reflect → Learn → Adapt → Repeat
+500 IQ Agentic Orchestrator
+Full pipeline: Discover Projects → Join TG Group → Identify CEO/Founder → Craft DM → Send
+
+General loop (every cycle): Observe → Think → Plan → Act → Reflect → Learn
+Smart hunt (every 3rd cycle): the full 6-phase strategic pipeline above
+
+Two rules that never break:
+  1. NEVER auto-reply to incoming DMs from strangers
+  2. NEVER post to groups on a timer with no strategic goal
 """
 import asyncio
 import json
@@ -9,315 +16,524 @@ from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 from rich.rule import Rule
-from telegram_agents.tools import ai_tools
+from telegram_agents.tools import ai_tools, web_tools, telegram_tools
 from telegram_agents.tools.memory import Memory
 from telegram_agents.tools.tool_registry import ToolRegistry
 from telegram_agents.database import Database
+from telegram_agents.config import Config
 
 console = Console()
 
-
 MASTER_GOAL = """
-You are managing a Telegram account for a professional seeking to:
-1. Find and join the most relevant groups (blockchain, Python, remote jobs, Web3, AI)
-2. Find remote job/ambassador/CM/moderator/creator opportunities and send compelling applications
-3. Build a strong professional network by connecting with the right people
-4. Post valuable content in groups to build reputation and attract opportunities
-5. Never stop — always find new opportunities and act on them
-6. RULE: Do NOT auto-reply to incoming DMs from strangers. Do NOT post to groups on a timer — only post when it serves a clear goal (news, opportunity outreach, job application).
-Be aggressive, smart, and strategic. Maximize every opportunity.
+You are a 500 IQ autonomous agent managing a Telegram account for a Web3/AI developer.
+Priority goals:
+1. Find Web3/AI/blockchain projects actively hiring or seeking ambassadors, CM, mods
+2. Join their Telegram groups, identify the CEO/founder/owner, send personalized outreach
+3. Join relevant professional groups (blockchain, Python dev, remote jobs)
+4. Apply to job postings found online
+5. Post valuable content in groups only when it serves a clear networking goal
+
+HARD RULES (never break):
+- DO NOT auto-reply to incoming DMs from strangers
+- DO NOT post to groups on a schedule without a strategic reason
+- DO NOT sound like a bot — every message must sound human
+- Rate limit: pause 5+ seconds between any sends
 """
+
+# Web search queries for discovering opportunities
+DISCOVERY_QUERIES = [
+    "new web3 blockchain project hiring developer ambassador 2026",
+    "DeFi NFT gaming AI project community manager moderator 2026",
+    "blockchain startup expanding team remote developer python 2026",
+    "site:twitter.com web3 project hiring ambassador open applications 2026",
+    "crypto project team we are looking for 2026",
+    "web3 AI project content creator role open 2026",
+]
 
 
 class AgentBrain:
-    def __init__(self, tools: ToolRegistry, db: Database, memory: Memory):
-        self.tools = tools
-        self.db = db
-        self.memory = memory
-        self.cycle = 0
-        self.action_history: list[str] = []
+    def __init__(self, tools: ToolRegistry, db: Database, memory: Memory, user_client=None):
+        self.tools       = tools
+        self.db          = db
+        self.memory      = memory
+        self.client      = user_client or tools.client
+        self.cycle       = 0
+        self.action_log: list[str] = []
+        self._contacted: set[str]  = set()  # project+person keys — avoid duplicate DMs
 
-    # ── STEP 1: OBSERVE ──────────────────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════════════════
+    #  500 IQ SMART HUNT PIPELINE
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # ── Phase 1: DISCOVER ────────────────────────────────────────────────────
+
+    async def discover_opportunities(self) -> list[dict]:
+        """
+        Run multiple web searches, then use AI to extract structured project data.
+        Returns: [{"name","role","tg_username","website","description"}, ...]
+        """
+        snippets = []
+        for q in DISCOVERY_QUERIES[:4]:
+            results = await web_tools.web_search(q, num=5)
+            for r in results:
+                snippets.append(
+                    f"Title: {r.get('title','')}\n"
+                    f"Snippet: {r.get('snippet','')}\n"
+                    f"URL: {r.get('url','')}"
+                )
+
+        if not snippets:
+            return []
+
+        raw = ai_tools.think(
+            system_addon="""Extract Web3/AI/blockchain projects that are ACTIVELY hiring or seeking roles.
+Return ONLY valid JSON array (no markdown, no explanation):
+[{"name":"ProjectName","role":"developer|ambassador|CM|moderator|creator","tg_username":"@handle_or_empty","website":"url_or_empty","description":"one sentence about the project and the role"}]
+Rules:
+- Include only if there is a clear hiring/role signal in the text
+- Max 8 entries, no duplicates
+- tg_username: only include if you see t.me/ or @handle clearly in the text, else leave empty""",
+            user_prompt="Search results:\n" + "\n---\n".join(snippets[:20]),
+            max_tokens=1000,
+        )
+        try:
+            m = re.search(r'\[.*?\]', raw, re.DOTALL)
+            projects = json.loads(m.group()) if m else []
+            # Filter already contacted this session
+            return [p for p in projects if isinstance(p, dict) and p.get("name") not in self._contacted]
+        except Exception:
+            return []
+
+    # ── Phase 2: INFILTRATE ──────────────────────────────────────────────────
+
+    async def infiltrate_project(self, project: dict) -> str | None:
+        """
+        Find and join the project's Telegram group via multiple strategies.
+        Returns: username/id of the joined group, or None.
+        """
+        name     = project.get("name", "")
+        tg_hint  = project.get("tg_username", "").strip().lstrip("@t.me/")
+
+        # Strategy A: direct join if we found a TG handle
+        if tg_hint:
+            ok = await telegram_tools.join_chat(self.client, tg_hint)
+            if ok:
+                console.print(f"    [green]✅ Joined @{tg_hint}[/green]")
+                await asyncio.sleep(4)
+                return tg_hint
+
+        # Strategy B: find their group via web search
+        groups = await web_tools.find_telegram_groups_online(name)
+        for g in groups[:3]:
+            u = g.get("username", "").strip().lstrip("@")
+            if not u:
+                continue
+            ok = await telegram_tools.join_chat(self.client, u)
+            if ok:
+                console.print(f"    [green]✅ Joined @{u} (web find)[/green]")
+                await asyncio.sleep(4)
+                return u
+
+        # Strategy C: Telegram's own global search
+        try:
+            hits = await telegram_tools.search_public_groups(self.client, name, limit=5)
+            for h in hits:
+                u = h.get("username", "")
+                if not u:
+                    continue
+                ok = await telegram_tools.join_chat(self.client, u)
+                if ok:
+                    console.print(f"    [green]✅ Joined @{u} (TG search)[/green]")
+                    await asyncio.sleep(4)
+                    return u
+        except Exception:
+            pass
+
+        return None
+
+    # ── Phase 3: READ THE ROOM ───────────────────────────────────────────────
+
+    async def read_room(self, chat_id: str) -> str:
+        """
+        Read recent group messages to understand project vibe and who is active.
+        Returns a compact text summary for AI context.
+        """
+        try:
+            msgs = await telegram_tools.get_chat_history(self.client, chat_id, limit=40)
+            lines = [
+                f"[user_{m.get('from_id','')}]: {m.get('text','')[:120]}"
+                for m in msgs[:25]
+            ]
+            return "\n".join(lines)
+        except Exception:
+            return ""
+
+    # ── Phase 4: IDENTIFY CEO / FOUNDER ─────────────────────────────────────
+
+    async def identify_decision_maker(self, chat_id: str, project_name: str,
+                                      room_context: str) -> dict | None:
+        """
+        Harvest group members → AI identifies the CEO/founder/owner.
+        Returns: {"tg_id","username","first_name","reason","confidence"} or None.
+        """
+        members = await telegram_tools.get_group_members(self.client, chat_id, limit=150)
+        if not members:
+            return None
+
+        raw = ai_tools.think(
+            system_addon="""You are a detective identifying the CEO, founder, owner, or key decision maker of a Web3 project from its Telegram group.
+
+Signals to look for (in order of importance):
+1. Username or name contains: founder, ceo, owner, lead, core, official, admin, dev
+2. Name closely matches the project name
+3. They posted announcements or authority-level messages in the group chat
+4. Single unique name that sounds like a founder (rare name pattern)
+5. Low user ID (early Telegram accounts often belong to founders)
+
+Return ONLY valid JSON (no markdown):
+{"tg_id": 12345, "username": "handle_or_empty", "first_name": "Name", "reason": "specific reason you chose them", "confidence": 75}
+
+If confidence < 35, return the single word: null""",
+            user_prompt=(
+                f"Project: {project_name}\n\n"
+                f"Recent group messages (who's talking like an authority):\n{room_context[:700]}\n\n"
+                f"Full member list ({len(members)} members — first 80 shown):\n"
+                + json.dumps(members[:80], indent=2)
+            ),
+            max_tokens=400,
+        )
+
+        try:
+            raw_s = raw.strip()
+            if raw_s.lower() in ("null", "none", ""):
+                return None
+            m = re.search(r'\{.*?\}', raw_s, re.DOTALL)
+            if not m:
+                return None
+            result = json.loads(m.group())
+            if result and int(result.get("confidence", 0)) >= 35:
+                return result
+        except Exception:
+            pass
+        return None
+
+    # ── Phase 5: CRAFT PERSONALIZED DM ──────────────────────────────────────
+
+    def craft_outreach_dm(self, target: dict, project: dict, room_context: str) -> str:
+        """
+        AI writes a hyper-personalized, human-sounding DM to the project founder.
+        """
+        return ai_tools.think(
+            system_addon="""You are an elite networker writing a short, genuine Telegram DM to a Web3/AI project founder.
+
+RULES — ALL must be followed:
+- MAX 3 sentences — brevity is confidence
+- Sound like a real person who did their research, NOT a bot
+- Reference the specific project naturally (not "I saw your project")
+- Mention one concrete skill or value: Python dev, solidity, community growth, content, analytics
+- End with ONE soft question — not pushy, not desperate
+- NO emojis, NO hashtags, NO "Hi there!", NO "I came across"
+- Every DM must feel uniquely written for THIS person
+
+Return ONLY the message text — nothing else, no quotes.""",
+            user_prompt=(
+                f"Project: {project.get('name')}\n"
+                f"Role I want: {project.get('role', 'developer')}\n"
+                f"What the project does: {project.get('description', '')}\n"
+                f"Who I'm DMing: {target.get('first_name', '')} "
+                f"(@{target.get('username', '')})\n"
+                f"Why they're likely the founder: {target.get('reason', '')}\n"
+                f"Group vibe from recent chat: {room_context[:250]}\n\n"
+                "Write the DM now:"
+            ),
+            max_tokens=200,
+        )
+
+    # ── Phase 6: SEND + LOG ──────────────────────────────────────────────────
+
+    async def send_outreach(self, target: dict, project: dict, msg: str) -> bool:
+        if not msg or len(msg) < 15 or msg.startswith("["):
+            return False
+
+        tg_id    = target.get("tg_id") or target.get("user_id")
+        username = target.get("username", "")
+
+        sent = False
+        try:
+            if username:
+                r = await telegram_tools.send_dm(self.client, f"@{username}", msg)
+                sent = bool(r)
+            if not sent and tg_id:
+                r = await telegram_tools.send_dm(self.client, int(tg_id), msg)
+                sent = bool(r)
+        except Exception as e:
+            console.print(f"    [red]DM error: {e}[/red]")
+
+        if sent:
+            await self.db.log_message("out", tg_id or 0, "user", msg, 0)
+            name = project.get("name", "")
+            who  = target.get("first_name", username)
+            console.print(f"    [bold green]✉️  Sent to {who} at {name}[/bold green]")
+            console.print(f"    [dim]\"{msg[:90]}...\"[/dim]")
+
+        return sent
+
+    # ── FULL PIPELINE ────────────────────────────────────────────────────────
+
+    async def smart_hunt_cycle(self) -> int:
+        """
+        Execute the full 6-phase 500 IQ pipeline.
+        Returns number of outreach DMs successfully sent.
+        """
+        console.print(Rule("[bold cyan]🧠 500 IQ SMART HUNT[/bold cyan]"))
+
+        # Phase 1
+        console.print("[dim]🔍 Discovering projects via web + X...[/dim]")
+        projects = await self.discover_opportunities()
+        if not projects:
+            console.print("[yellow]No new projects found this cycle.[/yellow]")
+            return 0
+        console.print(f"[cyan]→ {len(projects)} candidate projects[/cyan]")
+
+        contacted = 0
+        for project in projects[:5]:  # cap at 5 per cycle to stay safe
+            name = project.get("name", "unknown")
+            role = project.get("role", "role")
+            console.print(f"\n  [bold]◆ {name}[/bold] — {role}")
+
+            try:
+                # Phase 2
+                console.print("  [dim]📡 Infiltrating Telegram group...[/dim]")
+                chat_id = await self.infiltrate_project(project)
+                if not chat_id:
+                    console.print("  [yellow]No group found — skipping[/yellow]")
+                    continue
+
+                # Phase 3
+                console.print("  [dim]👁  Reading the room...[/dim]")
+                room = await self.read_room(chat_id)
+
+                # Phase 4
+                console.print("  [dim]🎯 Identifying decision maker...[/dim]")
+                target = await self.identify_decision_maker(chat_id, name, room)
+                if not target:
+                    console.print("  [yellow]No clear founder/CEO found — skipping[/yellow]")
+                    continue
+
+                fname = target.get("first_name", "?")
+                uname = target.get("username", "")
+                conf  = target.get("confidence", 0)
+                console.print(f"  [green]🎯 {fname} (@{uname}) — {conf}% confidence[/green]")
+                console.print(f"  [dim]Reason: {target.get('reason','')[:80]}[/dim]")
+
+                # Dedup guard
+                key = f"{name}__{target.get('tg_id', uname)}"
+                if key in self._contacted:
+                    console.print("  [dim]Already contacted — skipping[/dim]")
+                    continue
+
+                # Phase 5
+                console.print("  [dim]✍️  Crafting personalized DM...[/dim]")
+                msg = self.craft_outreach_dm(target, project, room)
+
+                # Phase 6
+                sent = await self.send_outreach(target, project, msg)
+                if sent:
+                    contacted += 1
+                    self._contacted.add(key)
+                    await self.memory.remember(
+                        key=f"outreach_{key}",
+                        value=f"DM to {fname} at {name} for {role}: {msg[:120]}",
+                        memory_type="outreach",
+                        score=1.0,
+                    )
+
+                # Rate limit between sends
+                await asyncio.sleep(Config.RATE_LIMIT_SLEEP * 5)
+
+            except Exception as e:
+                console.print(f"  [red]Error on {name}: {e}[/red]")
+                continue
+
+        # Mark all projects seen this cycle so we don't re-process next cycle
+        for p in projects[:5]:
+            self._contacted.add(p.get("name", ""))
+
+        console.print(f"\n[bold green]Hunt done: {contacted} DMs sent[/bold green]")
+        return contacted
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  GENERAL OBSERVE → THINK → PLAN → ACT LOOP
+    # ══════════════════════════════════════════════════════════════════════════
+
+    # Tools the general loop may NOT use (only smart_hunt sends strategically)
+    _GENERAL_BLOCKED = {"post_in_group", "post_to_all_groups", "send_dm",
+                        "reply_to_dm", "send_to_username"}
 
     async def observe(self) -> str:
-        """Collect current world state."""
-        stats = await self.db.get_stats()
+        stats  = await self.db.get_stats()
         groups = await self.db.get_groups(joined=True)
-        jobs = await self.db.get_jobs(applied=False)
-        contacts = await self.db.get_contacts()
-        inbox = await self.tools.get_inbox()
-        best_strategies = await self.memory.best_strategies()
+        jobs   = await self.db.get_jobs(applied=False)
+        best   = await self.memory.best_strategies()
+        return (
+            f"STATE (cycle {self.cycle}) — {datetime.now().strftime('%H:%M %d/%m')}:\n"
+            f"Groups joined: {len(groups)} | Jobs pending: {len(jobs)} | "
+            f"Messages sent: {stats.get('messages_sent', 0)} | "
+            f"Outreach this session: {len(self._contacted)}\n\n"
+            f"TOP STRATEGIES:\n{best}\n\n"
+            f"RECENT ACTIONS:\n" + "\n".join(self.action_log[-5:] or ["None yet"])
+        )
 
-        return f"""
-CURRENT STATE (Cycle {self.cycle}):
-- Groups joined: {len(groups)} | Total discovered: {stats.get('groups', 0)}
-- Contacts indexed: {len(contacts)}
-- Jobs found: {stats.get('jobs', 0)} | Applied: {stats.get('jobs_applied', 0)} | Pending: {len(jobs)}
-- Messages sent: {stats.get('messages_sent', 0)}
-- Unread conversations: {len(inbox)}
-- Time: {datetime.now().strftime('%Y-%m-%d %H:%M')}
-
-WHAT HAS WORKED BEFORE:
-{best_strategies}
-
-RECENT ACTIONS:
-{chr(10).join(self.action_history[-5:]) or 'None yet'}
-""".strip()
-
-    # ── STEP 2: THINK ────────────────────────────────────────────────────────
-
-    def think(self, observation: str) -> str:
-        """Deep chain-of-thought reasoning about what to do."""
+    def think(self, obs: str) -> str:
         return ai_tools.think(
-            system_addon="""You are a 1000 IQ autonomous agent managing a Telegram account.
-Think deeply about the current situation. Reason step by step.
-Consider: What is the biggest opportunity right now? What's been neglected?
-What sequence of actions will have the most impact?
-Be strategic, not random. Think like a chess grandmaster.
-Write your reasoning as a paragraph, then end with: CONCLUSION: [your decision]""",
-            user_prompt=f"""MASTER GOAL:
-{MASTER_GOAL}
-
-OBSERVATION:
-{observation}
-
-AVAILABLE TOOLS:
-{self.tools.descriptions}
-
-Think carefully and reason about the best course of action right now:""",
-            max_tokens=800,
+            system_addon=MASTER_GOAL + "\nThink in 2 sentences then output: CONCLUSION: [what to do now]",
+            user_prompt=f"STATE:\n{obs}\n\nTOOLS:\n{self.tools.descriptions}\n\nReason:",
+            max_tokens=300,
         )
 
-    # ── STEP 3: PLAN ─────────────────────────────────────────────────────────
-
-    def plan(self, thought: str, observation: str) -> list[dict]:
-        """Convert thought into a concrete action plan with tool calls."""
+    def plan(self, thought: str, obs: str) -> list[dict]:
         raw = ai_tools.think(
-            system_addon="""You are a planning agent. Convert reasoning into a JSON action plan.
-Return ONLY a JSON array. Each item must have:
-{
-  "step": 1,
-  "reason": "why this step",
-  "tool": "tool_name",
-  "args": {"param": "value"}
-}
-Use ONLY tools from the available list. Be specific with args.
-Max 5 steps. Think about dependencies between steps.""",
-            user_prompt=f"""REASONING:
-{thought}
-
-OBSERVATION:
-{observation}
-
-AVAILABLE TOOLS:
-{self.tools.descriptions}
-
-Return JSON action plan:""",
-            max_tokens=1200,
+            system_addon=(
+                "Convert reasoning into a JSON action plan. "
+                "Return ONLY a JSON array, no markdown:\n"
+                '[{"step":1,"reason":"why","tool":"tool_name","args":{"k":"v"}}]\n'
+                "Max 4 steps. Only use available tools. "
+                "DO NOT plan post_in_group, send_dm, reply_to_dm — the smart hunt handles sends."
+            ),
+            user_prompt=f"THOUGHT:\n{thought}\n\nSTATE:\n{obs}\n\nTOOLS:\n{self.tools.descriptions}\n\nJSON:",
+            max_tokens=500,
         )
-
-        # Parse JSON plan
-        match = re.search(r'\[.*?\]', raw, re.DOTALL)
-        if match:
+        m = re.search(r'\[.*?\]', raw, re.DOTALL)
+        if m:
             try:
-                steps = json.loads(match.group())
+                steps = json.loads(m.group())
                 return [s for s in steps if isinstance(s, dict) and "tool" in s]
             except Exception:
                 pass
-
-        # Fallback plan if JSON parsing fails
-        return [
-            {"step": 1, "reason": "Discover new opportunities", "tool": "get_stats", "args": {}},
-            {"step": 2, "reason": "Find relevant groups", "tool": "find_tg_groups_web", "args": {"topic": "blockchain developer jobs remote"}},
-        ]
-
-    # ── STEP 4: ACT ──────────────────────────────────────────────────────────
+        return [{"step": 1, "reason": "Check state", "tool": "get_stats", "args": {}}]
 
     async def act(self, plan: list[dict]) -> list[dict]:
-        """Execute the plan step by step, observing results."""
         results = []
         for step in plan:
-            tool = step.get("tool", "")
-            args = step.get("args", {})
+            tool   = step.get("tool", "")
+            args   = step.get("args", {})
             reason = step.get("reason", "")
 
-            console.print(f"  [cyan]▶ Step {step.get('step','')}[/cyan] [{tool}] — {reason}")
+            # General loop cannot send messages — only smart_hunt does targeted sends
+            if tool in self._GENERAL_BLOCKED:
+                console.print(f"  [yellow]⚠ Blocked {tool} in general loop — use /hunt for sends[/yellow]")
+                results.append({"step": step, "result": {"ok": False, "error": "blocked"}})
+                continue
 
+            console.print(f"  [cyan]▶ [{tool}][/cyan] {reason}")
             result = await self.tools.call(tool, **args)
             results.append({"step": step, "result": result})
 
-            # Log action
-            self.action_history.append(
-                f"[{datetime.now().strftime('%H:%M')}] {tool}({args}) → {'✅' if result.get('ok') else '❌'}"
-            )
+            ts = datetime.now().strftime("%H:%M")
+            ok_str = "✅" if result.get("ok") else "❌"
+            self.action_log.append(f"[{ts}] {tool} → {ok_str}")
 
-            # Brief summary
             if result.get("ok"):
-                r = result.get("result")
-                if isinstance(r, list):
-                    console.print(f"    [green]✅ Got {len(r)} results[/green]")
-                elif isinstance(r, dict):
-                    console.print(f"    [green]✅ {json.dumps(r)[:80]}[/green]")
-                else:
-                    console.print(f"    [green]✅ {str(r)[:80]}[/green]")
+                out = result.get("result", "")
+                console.print(f"    [green]✅ {str(out)[:80]}[/green]")
             else:
-                console.print(f"    [red]❌ {result.get('error','unknown error')}[/red]")
+                console.print(f"    [red]❌ {result.get('error','?')}[/red]")
 
-            # Small delay between actions
             await asyncio.sleep(2)
-
         return results
 
-    # ── STEP 5: REFLECT ──────────────────────────────────────────────────────
-
-    async def reflect(self, observation: str, plan: list[dict], results: list[dict]) -> str:
-        """Critically analyze what happened and extract learnings."""
-        results_summary = json.dumps([
-            {
-                "tool": r["step"]["tool"],
-                "args": r["step"]["args"],
-                "success": r["result"].get("ok", False),
-                "result_size": len(r["result"].get("result", [])) if isinstance(r["result"].get("result"), list) else 1,
-            }
+    async def reflect(self, obs: str, results: list[dict]) -> str:
+        summary = json.dumps([
+            {"tool": r["step"]["tool"], "ok": r["result"].get("ok"),
+             "out": str(r["result"].get("result",""))[:80]}
             for r in results
-        ], indent=2)
-
-        reflection = ai_tools.think(
-            system_addon="""You are a self-reflective AI agent. Analyze what just happened critically.
-Answer:
-1. What worked well? (be specific)
-2. What failed or underperformed?
-3. What should be done differently next cycle?
-4. What is the single most important next action?
-5. Score this cycle 1-10 and explain why.
-Be brutally honest. The goal is continuous improvement.""",
-            user_prompt=f"""MASTER GOAL: {MASTER_GOAL}
-
-STATE BEFORE: {observation[:500]}
-
-PLAN EXECUTED:
-{json.dumps([s['step'] for s in results], indent=2)[:500]}
-
-RESULTS:
-{results_summary}
-
-Reflect and learn:""",
-            max_tokens=600,
+        ])
+        return ai_tools.think(
+            system_addon="Analyze what happened in 2 sentences. What to do differently next cycle?",
+            user_prompt=f"STATE: {obs[:250]}\nRESULTS: {summary}\nAnalysis:",
+            max_tokens=150,
         )
-        return reflection
-
-    # ── STEP 6: LEARN ────────────────────────────────────────────────────────
 
     async def learn(self, reflection: str, results: list[dict]):
-        """Update memory with what worked and what didn't."""
-        # Score successful tools positively
         for r in results:
-            tool = r["step"]["tool"]
-            success = r["result"].get("ok", False)
-            result_value = r["result"].get("result")
-            has_data = bool(result_value) and (
-                not isinstance(result_value, list) or len(result_value) > 0
-            )
-            score = 1.0 if (success and has_data) else -0.5
-
+            score = 1.0 if r["result"].get("ok") else -0.5
             await self.memory.remember(
-                key=f"tool_{tool}_cycle{self.cycle}",
-                value=f"Tool {tool} in cycle {self.cycle}: {'success' if success else 'failed'}",
+                key=f"tool_{r['step']['tool']}_c{self.cycle}",
+                value=f"{r['step']['tool']}: {'ok' if r['result'].get('ok') else 'fail'}",
                 memory_type="tool_performance",
                 score=score,
             )
-
-        # Extract and store strategic insights from reflection
-        insight = ai_tools.think(
-            system_addon="Extract ONE key strategic insight as a single sentence. Start with an action verb.",
-            user_prompt=f"Reflection:\n{reflection}\n\nKey insight:",
-            max_tokens=80,
-        )
-        await self.memory.remember(
-            key=f"strategy_cycle{self.cycle}",
-            value=insight,
-            memory_type="strategy",
-            score=0,
-        )
-
-    # ── STEP 7: HANDLE INBOX ─────────────────────────────────────────────────
+        if reflection and not reflection.startswith("["):
+            await self.memory.remember(
+                key=f"strategy_c{self.cycle}",
+                value=reflection[:200],
+                memory_type="strategy",
+                score=0,
+            )
 
     async def handle_inbox(self):
-        """Log unread conversations — auto-reply is disabled."""
+        """Log unread count — NEVER auto-reply to strangers."""
         try:
-            inbox = await self.tools.get_inbox()
-            if inbox:
-                console.print(f"  [yellow]📬 {len(inbox)} unread conversation(s) — review manually[/yellow]")
+            dialogs = await telegram_tools.get_dialogs(self.client, limit=20)
+            unread  = [d for d in dialogs if d.get("unread", 0) > 0]
+            if unread:
+                console.print(f"  [yellow]📬 {len(unread)} unread — reply manually if needed[/yellow]")
         except Exception as e:
-            console.print(f"  [red]Inbox error: {e}[/red]")
+            console.print(f"  [red]Inbox check: {e}[/red]")
 
-    # ── MAIN AGENTIC LOOP ────────────────────────────────────────────────────
+    def _sleep_minutes(self, results: list[dict]) -> int:
+        if not results:
+            return 20
+        rate = sum(1 for r in results if r["result"].get("ok")) / len(results)
+        return 10 if rate >= 0.8 else (20 if rate >= 0.5 else 30)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    #  MAIN AUTONOMOUS LOOP
+    # ══════════════════════════════════════════════════════════════════════════
 
     async def run_forever(self):
         console.print(Panel(
-            "[bold magenta]1000 IQ AUTONOMOUS AGENT — ONLINE[/bold magenta]\n"
-            "[white]Reason → Plan → Act → Observe → Reflect → Learn → Adapt[/white]\n"
-            "[dim]True agentic intelligence. Runs forever. Zero human input.[/dim]",
+            "[bold magenta]🧠 500 IQ AGENTIC ORCHESTRATOR — ONLINE[/bold magenta]\n\n"
+            "[white]Every cycle:[/white]\n"
+            "  Observe → Think → Plan → Act → Reflect → Learn\n\n"
+            "[white]Every 3rd cycle (SMART HUNT):[/white]\n"
+            "  🔍 Discover projects via web + X/Twitter\n"
+            "  📡 Find & join their Telegram group\n"
+            "  👁  Read the room\n"
+            "  🎯 Identify CEO / Founder\n"
+            "  ✍️  Craft personalized DM\n"
+            "  ✉️  Send outreach\n\n"
+            "[dim]No auto-replies. No random posts. Only strategic sends.[/dim]",
             border_style="magenta",
         ))
+
+        hunt_every = 3  # run smart hunt every N cycles
 
         while True:
             self.cycle += 1
             console.print(Rule(f"[bold]CYCLE {self.cycle} — {datetime.now().strftime('%H:%M:%S')}[/bold]"))
 
             try:
-                # 1. OBSERVE — what's the current state?
-                console.print("[dim]👁  Observing...[/dim]")
-                observation = await self.observe()
+                # Smart hunt pipeline on every 3rd cycle
+                if self.cycle % hunt_every == 0:
+                    await self.smart_hunt_cycle()
 
-                # 2. THINK — reason deeply about what to do
-                console.print("[dim]🧠 Thinking...[/dim]")
-                thought = self.think(observation)
-                console.print(f"[dim italic]{thought[:300]}...[/dim italic]")
-
-                # 3. PLAN — turn thought into concrete tool calls
-                console.print("[dim]📋 Planning...[/dim]")
-                plan = self.plan(thought, observation)
-                console.print(f"[dim]Plan: {len(plan)} steps[/dim]")
-
-                # 4. ACT — execute the plan
-                console.print("[cyan]⚡ Acting...[/cyan]")
-                results = await self.act(plan)
-
-                # 5. HANDLE INBOX — reply to people
-                console.print("[dim]📬 Checking inbox...[/dim]")
+                # General loop — always runs
+                obs        = await self.observe()
+                thought    = self.think(obs)
+                console.print(f"[dim italic]{thought[:200]}[/dim italic]")
+                plan       = self.plan(thought, obs)
+                results    = await self.act(plan)
                 await self.handle_inbox()
-
-                # 6. REFLECT — critically analyze what happened
-                console.print("[dim]🪞 Reflecting...[/dim]")
-                reflection = await self.reflect(observation, plan, results)
-                console.print(f"[dim italic]{reflection[:200]}...[/dim italic]")
-
-                # 7. LEARN — store insights in memory
-                console.print("[dim]💾 Learning...[/dim]")
+                reflection = await self.reflect(obs, results)
                 await self.learn(reflection, results)
 
-                # 8. ADAPT — decide how long to sleep before next cycle
-                sleep_minutes = await self._decide_sleep(reflection, results)
-                console.print(f"[dim]😴 Next cycle in {sleep_minutes} min[/dim]")
-                await asyncio.sleep(sleep_minutes * 60)
+                sleep_min = self._sleep_minutes(results)
+                console.print(f"[dim]💤 Sleeping {sleep_min} min[/dim]")
+                await asyncio.sleep(sleep_min * 60)
 
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                console.print(f"[red]Cycle error: {e} — retrying in 5 min[/red]")
+                console.print(f"[red]Cycle {self.cycle} crashed: {e}[/red]")
                 await asyncio.sleep(300)
-
-    async def _decide_sleep(self, reflection: str, results: list[dict]) -> int:
-        """AI decides how long to wait before next cycle."""
-        successes = sum(1 for r in results if r["result"].get("ok"))
-        total = len(results)
-        raw = ai_tools.think(
-            system_addon="Decide sleep time in minutes (5-45). Reply with ONLY the number.",
-            user_prompt=f"Cycle had {successes}/{total} successes. Reflection: {reflection[:100]}\nSleep minutes:",
-            max_tokens=5,
-        )
-        try:
-            return max(5, min(45, int("".join(filter(str.isdigit, raw)) or "20")))
-        except Exception:
-            return 20

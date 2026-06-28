@@ -37,7 +37,6 @@ from telegram_agents.tools.memory import Memory
 from telegram_agents.tools.tool_registry import ToolRegistry
 from telegram_agents.brain import AgentBrain
 from telegram_agents.ai_bot import AIBot
-from telegram_agents.agents.opportunity_hunter import OpportunityHunterAgent
 
 console = Console()
 
@@ -121,45 +120,31 @@ async def main():
     )
 
     async with user_client, bot_client:
-        tools      = ToolRegistry(user_client, db)
-        brain      = AgentBrain(tools, db, memory)
-        ai_bot     = AIBot(bot_client, user_client, tools, db)
-        opp_hunter = OpportunityHunterAgent(user_client, db)
+        tools  = ToolRegistry(user_client, db)
+        brain  = AgentBrain(tools, db, memory, user_client=user_client)
+        ai_bot = AIBot(bot_client, user_client, tools, db)
 
-        # Start bot handlers
         await ai_bot.start()
 
         console.print(Panel(
-            "[bold magenta]🤖 TELEGRAM AI BOT — ONLINE[/bold magenta]\n\n"
-            "[white]Open Telegram → find your bot → send any message\n\n"
-            "Quick commands:\n"
-            "  /start  — welcome screen\n"
-            "  /hunt   — find ambassador/CM/mod roles\n"
+            "[bold magenta]🤖 TELEGRAM AI BOT + 500 IQ BRAIN — ONLINE[/bold magenta]\n\n"
+            "[white]Autonomous brain is running in background:\n"
+            "  Every cycle  : Observe → Think → Plan → Act → Learn\n"
+            "  Every 3rd    : 🔍 Find project → 📡 Join TG → 🎯 Find CEO → ✉️  DM\n\n"
+            "Bot commands:\n"
+            "  /start  — welcome\n"
+            "  /hunt   — force smart hunt now\n"
             "  /news   — post latest AI/Web3 news\n"
-            "  /jobs   — search blockchain jobs\n"
+            "  /jobs   — find + apply to jobs\n"
             "  /status — account stats\n"
-            "  /groups — list joined groups\n\n"
-            "Or just type anything in plain English![/white]\n\n"
-            f"[dim]Bot token: {Config.BOT_TOKEN[:20]}...[/dim]",
+            "  /groups — list joined groups\n"
+            "Or just type anything in plain English![/white]",
             border_style="magenta",
         ))
 
-        async def opportunity_loop():
-            """Hunt and apply to roles every 3 hours autonomously."""
-            while True:
-                try:
-                    await opp_hunter.run(max_apply=10)
-                except Exception as e:
-                    console.print(f"[red]OpportunityHunter error: {e}[/red]")
-                await asyncio.sleep(3 * 60 * 60)
-
-        async def keep_alive():
-            while True:
-                await asyncio.sleep(60)
-
+        # Run bot + autonomous brain simultaneously
         await asyncio.gather(
-            keep_alive(),
-            opportunity_loop(),  # autonomous: finds + applies every 3 hrs
+            brain.run_forever(),   # 500 IQ loop: discover → infiltrate → DM
         )
 
     await db.close()
