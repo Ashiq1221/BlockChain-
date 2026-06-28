@@ -213,24 +213,25 @@ def compute_confidence(
     num_agents: int,
     has_search: bool,
 ) -> tuple[int, str]:
-    """Returns (0-100 confidence, reason string)."""
-    base = judge_score
+    """Returns (0-100 confidence, reason string).
 
-    # Penalise for serious critiques
-    rejections = sum(1 for c in critiques if c.verdict == "reject")
-    warnings   = sum(1 for c in critiques if c.verdict == "warn")
-    base -= rejections * 15
-    base -= warnings   * 5
+    NOTE: _score_one() already applies critic penalty to the judge score via
+    max_penalty * 0.3, so we do NOT subtract again here — that caused the
+    double-penalty bug that produced 3% confidence.
+    """
+    base = judge_score  # already critic-adjusted by the judge
 
-    # Bonus for multi-agent agreement
+    # Bonus for multi-agent agreement and web-grounded search
     if num_agents >= 3:
         base += 5
     if has_search:
         base += 5
 
-    confidence = max(0, min(100, round(base)))
+    # Enforce a sensible floor: even a bad answer gets 20%
+    confidence = max(20, min(100, round(base)))
 
-    # Reason
+    # Reason string
+    rejections = sum(1 for c in critiques if c.verdict == "reject")
     verifiers = []
     if num_agents >= 2: verifiers.append(f"{num_agents} agents")
     if has_search:       verifiers.append("web search")

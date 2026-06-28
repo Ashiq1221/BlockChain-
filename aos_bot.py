@@ -83,22 +83,13 @@ def _source_buttons(sources: list[str]) -> InlineKeyboardMarkup | None:
     return InlineKeyboardMarkup(buttons) if buttons else None
 
 
-async def handle_message(bot: Client, msg: Message):
-    uid   = msg.from_user.id if msg.from_user else 0
-    text  = (msg.text or msg.caption or "").strip()
+async def _process_message(bot: Client, msg: Message, uid: int, text: str):
+    """Background task so new messages are never blocked by in-flight processing."""
+    try:
+        await bot.send_chat_action(uid, ChatAction.TYPING)
+    except Exception:
+        pass
 
-    # Security: only respond to owner if OWNER_ID is set
-    if C.OWNER_ID and uid != C.OWNER_ID:
-        await msg.reply("⛔ Access denied.")
-        return
-
-    if not text or text.startswith("/"):
-        return
-
-    # Show typing
-    await bot.send_chat_action(uid, ChatAction.TYPING)
-
-    # Send "thinking" placeholder
     thinking_msg = await msg.reply(
         "🧠 **AOS Processing...**\n\n"
         "⏳ Routing → Agents → Critics → Debate → Judge → Writing final answer..."
@@ -108,19 +99,31 @@ async def handle_message(bot: Client, msg: Message):
         resp = await aos.process(text)
         answer_text = resp.answer + _footer(resp)
 
-        # Truncate if too long for Telegram (4096 char limit)
         if len(answer_text) > 4000:
             answer_text = answer_text[:3900] + "\n\n_[truncated — answer too long]_"
 
         kb = _source_buttons(resp.sources)
-        # Store response_id for feedback
-        msg._aos_rid = resp.response_id
-
         await thinking_msg.edit(answer_text, reply_markup=kb)
 
     except Exception as e:
         await thinking_msg.edit(f"❌ AOS Error: {e}")
         console.print(f"[red]AOS error: {e}[/red]")
+
+
+async def handle_message(bot: Client, msg: Message):
+    uid  = msg.from_user.id if msg.from_user else 0
+    text = (msg.text or msg.caption or "").strip()
+
+    # Security: only respond to owner if OWNER_ID is set
+    if C.OWNER_ID and uid != C.OWNER_ID:
+        await msg.reply("⛔ Access denied.")
+        return
+
+    if not text or text.startswith("/"):
+        return
+
+    # Fire-and-forget so the next message can be picked up immediately
+    asyncio.create_task(_process_message(bot, msg, uid, text))
 
 
 async def handle_feedback(bot: Client, cb: CallbackQuery):

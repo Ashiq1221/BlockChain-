@@ -217,16 +217,29 @@ class AOS:
         fact_note_text = f"\nFact check: {fact_note}" if fact_note else ""
         low_conf_note = f"\n⚠️ Confidence: {confidence}% — treat with appropriate caution." if confidence < 80 else ""
 
-        return await p.call_claude(
-            prompt=(
-                f"USER QUESTION: {user_input}\n\n"
-                f"BEST DRAFT ANSWER:\n{winner}\n"
-                f"{critics_note}"
-                f"{fact_note_text}"
-                f"{sources_text}"
-                f"{low_conf_note}\n\n"
-                "Write the final polished answer:"
-            ),
-            system=system,
-            max_tokens=1500,
+        full_prompt = (
+            f"USER QUESTION: {user_input}\n\n"
+            f"BEST DRAFT ANSWER:\n{winner}\n"
+            f"{critics_note}"
+            f"{fact_note_text}"
+            f"{sources_text}"
+            f"{low_conf_note}\n\n"
+            "Write the final polished answer:"
         )
+
+        result = await p.call_claude(full_prompt, system, max_tokens=1500)
+
+        # Fallback chain if Claude failed or returned empty/error
+        if not result or result.startswith("[") or len(result) < 10:
+            result = await p.think(
+                prompt=full_prompt,
+                system=system,
+                max_tokens=1000,
+                prefer="gemini",
+            )
+
+        # Last resort: return the winner agent's draft directly
+        if not result or result.startswith("[") or len(result) < 10:
+            return winner
+
+        return result
