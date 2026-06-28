@@ -108,7 +108,7 @@ def _get_queue(status="pending", limit=20):
         "SELECT * FROM action_queue WHERE status=? ORDER BY score DESC LIMIT ?",
         (status, limit)
     ).fetchall()
-    cols = [d[0] for d in db.execute("PRAGMA table_info(action_queue)").fetchall()]
+    cols = [d[1] for d in db.execute("PRAGMA table_info(action_queue)").fetchall()]
     db.close()
     return [dict(zip(cols, r)) for r in rows]
 
