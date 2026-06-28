@@ -1166,14 +1166,214 @@ Reply in this exact JSON format (no markdown, pure JSON):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AGENT 12: Ethical Researcher
+# Uses Claude with chain-of-thought to reason carefully about:
+#   - what the panel legitimately allows for the user's account
+#   - what evidence has been collected so far
+#   - what the most honest interpretation of each finding is
+#   - what the right next step is (technically and ethically)
+# Writes a structured research report to ethical_research.log on each cycle.
+# ══════════════════════════════════════════════════════════════════════════════
+class EthicalResearcher(BaseAgent):
+    NAME  = "ETHICAL"
+    COLOR = "green"
+    CYCLE = 3600           # 1 hour — deep reasoning takes time
+    REPORT_F = Path("ethical_research.log")
+    MODEL    = "claude-sonnet-4-6"   # full Sonnet for deeper CoT
+
+    def _claude(self, system: str, user: str, max_tokens: int = 3000) -> str:
+        if not ANTHROPIC_KEY:
+            raise ValueError("ANTHROPIC_API_KEY not set")
+        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        msg = client.messages.create(
+            model=self.MODEL,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return msg.content[0].text.strip()
+
+    # ── Evidence snapshot ────────────────────────────────────────────────────
+    def _evidence(self) -> str:
+        orders  = STATE.get("orders", {})
+        disc    = STATE.get("discovered", {})
+        refills = STATE.get("refills", {})
+        bal     = STATE.get("balance", "0")
+        exp_log = STATE.get("ai_experiments", [])[-20:]
+
+        order_lines = []
+        for oid, info in orders.items():
+            svc = "8140" if oid in OLD_ORDERS else "12452/13139"
+            order_lines.append(
+                f"  #{oid} svc={svc} status={info.get('status')} "
+                f"remains={info.get('remains')} refilled={'YES' if oid in refills else 'no'}"
+            )
+
+        disc_lines = [f"  {k}: {str(v)[:100]}"
+                      for k, v in disc.items()
+                      if k not in ("refill_cooldown",)]
+
+        exp_summary = []
+        for e in exp_log:
+            res = e.get("result", {})
+            exp_summary.append(
+                f"  {e['exp'].get('id')} {e['exp'].get('method')} "
+                f"{e['exp'].get('url')} → {res.get('status')} "
+                f"{'SUCCESS' if res.get('success') else ''}"
+            )
+
+        cooldown = disc.get("refill_cooldown", "unknown")
+        ticket_msgs = STATE.get("ticket_msg_count", 0)
+
+        return f"""=== EVIDENCE COLLECTED BY ALL AGENTS ===
+
+Panel: https://smmfollows.com  |  User: hhrh197  |  Balance: ${bal}
+Support ticket #944469: {ticket_msgs} messages (read-only, no new posts)
+New-order refill cooldown: {cooldown}
+
+ORDER STATUS
+{chr(10).join(order_lines) if order_lines else '  (none)'}
+
+PANEL DISCOVERIES
+{chr(10).join(disc_lines) if disc_lines else '  (none)'}
+
+EXPERIMENTS RUN (last 20)
+{chr(10).join(exp_summary) if exp_summary else '  (none)'}
+
+KNOWN FACTS
+- Service 8140 (old orders): panel shows ZERO refill button in order row HTML.
+  API returns "Refill is disabled for this service". This is a panel-level block.
+  The service description says "Refill: 30 Days ♻️" — a discrepancy.
+- Services 12452 (likes) and 13139 (retweets): refill supported, 24h cooldown.
+  Orders placed 2026-06-28 ~05:33 UTC. Cooldown expires ~2026-06-29 ~05:33 UTC.
+- Panel JS: GET /orders/{{id}}/refill is the real UI refill endpoint.
+  Returns {{"status":"error","error":"Error"}} during cooldown.
+  Expected to return {{"status":"success"}} when ready.
+- Admin routes (/admin/refill/create etc.) return HTTP 500 — need admin session.
+- /refill page = refill history list (not a trigger).
+- No #setRefill modal found on /orders or /history pages.
+- Ticket #944469: staff has responded; reading only, no new posts sent."""
+
+    # ── System prompt ────────────────────────────────────────────────────────
+    SYSTEM = """You are an ethical technical researcher helping a user understand
+the behavior of an SMM panel (SMMFollows.com) where they have a legitimate
+paid account. Your job is to:
+
+1. ANALYSE the evidence honestly — do not assume malice; consider bugs,
+   misconfigurations, and legitimate business decisions.
+2. REASON step-by-step (chain of thought) before reaching conclusions.
+3. STAY within the scope of the user's own account and orders — do not
+   suggest exploiting other users' data, privilege escalation beyond what
+   a normal account should have, or bypassing authentication.
+4. IDENTIFY what legitimate recourse exists when a promised service feature
+   (e.g. "Refill: 30 Days") appears to be disabled.
+5. PRODUCE a structured research report with: findings, confidence level,
+   recommended next actions, and outstanding questions.
+
+Be concise but thorough. Prioritise actionable findings."""
+
+    # ── Per-cycle research prompt ────────────────────────────────────────────
+    def _research_prompt(self, evidence: str, cycle: int) -> str:
+        focus_rotation = [
+            "service 8140 refill discrepancy (advertised vs blocked)",
+            "what the panel JS refill flow tells us about the intended mechanism",
+            "whether the 24h cooldown is a technical limit or a business policy",
+            "what legitimate customer recourse options exist beyond tickets",
+            "synthesise all findings into a complete picture and recommend the clearest path forward",
+        ]
+        focus = focus_rotation[cycle % len(focus_rotation)]
+
+        return f"""RESEARCH CYCLE {cycle} — Focus: {focus}
+
+{evidence}
+
+Please provide:
+
+1. CHAIN OF THOUGHT — reason step by step about the evidence above,
+   especially as it relates to the focus topic.
+
+2. FINDINGS — bullet list, each with a confidence level (HIGH/MED/LOW)
+   and one sentence of supporting evidence.
+
+3. NEXT EXPERIMENTS — 3-5 specific, targeted probes that have NOT been
+   tried yet and are within the scope of a normal user account.
+   Format each as: [METHOD] /path body={{...}} — reason
+
+4. LEGITIMATE RECOURSE OPTIONS — non-ticket ways the user could escalate
+   or resolve the service discrepancy for service 8140.
+
+5. OUTSTANDING QUESTIONS — what would change your conclusions if answered.
+
+Keep findings grounded in the evidence. Flag speculations clearly."""
+
+    # ── Cycle ───────────────────────────────────────────────────────────────
+    def cycle(self):
+        self.log("Starting ethical research cycle...")
+        evidence = self._evidence()
+        cycle_n  = STATE.get("ethical_cycle", 0) + 1
+        STATE.set("ethical_cycle", cycle_n)
+
+        # Attempt Claude API; fall back to a structured local analysis
+        try:
+            prompt = self._research_prompt(evidence, cycle_n)
+            report = self._claude(self.SYSTEM, prompt)
+            source = "Claude"
+        except ValueError:
+            self.log(f"  {C['yellow']}API key not set — skipping this cycle")
+            return
+        except anthropic.BadRequestError as exc:
+            if "credit balance" in str(exc).lower():
+                self.log(f"  {C['yellow']}No credits — ethical researcher paused")
+                return
+            report = f"[Claude API error: {exc}]"
+            source = "error"
+        except Exception as exc:
+            self.log(f"  Claude error: {exc}", "warning")
+            return
+
+        # Write report to file
+        header = (f"\n{'═'*72}\n"
+                  f"ETHICAL RESEARCH REPORT — Cycle {cycle_n} — "
+                  f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')} — via {source}\n"
+                  f"{'═'*72}\n")
+        with open(self.REPORT_F, "a") as f:
+            f.write(header + report + "\n")
+
+        # Log key findings to STATE
+        STATE.record_discovery(f"ethical_report_{cycle_n}", report[:400])
+
+        # Print summary lines
+        lines = report.split("\n")
+        for line in lines:
+            line = line.strip()
+            if line and (line.startswith(("FINDINGS", "NEXT EXP", "LEGITIMATE", "OUTSTANDING",
+                                          "•", "-", "**", "HIGH", "MED", "LOW"))
+                         or "confidence" in line.lower()):
+                self.log(f"  {line[:140]}")
+
+        self.log(f"Report written → {self.REPORT_F} (cycle {cycle_n}, source={source})")
+
+        # Parse new experiments suggested by Claude and hand them to STATE
+        # so EndpointExplorer or AIResearcher can pick them up
+        new_eps = re.findall(
+            r'\[(GET|POST)\]\s+(/[\w/\-{}]+)(?:\s+body=(\{[^}]*\}))?', report
+        )
+        if new_eps:
+            self.log(f"  {C['cyan']}Claude suggested {len(new_eps)} new experiments:")
+            for method, path, body in new_eps:
+                self.log(f"    {method} {path}")
+                STATE.record_discovery(f"ethical_exp:{method}:{path}", body or "")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LAUNCH
 # ══════════════════════════════════════════════════════════════════════════════
 def banner():
     print(f"""{C['bold']}{C['cyan']}
 ╔══════════════════════════════════════════════════════════════════════╗
-║      11-AGENT DEEP PROBE + AI RESEARCH — SMMFOLLOWS                ║
+║    12-AGENT DEEP PROBE + AI RESEARCH + ETHICAL RESEARCHER           ║
 ║  BALANCE · TRACKER · REFILL-API · TICKET-WATCH · LIKES · RETWEETS  ║
-║  COMMENTS · ENDPOINT · JS-ANALYZE · COORD · AI-RESEARCH            ║
+║  COMMENTS · ENDPOINT · JS-ANALYZE · COORD · AI-RESEARCH · ETHICAL  ║
 ╚══════════════════════════════════════════════════════════════════════╝
 {C['reset']}""")
 
@@ -1197,6 +1397,7 @@ def main():
         JSBundleAnalyzer(halt, args.once),  # 9
         MasterCoordinator(halt, args.once), # 10
         AIResearcher(halt, args.once),      # 11 — Claude-powered hypothesis engine
+        EthicalResearcher(halt, args.once), # 12 — CoT reasoning + structured reports
     ]
 
     log.info(f"Launching {len(agents)} agents (no ticket posting, AI research active)...")
