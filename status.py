@@ -36,7 +36,7 @@ NEW_ORDERS = [
     {"id": "61450848", "type": "comments", "post": "2064283340849738045", "refillable": False},
 ]
 
-TICKET_ID = "1136178"
+TICKET_ID = "944469"   # primary long-running support thread
 
 
 def api(payload: dict) -> dict:
