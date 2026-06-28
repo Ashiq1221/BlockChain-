@@ -11,13 +11,19 @@ class Database:
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self):
+        # Delete stale WAL files before opening (prevents "database is locked")
+        import os
+        for ext in ("-shm", "-wal"):
+            try:
+                os.remove(self.path + ext)
+            except FileNotFoundError:
+                pass
         self._db = await aiosqlite.connect(self.path, timeout=60)
         self._db.row_factory = aiosqlite.Row
-        await self._db.execute("PRAGMA journal_mode=WAL")
+        await self._db.execute("PRAGMA journal_mode=DELETE")   # no WAL = no lock files
         await self._db.execute("PRAGMA busy_timeout=30000")
         await self._db.execute("PRAGMA synchronous=NORMAL")
         await self._db.execute("PRAGMA cache_size=10000")
-        await self._db.execute("PRAGMA wal_checkpoint(PASSIVE)")
         await self._db.commit()
         await self._create_tables()
 
@@ -26,72 +32,37 @@ class Database:
             await self._db.close()
 
     async def _create_tables(self):
-        await self._db.executescript("""
-            CREATE TABLE IF NOT EXISTS groups (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                tg_id       INTEGER UNIQUE,
-                username    TEXT,
-                title       TEXT,
-                members     INTEGER DEFAULT 0,
-                category    TEXT,
-                joined      INTEGER DEFAULT 0,
-                last_post   TEXT,
-                discovered  TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS contacts (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                tg_id       INTEGER UNIQUE,
-                username    TEXT,
-                first_name  TEXT,
-                last_name   TEXT,
-                bio         TEXT,
-                tags        TEXT,
-                dm_sent     INTEGER DEFAULT 0,
-                last_dm     TEXT,
-                added       TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS jobs (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                source      TEXT,
-                title       TEXT,
-                company     TEXT,
-                description TEXT,
-                url         TEXT,
-                applied     INTEGER DEFAULT 0,
-                applied_at  TEXT,
-                response    TEXT,
-                found_at    TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS messages (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                direction   TEXT,
-                peer_id     INTEGER,
-                peer_type   TEXT,
-                text        TEXT,
-                msg_id      INTEGER,
-                sent_at     TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS tasks (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                agent       TEXT,
-                goal        TEXT,
-                status      TEXT DEFAULT 'pending',
-                result      TEXT,
-                created_at  TEXT DEFAULT (datetime('now')),
-                updated_at  TEXT DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS analytics (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                event       TEXT,
-                data        TEXT,
-                ts          TEXT DEFAULT (datetime('now'))
-            );
-        """)
+        tables = [
+            """CREATE TABLE IF NOT EXISTS groups (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER UNIQUE,
+                username TEXT, title TEXT, members INTEGER DEFAULT 0,
+                category TEXT, joined INTEGER DEFAULT 0, last_post TEXT,
+                discovered TEXT DEFAULT (datetime('now')))""",
+            """CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id INTEGER UNIQUE,
+                username TEXT, first_name TEXT, last_name TEXT, bio TEXT,
+                tags TEXT, dm_sent INTEGER DEFAULT 0, last_dm TEXT,
+                added TEXT DEFAULT (datetime('now')))""",
+            """CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, title TEXT,
+                company TEXT, description TEXT, url TEXT,
+                applied INTEGER DEFAULT 0, applied_at TEXT, response TEXT,
+                found_at TEXT DEFAULT (datetime('now')))""",
+            """CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, direction TEXT,
+                peer_id INTEGER, peer_type TEXT, text TEXT, msg_id INTEGER,
+                sent_at TEXT DEFAULT (datetime('now')))""",
+            """CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT, goal TEXT,
+                status TEXT DEFAULT 'pending', result TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now')))""",
+            """CREATE TABLE IF NOT EXISTS analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT, data TEXT,
+                ts TEXT DEFAULT (datetime('now')))""",
+        ]
+        for sql in tables:
+            await self._db.execute(sql)
         await self._db.commit()
 
     # ── Groups ────────────────────────────────────────────────────────
