@@ -10,12 +10,14 @@ Pipeline (every 2nd cycle, 24/7):
   6. Send DM via user account (Pyrogram StringSession)
 
 Bot commands (send to your bot on Telegram):
+  /execute — run the FULL pipeline now (most powerful)
   /hunt    — trigger one hunt+DM cycle right now
   /status  — show cycle stats and recent actions
   /pause   — pause autonomous mode
   /resume  — resume autonomous mode
   /dm @user message — manually send a DM via your account
   /search query — search for opportunities now
+  /cycle N — change hunt frequency (1=every cycle)
   any text — AI chat (powered by Groq)
 
 Required env vars:
@@ -96,13 +98,14 @@ async def _cmd_help():
     await _send(
         "*🤖 Ashiq's Autonomous Bot*\n\n"
         "*Commands:*\n"
-        "`/hunt` — run a full search + DM cycle now\n"
+        "`/execute` — ⚡ run the FULL pipeline now (hunt + act + DM)\n"
+        "`/hunt` — run a search + DM cycle now\n"
         "`/status` — show stats & recent actions\n"
         "`/pause` — pause autonomous hunting\n"
         "`/resume` — resume autonomous hunting\n"
         "`/dm @user message` — send a manual DM\n"
         "`/search query` — search for opportunities\n"
-        "`/cycle N` — change hunt frequency (every N cycles)\n\n"
+        "`/cycle N` — change hunt frequency (1=every cycle)\n\n"
         "*Or just chat* — I'll answer with AI 🧠\n\n"
         "_Running 24/7 on Railway. No phone needed._"
     )
@@ -191,6 +194,41 @@ async def _cmd_cycle(args: str):
         await _send("Usage: `/cycle 2` (1 = every cycle, 3 = every 3rd, etc.)")
 
 
+async def _cmd_execute(args: str):
+    """Run a full pipeline cycle: observe → hunt → act — the most powerful command."""
+    if not _brain:
+        await _send("Bot not ready yet.")
+        return
+    if _brain._paused:
+        await _send("⚠️ Bot is paused. Send /resume first.")
+        return
+
+    await _send(
+        "⚡ *EXECUTE — Full pipeline running*\n"
+        "1. 🔍 Discovering projects...\n"
+        "2. 📡 Joining groups...\n"
+        "3. 🎯 Finding founders...\n"
+        "4. ✉️ Sending DMs..."
+    )
+    try:
+        obs     = await _brain.observe()
+        thought = _brain.think(obs)
+        plan    = _brain.plan(thought, obs)
+        results = await _brain.act(plan)
+        ok      = sum(1 for r in results if r["result"].get("ok"))
+
+        sent = await _brain.smart_hunt_cycle()
+
+        await _send(
+            f"✅ *Execute complete*\n\n"
+            f"Actions taken: *{ok}/{len(results)}* succeeded\n"
+            f"DMs sent: *{sent}*\n\n"
+            f"_Cycle {_brain.cycle} — running 24/7_"
+        )
+    except Exception as e:
+        await _send(f"❌ Execute error: `{e}`")
+
+
 async def _ai_chat(text: str):
     """AI chat response using Groq."""
     await _send("_thinking..._")
@@ -218,15 +256,16 @@ async def _ai_chat(text: str):
 # ─── Command router ───────────────────────────────────────────────────────────
 
 COMMANDS = {
-    "/start":  lambda _: _cmd_help(),
-    "/help":   lambda _: _cmd_help(),
-    "/status": lambda _: _cmd_status(),
-    "/hunt":   lambda _: _cmd_hunt(),
-    "/pause":  lambda _: _cmd_pause(),
-    "/resume": lambda _: _cmd_resume(),
-    "/dm":     _cmd_dm,
-    "/search": _cmd_search,
-    "/cycle":  _cmd_cycle,
+    "/start":   lambda _: _cmd_help(),
+    "/help":    lambda _: _cmd_help(),
+    "/status":  lambda _: _cmd_status(),
+    "/hunt":    lambda _: _cmd_hunt(),
+    "/execute": lambda args: _cmd_execute(args),
+    "/pause":   lambda _: _cmd_pause(),
+    "/resume":  lambda _: _cmd_resume(),
+    "/dm":      _cmd_dm,
+    "/search":  _cmd_search,
+    "/cycle":   _cmd_cycle,
 }
 
 
@@ -249,7 +288,6 @@ async def bot_commander():
                 if not msg:
                     continue
 
-                # Only process messages from the owner
                 from_id = str(msg.get("from", {}).get("id", ""))
                 if from_id != OWNER_ID:
                     continue
@@ -262,7 +300,7 @@ async def bot_commander():
 
                 if text.startswith("/"):
                     parts = text.split(" ", 1)
-                    cmd  = parts[0].lower().split("@")[0]  # handle /cmd@botname
+                    cmd  = parts[0].lower().split("@")[0]
                     args = parts[1] if len(parts) > 1 else ""
                     handler = COMMANDS.get(cmd)
                     if handler:
@@ -339,7 +377,6 @@ async def main():
         tools  = ToolRegistry(user_client, db)
         _brain = AgentBrain(tools, db, memory, user_client=user_client)
 
-        # Run brain + bot commander in parallel
         await asyncio.gather(
             _brain.run_forever(),
             bot_commander(),
