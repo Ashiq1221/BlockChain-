@@ -97,8 +97,34 @@ HEADERS = {
 }
 
 
+async def _tavily(query: str, num: int) -> list[dict]:
+    """Tavily API — reliable HTTPS search, works in all environments."""
+    if not Config.TAVILY_KEY:
+        return []
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                "https://api.tavily.com/search",
+                json={"api_key": Config.TAVILY_KEY, "query": query,
+                      "search_depth": "advanced", "max_results": num},
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as r:
+                if r.status == 200:
+                    d = await r.json()
+                    return [{"title": x.get("title", ""), "url": x.get("url", ""),
+                             "snippet": x.get("content", "")[:300]}
+                            for x in d.get("results", [])]
+    except Exception:
+        pass
+    return []
+
+
 async def web_search(query: str, num: int = 5) -> list[dict]:
-    """Try multiple search engines until one returns results."""
+    """Try Tavily first (reliable API), then fall back to scraping engines."""
+    r = await _tavily(query, num)
+    if r:
+        return r
+
     if Config.SERPAPI_KEY:
         r = await _serpapi(query, num)
         if r:

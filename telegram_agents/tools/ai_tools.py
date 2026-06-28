@@ -67,47 +67,73 @@ def _openai(system: str, prompt: str, max_tokens: int) -> str:
     return resp.json()["choices"][0]["message"]["content"].strip()
 
 
-def _groq(system: str, prompt: str, max_tokens: int) -> str:
+def _groq(system: str, prompt: str, max_tokens: int, model: str = "llama-3.1-8b-instant") -> str:
     if not Config.GROQ_API_KEY:
         raise ValueError("No Groq key")
-    resp = httpx.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {Config.GROQ_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": "llama-3.3-70b-versatile",
-            "max_tokens": max_tokens,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user",   "content": prompt},
-            ],
-        },
-        timeout=60,
-    )
-    if resp.status_code == 429:
-        raise RuntimeError("Groq rate limit")
-    resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"].strip()
+    import time as _time
+    for attempt in range(2):
+        resp = httpx.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {Config.GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": max_tokens,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user",   "content": prompt},
+                ],
+            },
+            timeout=60,
+        )
+        if resp.status_code == 429 and attempt == 0:
+            print(f"[AI] Groq {model} 429 — waiting 30s...")
+            _time.sleep(30)
+            continue
+        if resp.status_code == 429:
+            raise RuntimeError("Groq rate limit")
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+    raise RuntimeError("Groq rate limit after retry")
 
 
-def _gemini(system: str, prompt: str, max_tokens: int) -> str:
+def _groq_70b(system: str, prompt: str, max_tokens: int) -> str:
+    return _groq(system, prompt, max_tokens, model="llama-3.3-70b-versatile")
+
+
+def _groq_gemma(system: str, prompt: str, max_tokens: int) -> str:
+    return _groq(system, prompt, max_tokens, model="gemma2-9b-it")
+
+
+def _gemini(system: str, prompt: str, max_tokens: int, model: str = "gemini-1.5-flash") -> str:
     if not Config.GEMINI_API_KEY:
         raise ValueError("No Gemini key")
-    resp = httpx.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={Config.GEMINI_API_KEY}",
-        headers={"Content-Type": "application/json"},
-        json={
-            "contents": [{"parts": [{"text": f"{system}\n\n{prompt}"}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens},
-        },
-        timeout=60,
-    )
-    if resp.status_code == 429:
-        raise RuntimeError("Gemini rate limit")
-    resp.raise_for_status()
-    return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    import time as _time
+    for attempt in range(2):
+        resp = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={Config.GEMINI_API_KEY}",
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": f"{system}\n\n{prompt}"}]}],
+                "generationConfig": {"maxOutputTokens": max_tokens},
+            },
+            timeout=60,
+        )
+        if resp.status_code == 429 and attempt == 0:
+            print(f"[AI] Gemini {model} 429 — waiting 30s...")
+            _time.sleep(30)
+            continue
+        if resp.status_code == 429:
+            raise RuntimeError("Gemini rate limit")
+        resp.raise_for_status()
+        return resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    raise RuntimeError("Gemini rate limit after retry")
+
+
+def _gemini_flash2(system: str, prompt: str, max_tokens: int) -> str:
+    return _gemini(system, prompt, max_tokens, model="gemini-2.0-flash")
 
 
 # ── Auto-fallback core ────────────────────────────────────────────────────────
@@ -140,14 +166,17 @@ def _grok_xai(system: str, prompt: str, max_tokens: int) -> str:
 
 
 _PROVIDERS = [
-    ("Grok (xAI)",  _grok_xai),   # primary — latest knowledge, X/Twitter awareness
-    ("Anthropic",   _anthropic),
-    ("ChatGPT",     _openai),
-    ("Groq",        _groq),        # FREE — 14,400 req/day
-    ("Gemini",      _gemini),
+    ("Groq-instant", _groq),         # FREE, high rate limit — try first
+    ("Gemini-flash", _gemini),        # FREE, generous quota
+    ("Groq-70b",     _groq_70b),      # fallback Groq model
+    ("Groq-gemma",   _groq_gemma),    # fallback Groq model
+    ("Gemini-2",     _gemini_flash2), # fallback Gemini model
+    ("Anthropic",    _anthropic),     # paid — use if credits available
+    ("ChatGPT",      _openai),        # paid fallback
+    ("Grok (xAI)",   _grok_xai),      # xAI — last resort
 ]
 
-_active_provider = 0   # start with Anthropic
+_active_provider = 0
 
 
 def _call(system_addon: str, user_prompt: str, max_tokens: int = 1024) -> str:

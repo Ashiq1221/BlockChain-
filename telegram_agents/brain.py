@@ -243,33 +243,44 @@ If confidence < 35, return the single word: null""",
     # ── Phase 5: CRAFT PERSONALIZED DM ──────────────────────────────────────
 
     def craft_outreach_dm(self, target: dict, project: dict, room_context: str) -> str:
-        """
-        AI writes a hyper-personalized, human-sounding DM to the project founder.
-        """
+        """AI writes a hyper-personalized DM using Ashiq's real stats."""
+        MY_PROFILE = (
+            "NAME: Ashiq (@ashiq80) | Kashmir, India | fully remote\n"
+            "STATS: 16,000+ Web3 Twitter/X followers (100% organic) | "
+            "6,000+ member community (Telegram, Discord, OpenChat, DSCVR)\n"
+            "PAST: EMC Protocol, ICPepeworld, Network3, LingoAI, RIDO, JarvisBot_AI\n"
+            "SKILLS: Community Manager, Content Creator, Social Media Manager, "
+            "AI prompt engineering, agentic AI systems, data annotation\n"
+            "EDGE: builds autonomous AI systems — can automate growth, outreach, community ops"
+        )
+        role = project.get("role", "community/content")
+        stat = ("16K Twitter followers" if "social" in role or "content" in role or "marketing" in role
+                else "6K-member community" if "community" in role or "moderator" in role
+                else "autonomous agentic AI systems")
         return ai_tools.think(
-            system_addon="""You are an elite networker writing a short, genuine Telegram DM to a Web3/AI project founder.
+            system_addon=f"""You are writing a Telegram DM for Ashiq, a Web3/AI community specialist.
+
+ASHIQ'S PROFILE:
+{MY_PROFILE}
 
 RULES — ALL must be followed:
 - MAX 3 sentences — brevity is confidence
-- Sound like a real person who did their research, NOT a bot
-- Reference the specific project naturally (not "I saw your project")
-- Mention one concrete skill or value: Python dev, solidity, community growth, content, analytics
-- End with ONE soft question — not pushy, not desperate
-- NO emojis, NO hashtags, NO "Hi there!", NO "I came across"
-- Every DM must feel uniquely written for THIS person
-
-Return ONLY the message text — nothing else, no quotes.""",
+- Open with something SPECIFIC about the project (not "I saw your project")
+- Drop ONE concrete stat that matches their need: {stat}
+- End with ONE soft, specific question — not "are you hiring?"
+- NO emojis, NO hashtags, NO "Dear", NO "Hi there!", NO "I came across"
+- Sign off: Ashiq | @ashiq80
+- Return ONLY the message text — no quotes, no extra lines""",
             user_prompt=(
                 f"Project: {project.get('name')}\n"
-                f"Role I want: {project.get('role', 'developer')}\n"
-                f"What the project does: {project.get('description', '')}\n"
-                f"Who I'm DMing: {target.get('first_name', '')} "
-                f"(@{target.get('username', '')})\n"
-                f"Why they're likely the founder: {target.get('reason', '')}\n"
-                f"Group vibe from recent chat: {room_context[:250]}\n\n"
-                "Write the DM now:"
+                f"Role needed: {role}\n"
+                f"What they do: {project.get('description', '')}\n"
+                f"Recipient: {target.get('first_name', '')} (@{target.get('username', '')})\n"
+                f"Why likely founder: {target.get('reason', '')}\n"
+                f"Group vibe: {room_context[:200]}\n\n"
+                "Write the DM:"
             ),
-            max_tokens=200,
+            max_tokens=220,
         )
 
     # ── Phase 6: SEND + LOG ──────────────────────────────────────────────────
