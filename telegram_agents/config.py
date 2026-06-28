@@ -37,6 +37,10 @@ class Config:
     GROQ_API_KEY:   str = os.getenv("GROQ_API_KEY", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+    # Bot
+    BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    OWNER_ID:  int = int(os.getenv("TELEGRAM_OWNER_ID", "0"))
+
     # Optional
     SERPAPI_KEY: str = os.getenv("SERPAPI_KEY", "")
     DB_PATH: str = "telegram_agents.db"
