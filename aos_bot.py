@@ -670,7 +670,7 @@ async def handle_update(session, update, owner_id):
     text    = (msg.get("text") or "").strip()
 
     if C.OWNER_ID and uid != C.OWNER_ID:
-        await send(session, chat_id, "⛔ Access denied.")
+        await send(session, chat_id, f"⛔ Access denied. (your id: {uid}, expected: {C.OWNER_ID})")
         return
     if not text:
         return
