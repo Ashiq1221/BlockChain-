@@ -8,13 +8,13 @@ import subprocess, sys, os
 PACKAGES = [
     "pyrogram==2.0.106",
     "TgCrypto",
-    "anthropic==0.28.0",   # older version — no Rust needed (works on Android)
+    "httpx",          # replaces anthropic SDK — pure Python, no Rust needed
     "aiohttp",
     "aiosqlite",
     "python-dotenv",
     "rich",
     "aiofiles",
-    "beautifulsoup4",      # lxml optional — falls back to html.parser on Android
+    "beautifulsoup4",
 ]
 
 def install(pkg):
