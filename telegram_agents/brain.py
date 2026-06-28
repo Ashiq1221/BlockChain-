@@ -243,28 +243,11 @@ Reflect and learn:""",
     # ── STEP 7: HANDLE INBOX ─────────────────────────────────────────────────
 
     async def handle_inbox(self):
-        """Autonomously respond to any pending conversations."""
+        """Log unread conversations — auto-reply is disabled."""
         try:
             inbox = await self.tools.get_inbox()
-            if not inbox:
-                return
-
-            console.print(f"  [yellow]📬 {len(inbox)} unread conversation(s)[/yellow]")
-            for chat in inbox[:5]:
-                chat_id = chat.get("chat_id")
-                top_msg = chat.get("top_message", "")
-                if not top_msg or not chat_id:
-                    continue
-
-                # Compose intelligent reply
-                reply = ai_tools.smart_reply(
-                    incoming=top_msg,
-                    conversation_history="",
-                    goal=MASTER_GOAL,
-                )
-                await self.tools.reply_to_dm(user_id=chat_id, text=reply)
-                console.print(f"  [green]💬 Replied to chat {chat_id}[/green]")
-                await asyncio.sleep(3)
+            if inbox:
+                console.print(f"  [yellow]📬 {len(inbox)} unread conversation(s) — review manually[/yellow]")
         except Exception as e:
             console.print(f"  [red]Inbox error: {e}[/red]")
 

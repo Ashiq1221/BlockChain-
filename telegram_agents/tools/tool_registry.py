@@ -75,19 +75,13 @@ get_inbox()                      — get recent incoming direct messages
         return success
 
     async def post_in_group(self, group_id: int, text: str) -> bool:
-        msg = await telegram_tools.send_message(self.client, group_id, text)
-        if msg:
-            await self.db.log_message("out", group_id, "group", text, msg.id)
-        return bool(msg)
+        raise PermissionError("Autonomous group posting is disabled. Manual sending only.")
 
     async def send_dm(self, user_id: int, text: str) -> bool:
-        msg = await telegram_tools.send_dm(self.client, user_id, text)
-        if msg:
-            await self.db.log_message("out", user_id, "user", text, msg.id)
-        return bool(msg)
+        raise PermissionError("Autonomous DM sending is disabled. Manual sending only.")
 
     async def reply_to_dm(self, user_id: int, text: str) -> bool:
-        return await self.send_dm(user_id=user_id, text=text)
+        raise PermissionError("Autonomous DM sending is disabled. Manual sending only.")
 
     async def get_group_members(self, group_id: int) -> list:
         return await telegram_tools.get_group_members(self.client, group_id, limit=50)
@@ -115,14 +109,7 @@ get_inbox()                      — get recent incoming direct messages
         return True
 
     async def apply_to_job(self, job_id: int, message: str) -> bool:
-        jobs = await self.db.get_jobs()
-        for j in jobs:
-            if j["id"] == job_id and j.get("group_id"):
-                msg = await telegram_tools.send_message(self.client, j["group_id"], message)
-                if msg:
-                    await self.db.mark_job_applied(job_id, message)
-                    await self.db.log_message("out", j["group_id"], "group", message, msg.id)
-                    return True
+        # Saves application draft without sending any message
         await self.db.mark_job_applied(job_id, message)
         return True
 

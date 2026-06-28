@@ -37,59 +37,58 @@ WELCOME = """🤖 **AI Telegram Agent — Online**
 I'm your personal AI agent. Send me any command in plain text:
 
 • `join 10 web3 groups`
-• `post AI news in my groups`
-• `find ambassador programs and apply`
-• `hunt CM / moderator roles in 2026 projects`
-• `search blockchain developer jobs`
-• `send DM to @username saying: hi there`
-• `post in all my groups: [your message]`
+• `hunt ambassador / CM / moderator roles in 2026 projects`
+• `search blockchain developer jobs and save them`
 • `generate a post about DeFi 2026`
 • `what groups am I in?`
+• `show me latest AI/Web3 news`
+• `find new Web3 projects on X/Twitter`
 
 Or use the buttons below for quick actions.
+
+⚠️ Note: Autonomous DMs and group posting are disabled. All finds are saved for your review.
 """
 
 HELP = """📋 **All Capabilities**
 
 **Telegram Actions**
 • Join groups by keyword or count
-• Post in specific groups or all groups at once
-• Send DMs to any @username
-• Harvest members from groups
+• Read group messages and chat history
+• Harvest members from groups (save to contacts)
 • Leave groups
 
 **Opportunity Hunting**
 • Hunt ambassador programs (web + X/Twitter, 2026)
-• Apply for CM / moderator / content creator roles
-• Search for new Web3/AI project roles
+• Find CM / moderator / content creator roles
+• Discover new Web3/AI project roles
+• All results saved to database — you review & apply manually
 
 **Web & AI**
 • Search web for anything
 • Fetch any URL and summarize it
-• Generate content about any topic
-• Post latest AI/Web3 news
+• Generate high-quality content about any topic
+• Find latest AI/Web3 news
 
 **Job Search**
 • Search for blockchain/remote jobs
-• Save and apply to job listings
+• Save job listings for manual review
 
 **Account Info**
-• Stats: messages sent, groups joined, applications
+• Stats: groups joined, jobs found, contacts
 • List all joined groups
 • View inbox / unread messages
 
-Just type anything naturally — the AI figures out what to do!
+⚠️ DMs and group posting are disabled — no autonomous sending.
 """
 
-AI_SYSTEM = """You are a 1000 IQ autonomous Telegram AI agent.
+AI_SYSTEM = """You are a 1000 IQ Telegram AI assistant.
 The user sends you tasks. Plan and execute them using available tools.
+
+IMPORTANT: You CANNOT send messages, DMs, or post to groups. Read-only operations only.
 
 AVAILABLE TOOLS:
 search_groups(query)                 — search Telegram groups by keyword
 join_group(username)                 — join a group by @username or t.me link
-post_in_group(group_id, text)        — post in a group (needs group_id integer)
-send_dm(user_id, text)               — DM by user_id
-send_to_username(username, text)     — DM by @username
 get_group_members(group_id)          — list group members
 get_dialogs()                        — list all my chats
 get_chat_history(group_id)           — read recent messages
@@ -98,17 +97,13 @@ find_tg_groups_web(topic)            — find Telegram groups via web search
 get_stats()                          — account stats
 get_unapplied_jobs()                 — pending job applications
 save_job(title,company,desc,src)     — save a job
-apply_to_job(job_id, message)        — apply to a job
 get_contacts()                       — saved contacts
 harvest_members(group_id)            — collect members from a group
-reply_to_dm(user_id, text)           — reply to someone
 get_inbox()                          — unread messages
-post_news(topic)                     — fetch and post latest news on a topic
 bulk_join_groups(topic, count)       — join multiple groups (default 5)
-post_to_all_groups(text)             — post in ALL joined groups
 generate_content(topic)              — generate a high-quality post
 fetch_url(url)                       — fetch and read any URL
-hunt_opportunities(role)             — hunt ambassador/CM/mod/creator roles
+hunt_opportunities(role)             — find ambassador/CM/mod/creator roles (no auto-apply)
 leave_group(username)                — leave a group
 
 Return ONLY a JSON array:
@@ -180,7 +175,7 @@ class AIBot:
         await self._execute_and_reply(msg, "hunt ambassador CM moderator content creator roles in web3 AI 2026 projects")
 
     async def _cmd_news(self, bot: Client, msg: Message):
-        await self._execute_and_reply(msg, "search and post latest AI and Web3 crypto news in my groups")
+        await self._execute_and_reply(msg, "search latest AI and Web3 crypto news and show me a summary")
 
     async def _cmd_jobs(self, bot: Client, msg: Message):
         await self._execute_and_reply(msg, "search for blockchain remote developer jobs and save them")
@@ -193,11 +188,11 @@ class AIBot:
     async def _on_button(self, bot: Client, cb: CallbackQuery):
         await cb.answer()
         mapping = {
-            "hunt":   "hunt ambassador CM moderator content creator roles in web3 AI 2026",
-            "news":   "search and post latest AI Web3 crypto news in my groups",
+            "hunt":   "hunt ambassador CM moderator content creator roles in web3 AI 2026 projects and save results",
+            "news":   "search latest AI Web3 crypto news and show me a summary",
             "stats":  "get stats and show account performance summary",
             "join":   "find and join 5 top web3 AI crypto telegram groups",
-            "jobs":   "search blockchain remote developer jobs",
+            "jobs":   "search blockchain remote developer jobs and save them",
             "groups": "list all groups I am currently in",
         }
         task = mapping.get(cb.data, cb.data)
@@ -306,7 +301,13 @@ class AIBot:
 
     # ── Tool dispatcher ──────────────────────────────────────────────────────────
 
+    _BLOCKED_TOOLS = {"send_dm", "reply_to_dm", "post_in_group", "post_to_all_groups",
+                      "send_to_username", "post_news"}
+
     async def _call_tool(self, tool: str, **kwargs) -> dict:
+        # Hard block — no autonomous sending of any kind
+        if tool in self._BLOCKED_TOOLS:
+            return {"ok": False, "error": f"'{tool}' is disabled. No autonomous sending allowed."}
         # Extended tools
         if tool == "post_news":
             return await self._post_news(kwargs.get("topic", "AI web3 crypto"))
@@ -342,23 +343,13 @@ class AIBot:
         if not results:
             return {"ok": False, "error": "No news found"}
         headlines = "\n".join(f"• {r['title']}" for r in results[:5] if r.get("title"))
-        post = ai_tools.think(
-            system_addon="Write a short engaging Telegram post (3-5 bullet points) about these news headlines. No hashtags. Sound human.",
-            user_prompt=f"Topic: {topic}\nHeadlines:\n{headlines}\n\nPost:",
+        summary = ai_tools.think(
+            system_addon="Summarize these news headlines into a concise digest (3-5 bullets). No hashtags. Sound human.",
+            user_prompt=f"Topic: {topic}\nHeadlines:\n{headlines}\n\nSummary:",
             max_tokens=300,
         )
-        groups = await self.db.get_groups(joined=True)
-        posted = 0
-        for g in groups[:5]:
-            try:
-                from telegram_agents.tools import telegram_tools
-                msg = await telegram_tools.send_message(self.user_client, g["tg_id"], post)
-                if msg:
-                    posted += 1
-                await asyncio.sleep(3)
-            except Exception:
-                pass
-        return {"ok": True, "result": f"Posted '{topic}' news in {posted} groups.\n\nPost preview:\n{post[:200]}"}
+        # Read-only: show summary, do NOT post to any group
+        return {"ok": True, "result": f"Latest {topic} news:\n\n{summary}"}
 
     async def _bulk_join_groups(self, topic: str, count: int = 5) -> dict:
         groups = await web_tools.find_telegram_groups_online(topic)
@@ -379,34 +370,15 @@ class AIBot:
         return {"ok": True, "result": f"Joined {joined}/{min(count, len(groups))} groups about '{topic}'"}
 
     async def _post_to_all_groups(self, text: str) -> dict:
-        if not text:
-            return {"ok": False, "error": "No text provided"}
-        groups = await self.db.get_groups(joined=True)
-        posted = 0
-        from telegram_agents.tools import telegram_tools
-        for g in groups:
-            try:
-                msg = await telegram_tools.send_message(self.user_client, g["tg_id"], text)
-                if msg:
-                    posted += 1
-                await asyncio.sleep(3)
-            except Exception:
-                pass
-        return {"ok": True, "result": f"Posted in {posted}/{len(groups)} groups"}
+        # Autonomous group posting is disabled
+        return {"ok": False, "error": "Group posting is disabled. Copy the generated text and post manually."}
 
     async def _hunt_opps(self, role: str = "") -> dict:
         from telegram_agents.agents.opportunity_hunter import OpportunityHunterAgent
         hunter = OpportunityHunterAgent(self.user_client, self.db)
-        r = await hunter.run(max_apply=10)
-        return {"ok": True, "result": f"Found {r['found']} opportunities, applied to {r['applied']}"}
+        r = await hunter.run(max_apply=0)  # find only — never DM
+        return {"ok": True, "result": f"Found {r['found']} opportunities saved to database. Review and apply manually."}
 
     async def _send_to_username(self, username: str, text: str) -> dict:
-        if not username or not text:
-            return {"ok": False, "error": "Missing username or text"}
-        username = username.lstrip("@").strip()
-        try:
-            from telegram_agents.tools import telegram_tools
-            msg = await telegram_tools.send_dm(self.user_client, f"@{username}", text)
-            return {"ok": bool(msg), "result": f"Sent DM to @{username}"}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        # Autonomous DM sending is disabled
+        return {"ok": False, "error": "DM sending is disabled. Send manually from Telegram."}
