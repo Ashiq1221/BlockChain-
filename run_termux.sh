@@ -2,9 +2,9 @@
 # Quick launcher for Termux — kills old instances, installs deps, starts bot.py
 cd "$(dirname "$0")"
 
-# Kill any previous bot instances to avoid "database is locked"
+# Kill any previous bot instances (exclude self)
 echo "🔄 Stopping any previous bot instances..."
-pkill -f "python.*bot.py" 2>/dev/null; sleep 1
+pgrep -f "python.*bot.py" | grep -v $$ | xargs kill -15 2>/dev/null; sleep 1
 
 # Remove stale WAL lock files
 rm -f telegram_agents.db-shm telegram_agents.db-wal

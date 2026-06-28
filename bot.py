@@ -30,9 +30,9 @@ def _kill_old_and_clean():
             except Exception:
                 pass
     except ImportError:
-        # psutil not installed — use shell fallback
+        # psutil not installed — kill other instances but NOT self
         subprocess.call(
-            f"pkill -f 'python.*bot.py' 2>/dev/null; sleep 0.5",
+            f"pgrep -f 'python.*bot.py' | grep -v {my_pid} | xargs kill -15 2>/dev/null; sleep 0.5",
             shell=True, stderr=subprocess.DEVNULL
         )
     # Remove stale SQLite WAL lock files
