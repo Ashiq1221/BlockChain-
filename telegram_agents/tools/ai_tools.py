@@ -67,6 +67,31 @@ def _openai(system: str, prompt: str, max_tokens: int) -> str:
     return resp.json()["choices"][0]["message"]["content"].strip()
 
 
+def _groq(system: str, prompt: str, max_tokens: int) -> str:
+    if not Config.GROQ_API_KEY:
+        raise ValueError("No Groq key")
+    resp = httpx.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {Config.GROQ_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": "llama-3.3-70b-versatile",
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ],
+        },
+        timeout=60,
+    )
+    if resp.status_code == 429:
+        raise RuntimeError("Groq rate limit")
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
 def _gemini(system: str, prompt: str, max_tokens: int) -> str:
     if not Config.GEMINI_API_KEY:
         raise ValueError("No Gemini key")
@@ -90,6 +115,7 @@ def _gemini(system: str, prompt: str, max_tokens: int) -> str:
 _PROVIDERS = [
     ("Anthropic", _anthropic),
     ("ChatGPT",   _openai),
+    ("Groq",      _groq),      # FREE — 14,400 req/day
     ("Gemini",    _gemini),
 ]
 
