@@ -1,2 +1,164 @@
-# BlockChain-
-BlockChain with supply 11000
+# Telegram Autonomous AI Agent System
+
+10 specialized AI agents, all powered by Claude, that autonomously manage your Telegram account — finding groups, hunting jobs, sending DMs, posting content, building your network, and more.
+
+---
+
+## Agent Roster
+
+| # | Agent | Mission |
+|---|-------|---------|
+| 1 | **Commander** | Master orchestrator — interprets your natural-language goals and delegates to other agents |
+| 2 | **GroupDiscovery** | Searches the web + Telegram to find and join relevant groups |
+| 3 | **JobHunter** | Scans groups for job posts, crafts personalized applications, sends them |
+| 4 | **DMAgent** | Runs targeted DM campaigns with AI-personalized messages |
+| 5 | **ContentAgent** | Generates and posts content in groups, adapts tone per group category |
+| 6 | **NetworkAgent** | Harvests contacts from groups, tags by relevance |
+| 7 | **MonitorAgent** | Watches groups in real-time for keywords, opportunities, mentions |
+| 8 | **ResponderAgent** | Auto-replies to incoming DMs and group mentions intelligently |
+| 9 | **AnalyticsAgent** | Tracks all metrics, prints dashboards, generates AI insights |
+| 10 | **StrategyAgent** | Plans multi-week campaigns, generates daily briefings |
+
+---
+
+## Setup
+
+### 1. Get Telegram API credentials
+
+Go to [my.telegram.org/apps](https://my.telegram.org/apps), create an app, and copy your `api_id` and `api_hash`.
+
+### 2. Get Anthropic API key
+
+Sign up at [console.anthropic.com](https://console.anthropic.com) and create an API key.
+
+### 3. Configure
+
+```bash
+cp .env.example .env
+# Edit .env with your credentials
+```
+
+### 4. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5. First run (authenticate Telegram session)
+
+```bash
+python main.py --agent analytics
+```
+
+On first run, Pyrogram will ask for your phone number and verification code. After that, a `.session` file is saved and you never need to authenticate again.
+
+---
+
+## Usage
+
+### Natural language (Commander handles everything)
+
+```bash
+python main.py --goal "find blockchain developer jobs and apply to them"
+python main.py --goal "join Python communities and post about my freelance services"
+python main.py --goal "find hiring managers and DM them my portfolio"
+```
+
+### Individual agents
+
+```bash
+# Discover and join relevant groups
+python main.py --agent group_discovery --topics "python,blockchain,remote jobs"
+
+# Hunt jobs and apply
+python main.py --agent job_hunter --goal "find remote backend developer jobs"
+
+# DM campaign
+python main.py --agent dm --goal "introduce myself as a blockchain developer" --max-send 20
+
+# Post content in joined groups
+python main.py --agent content --topic "Available for freelance blockchain development"
+
+# Build contact database from groups
+python main.py --agent network
+
+# Monitor for keywords (10 minutes)
+python main.py --agent monitor --keywords "hiring,looking for developer,remote" --duration 600
+
+# Auto-respond to all incoming DMs (1 hour)
+python main.py --agent responder --duration 3600
+
+# Analytics dashboard + AI insights
+python main.py --agent analytics
+
+# Generate 2-week strategy
+python main.py --agent strategy --goal "land a remote Python job"
+
+# Morning briefing
+python main.py --agent brief
+
+# Full pipeline (discover → network → hunt jobs → analytics)
+python main.py --agent full --goal "find and apply to remote blockchain jobs"
+```
+
+### Dry run (no messages sent)
+
+```bash
+python main.py --agent job_hunter --dry-run
+```
+
+---
+
+## Configuration (`.env`)
+
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_API_ID` | From my.telegram.org/apps |
+| `TELEGRAM_API_HASH` | From my.telegram.org/apps |
+| `TELEGRAM_PHONE` | Your phone with country code (+1234567890) |
+| `TELEGRAM_SESSION_NAME` | Session file name (default: tg_agent_session) |
+| `ANTHROPIC_API_KEY` | Your Claude API key |
+| `AGENT_PERSONA` | How agents should sound (default: professional) |
+| `MAX_DM_PER_HOUR` | Rate limit for DMs (default: 10) |
+| `MAX_GROUP_POSTS_PER_HOUR` | Rate limit for posts (default: 5) |
+| `RATE_LIMIT_SLEEP` | Seconds between Telegram actions (default: 3) |
+| `AUTO_RESPOND` | Enable auto-DM responses (default: true) |
+| `JOB_KEYWORDS` | Comma-separated job keywords |
+| `SERPAPI_KEY` | Optional: SerpAPI key for enhanced web search |
+
+---
+
+## Architecture
+
+```
+telegram_agents/
+├── config.py           — All configuration from .env
+├── database.py         — SQLite persistence (groups, contacts, jobs, messages, tasks)
+├── base_agent.py       — Abstract base shared by all agents
+├── agents/
+│   ├── commander.py        — Agent 1: Orchestrator
+│   ├── group_discovery.py  — Agent 2: Group finder
+│   ├── job_hunter.py       — Agent 3: Job applicant
+│   ├── dm_agent.py         — Agent 4: DM campaigner
+│   ├── content_agent.py    — Agent 5: Content publisher
+│   ├── network_agent.py    — Agent 6: Contact harvester
+│   ├── monitor_agent.py    — Agent 7: Real-time watcher
+│   ├── responder_agent.py  — Agent 8: Auto-responder
+│   ├── analytics_agent.py  — Agent 9: Metrics + insights
+│   └── strategy_agent.py   — Agent 10: Long-term planner
+└── tools/
+    ├── telegram_tools.py   — Pyrogram API wrappers
+    ├── web_tools.py        — Web search + scraping
+    └── ai_tools.py         — Claude AI integration
+```
+
+All state persists in `telegram_agents.db` (SQLite) — survives restarts.
+
+---
+
+## Important Notes
+
+- **Rate limiting**: The system respects Telegram's limits. Default: 3s between actions, max 10 DMs/hour.
+- **Anti-spam**: Never spam. The AI personalizes every message. Use responsibly.
+- **Session file**: Keep your `.session` file private — it grants full account access.
+- **Flood protection**: Pyrogram auto-handles `FloodWait` errors with backoff.
