@@ -17,16 +17,18 @@ POLL_INTERVAL_SEC   = 60    # seconds between order status checks
 REFILL_INTERVAL_SEC = 300   # seconds between refill sweeps
 AGENT_THINK_SEC     = 30    # seconds between agent decision cycles
 
-# ── Service IDs ─────────────────────────────────────────────────────────────
-# Run:  python agent.py list-services   to discover your account's real IDs
-LIKES_SERVICE_ID    = int(os.getenv("SMM_LIKES_SVC",    "1"))
-COMMENTS_SERVICE_ID = int(os.getenv("SMM_COMMENTS_SVC", "2"))
-RETWEETS_SERVICE_ID = int(os.getenv("SMM_RETWEETS_SVC", "3"))
+# ── Service IDs (verified live from your account) ───────────────────────────
+# ID 12452 → Twitter Likes Turkey HQ | rate $0.88/1k | refill YES | min 10
+# ID 7339  → Twitter Comments Custom USA | rate $33.75/1k | min 5
+# ID 13139 → Twitter Retweets HQ | rate $0.54/1k | refill YES | min 10
+LIKES_SERVICE_ID    = int(os.getenv("SMM_LIKES_SVC",    "12452"))
+COMMENTS_SERVICE_ID = int(os.getenv("SMM_COMMENTS_SVC", "7339"))
+RETWEETS_SERVICE_ID = int(os.getenv("SMM_RETWEETS_SVC", "13139"))
 
 # ── Default Quantities ──────────────────────────────────────────────────────
-DEFAULT_LIKES_QTY    = int(os.getenv("SMM_LIKES_QTY",    "100"))
-DEFAULT_COMMENTS_QTY = int(os.getenv("SMM_COMMENTS_QTY", "10"))
-DEFAULT_RETWEETS_QTY = int(os.getenv("SMM_RETWEETS_QTY", "50"))
+DEFAULT_LIKES_QTY    = int(os.getenv("SMM_LIKES_QTY",    "50"))
+DEFAULT_COMMENTS_QTY = int(os.getenv("SMM_COMMENTS_QTY", "5"))
+DEFAULT_RETWEETS_QTY = int(os.getenv("SMM_RETWEETS_QTY", "10"))
 
 # ── Targets ─────────────────────────────────────────────────────────────────
 # Comma-separated post URLs the agent should boost
