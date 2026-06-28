@@ -24,6 +24,10 @@ class AOSConfig:
     OPENAI_KEY:    str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL:  str = "gpt-4o-mini"
 
+    # ── Telegram Bot ─────────────────────────────────────────────────────────
+    BOT_TOKEN:  str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    OWNER_ID:   int = int(os.getenv("TELEGRAM_OWNER_ID", "0"))
+
     # ── Search ───────────────────────────────────────────────────────────────
     TAVILY_KEY:    str = os.getenv("TAVILY_API_KEY", "")
 
