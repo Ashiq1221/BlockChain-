@@ -1,6 +1,7 @@
 import aiosqlite
 import asyncio
 import json
+import os
 from datetime import datetime
 from telegram_agents.config import Config
 
@@ -9,21 +10,32 @@ class Database:
     def __init__(self):
         self.path = Config.DB_PATH
         self._db: aiosqlite.Connection | None = None
+        self._lock = asyncio.Lock()   # serialise all writes
 
     async def connect(self):
-        # Delete stale WAL files before opening (prevents "database is locked")
-        import os
-        for ext in ("-shm", "-wal"):
+        # Wipe stale lock/WAL files
+        for ext in ("-shm", "-wal", "-journal"):
             try:
                 os.remove(self.path + ext)
             except FileNotFoundError:
                 pass
+
+        # If DB file itself is corrupted/locked, delete and start fresh
+        try:
+            test = await aiosqlite.connect(self.path, timeout=3)
+            await test.execute("SELECT 1")
+            await test.close()
+        except Exception:
+            try:
+                os.remove(self.path)
+            except FileNotFoundError:
+                pass
+
         self._db = await aiosqlite.connect(self.path, timeout=60)
         self._db.row_factory = aiosqlite.Row
-        await self._db.execute("PRAGMA journal_mode=DELETE")   # no WAL = no lock files
+        await self._db.execute("PRAGMA journal_mode=DELETE")
         await self._db.execute("PRAGMA busy_timeout=30000")
         await self._db.execute("PRAGMA synchronous=NORMAL")
-        await self._db.execute("PRAGMA cache_size=10000")
         await self._db.commit()
         await self._create_tables()
 
@@ -68,20 +80,21 @@ class Database:
     # ── Groups ────────────────────────────────────────────────────────
 
     async def _exec(self, sql: str, params=None, retries: int = 5):
-        """Execute with retry on database locked."""
-        for i in range(retries):
-            try:
-                if params is None:
-                    await self._db.execute(sql)
-                else:
-                    await self._db.execute(sql, params)
-                await self._db.commit()
-                return
-            except Exception as e:
-                if "locked" in str(e).lower() and i < retries - 1:
-                    await asyncio.sleep(0.3 * (i + 1))
-                else:
-                    raise
+        """Serialised write with retry — only one write at a time."""
+        async with self._lock:
+            for i in range(retries):
+                try:
+                    if params is None:
+                        await self._db.execute(sql)
+                    else:
+                        await self._db.execute(sql, params)
+                    await self._db.commit()
+                    return
+                except Exception as e:
+                    if "locked" in str(e).lower() and i < retries - 1:
+                        await asyncio.sleep(0.4 * (i + 1))
+                    else:
+                        return  # swallow — don't crash the brain over a log entry
 
     async def upsert_group(self, tg_id: int, **kwargs):
         cols = ", ".join(["tg_id"] + list(kwargs.keys()))
@@ -155,18 +168,19 @@ class Database:
     # ── Tasks ─────────────────────────────────────────────────────────
 
     async def create_task(self, agent: str, goal: str) -> int:
-        for i in range(5):
-            try:
-                cur = await self._db.execute(
-                    "INSERT INTO tasks (agent, goal) VALUES (?,?)", [agent, goal]
-                )
-                await self._db.commit()
-                return cur.lastrowid
-            except Exception as e:
-                if "locked" in str(e).lower() and i < 4:
-                    await asyncio.sleep(0.3 * (i + 1))
-                else:
-                    raise
+        async with self._lock:
+            for i in range(5):
+                try:
+                    cur = await self._db.execute(
+                        "INSERT INTO tasks (agent, goal) VALUES (?,?)", [agent, goal]
+                    )
+                    await self._db.commit()
+                    return cur.lastrowid
+                except Exception as e:
+                    if "locked" in str(e).lower() and i < 4:
+                        await asyncio.sleep(0.4 * (i + 1))
+                    else:
+                        return 0
         return 0
 
     async def update_task(self, task_id: int, status: str, result: str = ""):
