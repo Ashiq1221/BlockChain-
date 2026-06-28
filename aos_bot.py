@@ -355,7 +355,7 @@ Return ONLY a valid JSON array. No markdown. No explanation."""
     # Parse JSON
     match = re.search(r'\[.*\]', result, re.DOTALL)
     if not match:
-        console.print("[yellow]  Analyst: no JSON found[/yellow]")
+        console.print(f"[yellow]  Analyst: no JSON found. AI returned ({len(result)} chars): {result[:200]!r}[/yellow]")
         return []
     try:
         leads = json.loads(match.group())
@@ -503,59 +503,88 @@ async def agent_queue(session, owner_id: int, targets: list[dict],
 # ── AI call helper ────────────────────────────────────────────────────────────
 
 async def _ai_call(prompt: str, max_tokens: int = 800) -> str:
+    GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
     providers = []
-    if C.XAI_KEY:
-        providers.append(("Grok",   "https://api.x.ai/v1/chat/completions",
-                          C.XAI_KEY,  C.XAI_MODEL, "openai"))
-    if C.CLAUDE_KEY:
-        providers.append(("Claude", "anthropic",
-                          C.CLAUDE_KEY, "claude-3-5-haiku-20241022", "anthropic"))
+    # Put fastest/cheapest first; skip Grok (permission denied) and Claude (no credits)
     if C.GROQ_KEY:
-        providers.append(("Groq",   "https://api.groq.com/openai/v1/chat/completions",
-                          C.GROQ_KEY,  C.GROQ_MODEL, "openai"))
+        # Try multiple Groq models — instant has highest rate limits
+        providers.append(("Groq-instant", GROQ_URL, C.GROQ_KEY, "llama-3.1-8b-instant", "openai"))
+        providers.append(("Groq-70b",     GROQ_URL, C.GROQ_KEY, "llama-3.3-70b-versatile", "openai"))
+        providers.append(("Groq-gemma",   GROQ_URL, C.GROQ_KEY, "gemma2-9b-it", "openai"))
     if C.GEMINI_KEY:
-        providers.append(("Gemini", "gemini",
-                          C.GEMINI_KEY, C.GEMINI_MODEL, "gemini"))
+        providers.append(("Gemini-flash", "gemini", C.GEMINI_KEY, "gemini-1.5-flash", "gemini"))
+        providers.append(("Gemini-2",     "gemini", C.GEMINI_KEY, C.GEMINI_MODEL, "gemini"))
+    if C.CLAUDE_KEY:
+        providers.append(("Claude", "anthropic", C.CLAUDE_KEY, "claude-3-5-haiku-20241022", "anthropic"))
+    if C.XAI_KEY:
+        providers.append(("Grok", "https://api.x.ai/v1/chat/completions", C.XAI_KEY, C.XAI_MODEL, "openai"))
 
     for name, url, key, model, fmt in providers:
-        try:
-            async with aiohttp.ClientSession() as s:
-                if fmt == "anthropic":
-                    async with s.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers={"x-api-key": key, "anthropic-version": "2023-06-01",
-                                 "content-type": "application/json"},
-                        json={"model": model, "max_tokens": max_tokens,
-                              "messages": [{"role": "user", "content": prompt}]},
-                        timeout=aiohttp.ClientTimeout(total=30),
-                    ) as r:
-                        if r.status == 200:
-                            d = await r.json()
-                            return d["content"][0]["text"].strip()
-                elif fmt == "gemini":
-                    async with s.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
-                        json={"contents": [{"parts": [{"text": prompt}]}],
-                              "generationConfig": {"maxOutputTokens": max_tokens}},
-                        timeout=aiohttp.ClientTimeout(total=30),
-                    ) as r:
-                        if r.status == 200:
-                            d = await r.json()
-                            return d["candidates"][0]["content"]["parts"][0]["text"].strip()
-                else:
-                    async with s.post(
-                        url,
-                        headers={"Authorization": f"Bearer {key}",
-                                 "Content-Type": "application/json"},
-                        json={"model": model, "max_tokens": max_tokens,
-                              "messages": [{"role": "user", "content": prompt}]},
-                        timeout=aiohttp.ClientTimeout(total=30),
-                    ) as r:
-                        if r.status == 200:
-                            d = await r.json()
-                            return d["choices"][0]["message"]["content"].strip()
-        except Exception:
-            continue
+        for attempt in range(2):   # retry once on 429
+            try:
+                async with aiohttp.ClientSession() as s:
+                    if fmt == "anthropic":
+                        async with s.post(
+                            "https://api.anthropic.com/v1/messages",
+                            headers={"x-api-key": key, "anthropic-version": "2023-06-01",
+                                     "content-type": "application/json"},
+                            json={"model": model, "max_tokens": max_tokens,
+                                  "messages": [{"role": "user", "content": prompt}]},
+                            timeout=aiohttp.ClientTimeout(total=30),
+                        ) as r:
+                            if r.status == 200:
+                                d = await r.json()
+                                return d["content"][0]["text"].strip()
+                            elif r.status == 429 and attempt == 0:
+                                console.print(f"[yellow]  {name} 429 — waiting 30s...[/yellow]")
+                                await asyncio.sleep(30)
+                                continue
+                            else:
+                                body = await r.text()
+                                console.print(f"[yellow]  {name} {r.status}: {body[:100]}[/yellow]")
+                                break
+                    elif fmt == "gemini":
+                        async with s.post(
+                            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+                            json={"contents": [{"parts": [{"text": prompt}]}],
+                                  "generationConfig": {"maxOutputTokens": max_tokens}},
+                            timeout=aiohttp.ClientTimeout(total=30),
+                        ) as r:
+                            if r.status == 200:
+                                d = await r.json()
+                                return d["candidates"][0]["content"]["parts"][0]["text"].strip()
+                            elif r.status == 429 and attempt == 0:
+                                console.print(f"[yellow]  {name} 429 — waiting 30s...[/yellow]")
+                                await asyncio.sleep(30)
+                                continue
+                            else:
+                                body = await r.text()
+                                console.print(f"[yellow]  {name} {r.status}: {body[:100]}[/yellow]")
+                                break
+                    else:
+                        async with s.post(
+                            url,
+                            headers={"Authorization": f"Bearer {key}",
+                                     "Content-Type": "application/json"},
+                            json={"model": model, "max_tokens": max_tokens,
+                                  "messages": [{"role": "user", "content": prompt}]},
+                            timeout=aiohttp.ClientTimeout(total=30),
+                        ) as r:
+                            if r.status == 200:
+                                d = await r.json()
+                                return d["choices"][0]["message"]["content"].strip()
+                            elif r.status == 429 and attempt == 0:
+                                console.print(f"[yellow]  {name} 429 — waiting 30s...[/yellow]")
+                                await asyncio.sleep(30)
+                                continue
+                            else:
+                                body = await r.text()
+                                console.print(f"[yellow]  {name} {r.status}: {body[:100]}[/yellow]")
+                                break
+            except Exception as e:
+                console.print(f"[yellow]  {name} error: {e}[/yellow]")
+                break
+    console.print("[red]  _ai_call: all providers failed[/red]")
     return ""
 
 
@@ -599,10 +628,12 @@ async def run_orchestra(session, owner_id: int):
                        f"Queue size: {_queue_size('pending')} pending.")
             return
 
-        # Agent 4: Writer (parallel DM crafting)
-        dm_results = await asyncio.gather(
-            *[agent_writer(t) for t in targets]
-        )
+        # Agent 4: Writer (sequential to avoid rate limits — 5s gap between calls)
+        dm_results = []
+        for i, t in enumerate(targets):
+            dm_results.append(await agent_writer(t))
+            if i < len(targets) - 1:
+                await asyncio.sleep(5)
 
         # Agent 5: Queue + Report
         await agent_queue(session, owner_id, targets, dm_results)
@@ -670,7 +701,7 @@ async def handle_update(session, update, owner_id):
     text    = (msg.get("text") or "").strip()
 
     if C.OWNER_ID and uid != C.OWNER_ID:
-        await send(session, chat_id, f"⛔ Access denied. (your id: {uid}, expected: {C.OWNER_ID})")
+        await send(session, chat_id, "⛔ Access denied.")
         return
     if not text:
         return
