@@ -6,13 +6,23 @@ import subprocess, sys, os
 
 # ── Auto-install missing packages ────────────────────────────────────────────
 PACKAGES = [
-    "pyrogram==2.0.106", "TgCrypto", "anthropic",
-    "aiohttp", "aiosqlite", "python-dotenv",
-    "rich", "aiofiles", "beautifulsoup4", "lxml"
+    "pyrogram==2.0.106",
+    "TgCrypto",
+    "anthropic==0.28.0",   # older version — no Rust needed (works on Android)
+    "aiohttp",
+    "aiosqlite",
+    "python-dotenv",
+    "rich",
+    "aiofiles",
+    "beautifulsoup4",      # lxml optional — falls back to html.parser on Android
 ]
 
 def install(pkg):
-    subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "-q"])
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", pkg, "-q",
+         "--no-build-isolation"],
+        stderr=subprocess.DEVNULL,
+    )
 
 print("\n🔧 Checking packages...")
 for pkg in PACKAGES:
@@ -23,8 +33,8 @@ for pkg in PACKAGES:
         print(f"   Installing {pkg}...")
         try:
             install(pkg)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"   ⚠️  {name} skipped (non-critical): {e}")
 
 # ── Now import everything ─────────────────────────────────────────────────────
 import asyncio

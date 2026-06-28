@@ -35,7 +35,7 @@ async def _ddg_search(query: str, num: int) -> list[dict]:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data={"q": query}, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 html = await resp.text()
-                soup = BeautifulSoup(html, "lxml")
+                soup = BeautifulSoup(html, "html.parser")
                 for r in soup.select(".result__body")[:num]:
                     title_el = r.select_one(".result__title")
                     snippet_el = r.select_one(".result__snippet")
@@ -57,7 +57,7 @@ async def fetch_page(url: str) -> str:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 html = await resp.text()
-                soup = BeautifulSoup(html, "lxml")
+                soup = BeautifulSoup(html, "html.parser")
                 for tag in soup(["script", "style", "nav", "footer", "header"]):
                     tag.decompose()
                 return soup.get_text(separator="\n", strip=True)[:4000]

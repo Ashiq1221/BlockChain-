@@ -4,6 +4,9 @@ from telegram_agents.config import Config
 
 _client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
 
+# Model name compatibility across anthropic SDK versions
+_MODEL = getattr(Config, "CLAUDE_MODEL", "claude-3-5-sonnet-20241022")
+
 SYSTEM_BASE = f"""You are an elite AI operating as part of a 10-agent autonomous Telegram management system.
 Persona: {Config.AGENT_PERSONA}
 Language: {Config.AGENT_LANGUAGE}
@@ -19,7 +22,7 @@ Core principles:
 def think(system_addon: str, user_prompt: str, max_tokens: int = 1024) -> str:
     """Single-turn Claude reasoning call."""
     response = _client.messages.create(
-        model=Config.CLAUDE_MODEL,
+        model=_MODEL,
         max_tokens=max_tokens,
         system=SYSTEM_BASE + "\n" + system_addon,
         messages=[{"role": "user", "content": user_prompt}],
