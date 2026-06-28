@@ -1,31 +1,38 @@
 """
 Full cloud autonomous bot — deploy to Railway (railway.app).
 
-What it does 24/7:
-  Every 3rd cycle → discover Web3/AI projects via Tavily + Grok
-                  → join their Telegram group
-                  → read room context
-                  → identify CEO / founder
-                  → craft personalized DM (Ashiq | @ashiq80)
-                  → send DM autonomously
+Pipeline (every 3rd cycle, 24/7):
+  1. Discover Web3/AI projects hiring via X/Twitter + Tavily
+  2. Find & join their Telegram group
+  3. Read the room context
+  4. Identify CEO / Founder (admin scan)
+  5. Craft personalized DM using Ashiq's real stats
+  6. Send DM via user account (Pyrogram StringSession)
 
 Setup (one time):
-  1. Run generate_session.py on Termux → copy TELEGRAM_SESSION_STRING
-  2. Create Railway project → connect this repo
-  3. Set env vars in Railway dashboard (see generate_session.py output)
-  4. Deploy — runs forever, no phone needed
+  1. Run on Termux:  python3 generate_session.py  → copy SESSION_STRING
+  2. Go to railway.app → New Project → Deploy from GitHub
+  3. Set env vars in Railway dashboard (list below)
+  4. Deploy → runs forever, no phone needed
+
+Required env vars:
+  TELEGRAM_SESSION_STRING   ← from generate_session.py
+  TELEGRAM_API_ID
+  TELEGRAM_API_HASH
+  TELEGRAM_BOT_TOKEN        ← reports to your Telegram
+  TELEGRAM_OWNER_ID
+  GROQ_API_KEY              ← free at console.groq.com
+  TAVILY_API_KEY            ← free at tavily.com
+  GEMINI_API_KEY            ← free at aistudio.google.com
 """
-import asyncio, os, sys, subprocess
+import asyncio, os, sys, subprocess, aiohttp, time
 from dotenv import load_dotenv
 load_dotenv()
 
-# Auto-install
-PKGS = ["pyrogram==2.0.106", "TgCrypto", "httpx", "aiohttp",
-        "aiosqlite", "python-dotenv", "rich", "aiofiles", "beautifulsoup4"]
-for pkg in PKGS:
-    name = pkg.split("==")[0].replace("-", "_")
+for pkg in ["pyrogram==2.0.106", "TgCrypto", "httpx", "aiohttp",
+            "aiosqlite", "python-dotenv", "rich", "aiofiles", "beautifulsoup4"]:
     try:
-        __import__(name)
+        __import__(pkg.split("==")[0].replace("-", "_"))
     except ImportError:
         subprocess.call([sys.executable, "-m", "pip", "install", pkg, "-q"],
                         stderr=subprocess.DEVNULL)
@@ -42,17 +49,34 @@ from telegram_agents.brain import AgentBrain
 
 console = Console()
 
+BOT_BASE   = f"https://api.telegram.org/bot{Config.BOT_TOKEN}"
+OWNER_ID   = Config.OWNER_ID
+_BOT_TIMEOUT = aiohttp.ClientTimeout(total=15)
+
+
+async def _notify(text: str):
+    """Send status message to owner via Bot API (no Pyrogram needed)."""
+    if not Config.BOT_TOKEN or not OWNER_ID:
+        return
+    try:
+        async with aiohttp.ClientSession() as s:
+            await s.post(f"{BOT_BASE}/sendMessage",
+                         json={"chat_id": OWNER_ID, "text": text,
+                               "parse_mode": "Markdown"},
+                         timeout=_BOT_TIMEOUT)
+    except Exception:
+        pass
+
 
 def _check():
     missing = []
     if not Config.API_ID:   missing.append("TELEGRAM_API_ID")
     if not Config.API_HASH: missing.append("TELEGRAM_API_HASH")
     if not os.getenv("TELEGRAM_SESSION_STRING"):
-        missing.append("TELEGRAM_SESSION_STRING  ← run generate_session.py")
+        missing.append("TELEGRAM_SESSION_STRING  ← run generate_session.py on Termux")
     if missing:
-        console.print("[bold red]❌ Missing env vars:[/bold red]")
         for m in missing:
-            console.print(f"  [red]• {m}[/red]")
+            console.print(f"[red]❌ Missing: {m}[/red]")
         return False
     return True
 
@@ -67,34 +91,38 @@ async def main():
     await db.connect()
     memory = Memory()
 
-    # User client from session string — no file, no OTP on server
     user_client = Client(
-        name         = "cloud_session",
-        api_id       = Config.API_ID,
-        api_hash     = Config.API_HASH,
+        name           = "cloud_session",
+        api_id         = Config.API_ID,
+        api_hash       = Config.API_HASH,
         session_string = session_str,
     )
 
     async with user_client:
         me = await user_client.get_me()
         console.print(Panel(
-            f"[bold green]✅ User account: {me.first_name} (@{me.username})[/bold green]\n\n"
+            f"[bold green]✅ Logged in as {me.first_name} (@{me.username})[/bold green]\n\n"
             "[bold magenta]🚀 FULL CLOUD AUTONOMOUS BOT — ONLINE[/bold magenta]\n\n"
-            "[white]Pipeline fires every 3rd cycle:\n"
-            "  1. 🔍 Discover Web3/AI projects (Tavily search)\n"
-            "  2. 📡 Find & join their Telegram group\n"
+            "[white]Every 3rd cycle:\n"
+            "  1. 🔍 Discover projects (X/Twitter + Tavily)\n"
+            "  2. 📡 Join their Telegram group\n"
             "  3. 👁  Read room context\n"
-            "  4. 🎯 Identify CEO / Founder (admin scan)\n"
-            "  5. ✍️  Craft personalized DM with Ashiq's real stats\n"
-            "  6. ✉️  Send DM via user account\n\n"
-            "[dim]No auto-replies to strangers. Only strategic outreach.[/dim]",
+            "  4. 🎯 Find CEO / Founder\n"
+            "  5. ✍️  Craft DM (Ashiq | @ashiq80)\n"
+            "  6. ✉️  Send DM via your account[/white]",
             border_style="magenta",
         ))
+
+        await _notify(
+            f"🚀 *Cloud Bot Online*\n"
+            f"Account: {me.first_name} (@{me.username})\n"
+            f"Pipeline: X/Twitter + Tavily → join group → DM CEO\n"
+            f"Running 24/7 — no phone needed."
+        )
 
         tools = ToolRegistry(user_client, db)
         brain = AgentBrain(tools, db, memory, user_client=user_client)
 
-        # Run the full autonomous brain — discovers, infiltrates, DMs
         await brain.run_forever()
 
     await db.close()
@@ -104,4 +132,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        console.print("\n[yellow]Bot stopped.[/yellow]")
+        console.print("\n[yellow]Stopped.[/yellow]")
