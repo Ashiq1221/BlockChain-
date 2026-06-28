@@ -70,38 +70,45 @@ class AgentBrain:
 
     async def discover_opportunities(self) -> list[dict]:
         """
-        PRIMARY: Grok live X/Twitter + web search → real-time project discovery.
-        FALLBACK: Traditional web scraping with DISCOVERY_QUERIES.
+        Source priority: X/Twitter API → Tavily (web_search) → Grok → scraping.
         Returns: [{"name","role","tg_username","website","description"}, ...]
         """
-        raw_text = ""
+        parts = []
 
-        # ── PRIMARY: Grok live search ────────────────────────────────────────
-        if _Cfg.XAI_API_KEY:
-            console.print("    [dim cyan]Grok live X/Twitter search...[/dim cyan]")
-            # Run both project + job searches in parallel
+        # ── PRIMARY: X/Twitter developer API — real-time tweets ─────────────
+        if _Cfg.X_BEARER_TOKEN:
+            console.print("    [dim cyan]X/Twitter live search...[/dim cyan]")
+            x_text = await web_tools.x_search_jobs()
+            if x_text and len(x_text) > 100:
+                parts.append(f"[X/TWITTER LIVE]\n{x_text}")
+                console.print(f"    [green]X/Twitter: {len(x_text)} chars[/green]")
+
+        # ── SECONDARY: Tavily web search ─────────────────────────────────────
+        console.print("    [dim]Tavily web search...[/dim]")
+        snippets = []
+        for q in DISCOVERY_QUERIES[:4]:
+            results = await web_tools.web_search(q, num=6)
+            for r in results:
+                snippets.append(
+                    f"Title: {r.get('title','')}\n"
+                    f"Snippet: {r.get('snippet','')}\n"
+                    f"URL: {r.get('url','')}"
+                )
+        if snippets:
+            parts.append(f"[WEB SEARCH]\n" + "\n---\n".join(snippets[:20]))
+            console.print(f"    [green]Web: {len(snippets)} results[/green]")
+
+        # ── TERTIARY: Grok (if credits available) ────────────────────────────
+        if _Cfg.XAI_API_KEY and not parts:
             grok_projects, grok_jobs = await asyncio.gather(
                 web_tools.grok_find_projects(),
                 web_tools.grok_find_jobs(),
             )
             combined = "\n\n".join(filter(None, [grok_projects, grok_jobs]))
             if combined and len(combined) > 100:
-                raw_text = combined
-                console.print(f"    [cyan]Grok: {len(grok_projects)} project chars + {len(grok_jobs)} job chars[/cyan]")
+                parts.append(f"[GROK]\n{combined}")
 
-        # ── FALLBACK: Web scraping ────────────────────────────────────────────
-        if not raw_text:
-            console.print("    [dim]Grok unavailable — falling back to web scraping...[/dim]")
-            snippets = []
-            for q in DISCOVERY_QUERIES[:4]:
-                results = await web_tools.web_search(q, num=5)
-                for r in results:
-                    snippets.append(
-                        f"Title: {r.get('title','')}\n"
-                        f"Snippet: {r.get('snippet','')}\n"
-                        f"URL: {r.get('url','')}"
-                    )
-            raw_text = "\n---\n".join(snippets[:20])
+        raw_text = "\n\n".join(parts)[:6000]
 
         if not raw_text:
             return []

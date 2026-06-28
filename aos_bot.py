@@ -244,6 +244,57 @@ async def _tavily_search(query: str, max_results: int = 8) -> list[dict]:
     return []
 
 
+X_SEARCH_QUERIES = [
+    "web3 blockchain hiring community manager ambassador telegram t.me apply",
+    "crypto AI project moderator content creator hiring remote 2026",
+    "DeFi NFT gaming startup community growth role open telegram",
+    "web3 ambassador program open apply 2026 t.me",
+]
+
+async def _x_search(queries: list[str]) -> list[dict]:
+    """X/Twitter developer API — real-time tweet search for job opportunities."""
+    bearer = C.X_BEARER_TOKEN
+    if not bearer:
+        return []
+
+    results = []
+    for q in queries[:4]:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    "https://api.twitter.com/2/tweets/search/recent",
+                    headers={"Authorization": f"Bearer {bearer}"},
+                    params={
+                        "query":        f"({q}) -is:retweet lang:en",
+                        "max_results":  10,
+                        "tweet.fields": "author_id,created_at,text",
+                        "expansions":   "author_id",
+                        "user.fields":  "name,username",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as r:
+                    if r.status == 200:
+                        d = await r.json()
+                        users = {u["id"]: u for u in d.get("includes", {}).get("users", [])}
+                        for t in d.get("data", []):
+                            author  = users.get(t.get("author_id", ""), {})
+                            uname   = author.get("username", "")
+                            results.append({
+                                "title": f"@{uname}: {t['text'][:80]}",
+                                "url":   f"https://twitter.com/{uname}/status/{t['id']}",
+                                "snip":  t["text"][:300],
+                                "answer": "",
+                            })
+                    else:
+                        body = await r.text()
+                        console.print(f"[yellow]  X API {r.status}: {body[:80]}[/yellow]")
+        except Exception as e:
+            console.print(f"[yellow]  X search error: {e}[/yellow]")
+        await asyncio.sleep(1)   # stay within 15 req/15 min rate limit
+
+    return results
+
+
 async def _grok_search(prompt: str) -> str:
     """Grok live X/Twitter + web search."""
     if not C.XAI_KEY:
@@ -298,7 +349,17 @@ async def agent_scout() -> str:
         chunks.append(f"[TAVILY SEARCH — {len(unique)} results]\n" + "\n".join(lines))
         console.print(f"[green]  Tavily: {len(unique)} results[/green]")
 
-    # ── SECONDARY: Grok live X/Twitter (if credits available) ────────────────
+    # ── SECONDARY: X/Twitter developer API (real-time tweets) ───────────────
+    x_hits = await _x_search(X_SEARCH_QUERIES)
+    if x_hits:
+        seen_urls = {h["url"] for h in tavily_hits}
+        x_unique  = [h for h in x_hits if h["url"] not in seen_urls]
+        if x_unique:
+            lines = [f"- {h['title']} | {h['url']}\n  {h['snip']}" for h in x_unique[:20]]
+            chunks.append(f"[X/TWITTER LIVE — {len(x_unique)} tweets]\n" + "\n".join(lines))
+            console.print(f"[green]  X/Twitter: {len(x_unique)} tweets[/green]")
+
+    # ── TERTIARY: Grok live X/Twitter (if credits available) ─────────────────
     grok_text = await _grok_search(
         "Search X/Twitter and web RIGHT NOW (2026) for Web3, AI, blockchain projects "
         "ACTIVELY hiring or seeking developers, ambassadors, community managers, "

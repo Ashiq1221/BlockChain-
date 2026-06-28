@@ -46,6 +46,7 @@ class Config:
     OWNER_ID:  int = int(os.getenv("TELEGRAM_OWNER_ID", "0"))
 
     # Optional
-    SERPAPI_KEY:  str = os.getenv("SERPAPI_KEY", "")
-    TAVILY_KEY:   str = os.getenv("TAVILY_API_KEY", "")
+    SERPAPI_KEY:     str = os.getenv("SERPAPI_KEY", "")
+    TAVILY_KEY:      str = os.getenv("TAVILY_API_KEY", "")
+    X_BEARER_TOKEN:  str = os.getenv("X_BEARER_TOKEN", "")
     DB_PATH: str = "telegram_agents.db"

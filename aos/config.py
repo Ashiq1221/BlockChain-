@@ -33,7 +33,8 @@ class AOSConfig:
     XAI_MODEL:     str = "grok-3-latest"
 
     # ── Search ───────────────────────────────────────────────────────────────
-    TAVILY_KEY:    str = os.getenv("TAVILY_API_KEY", "")
+    TAVILY_KEY:       str = os.getenv("TAVILY_API_KEY", "")
+    X_BEARER_TOKEN:   str = os.getenv("X_BEARER_TOKEN", "")
 
     # ── Memory ───────────────────────────────────────────────────────────────
     DB_PATH:       str = os.getenv("AOS_DB_PATH", "aos_memory.db")

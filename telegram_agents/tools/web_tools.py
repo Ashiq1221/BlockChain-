@@ -97,6 +97,50 @@ HEADERS = {
 }
 
 
+async def x_search_jobs() -> str:
+    """X/Twitter developer API — real-time search for Web3/AI job opportunities."""
+    bearer = Config.X_BEARER_TOKEN
+    if not bearer:
+        return ""
+
+    queries = [
+        "web3 blockchain hiring community manager ambassador telegram",
+        "crypto AI project moderator content creator hiring remote 2026",
+        "DeFi NFT gaming startup ambassador role apply t.me",
+    ]
+    tweets = []
+    for q in queries:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    "https://api.twitter.com/2/tweets/search/recent",
+                    headers={"Authorization": f"Bearer {bearer}"},
+                    params={
+                        "query":        f"({q}) -is:retweet lang:en",
+                        "max_results":  10,
+                        "tweet.fields": "author_id,created_at,text",
+                        "expansions":   "author_id",
+                        "user.fields":  "name,username",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as r:
+                    if r.status == 200:
+                        d = await r.json()
+                        users = {u["id"]: u for u in d.get("includes", {}).get("users", [])}
+                        for t in d.get("data", []):
+                            author = users.get(t.get("author_id", ""), {})
+                            uname  = author.get("username", "")
+                            tweets.append(
+                                f"@{uname}: {t['text']}\n"
+                                f"  url: https://twitter.com/{uname}/status/{t['id']}"
+                            )
+        except Exception:
+            pass
+        await asyncio.sleep(1)
+
+    return "\n\n".join(tweets[:25]) if tweets else ""
+
+
 async def _tavily(query: str, num: int) -> list[dict]:
     """Tavily API — reliable HTTPS search, works in all environments."""
     if not Config.TAVILY_KEY:
