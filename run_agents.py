@@ -12,13 +12,14 @@ Usage:
 """
 
 from __future__ import annotations
-import argparse, json, logging, re, sys, threading, time
+import argparse, json, logging, os, re, sys, threading, time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
 import requests
 from bs4 import BeautifulSoup
+import anthropic
 
 try:
     from colorama import Fore, Style, init as colorama_init
@@ -30,12 +31,13 @@ except ImportError:
     C = {k: "" for k in ["red","green","yellow","cyan","magenta","blue","white","reset","bold"]}
 
 # ── Config ─────────────────────────────────────────────────────────────────────
-API_KEY  = "882fa9a6e54b39ffa8c7e2bf4fcc1f46"
-API_URL  = "https://smmfollows.com/api/v2"
-PANEL    = "https://smmfollows.com"
-USER     = "hhrh197"
-PASSWD   = "Yawer@123"
-STATE_F  = Path("agent_state.json")
+API_KEY      = "882fa9a6e54b39ffa8c7e2bf4fcc1f46"
+API_URL      = "https://smmfollows.com/api/v2"
+PANEL        = "https://smmfollows.com"
+USER         = "hhrh197"
+PASSWD       = "Yawer@123"
+STATE_F      = Path("agent_state.json")
+ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 POSTS = [
     "https://x.com/i/status/2065705610163941467",
@@ -753,14 +755,425 @@ class MasterCoordinator(BaseAgent):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# AGENT 11: AI Researcher — Claude-powered hypothesis engine
+# Reads all panel discoveries, asks Claude to reason about patterns,
+# generate novel endpoint/param combinations, then executes them live.
+# ══════════════════════════════════════════════════════════════════════════════
+class AIResearcher(BaseAgent):
+    NAME  = "AI-RESEARCH"
+    COLOR = "cyan"
+    CYCLE = 1800   # 30 min — waits for new data between runs
+
+    # Accumulated experiment log persisted in STATE
+    _EXP_KEY = "ai_experiments"
+
+    def _ask_claude(self, prompt: str) -> str:
+        """Call Claude API. Raises anthropic.BadRequestError if no credits."""
+        if not ANTHROPIC_KEY:
+            raise ValueError("ANTHROPIC_API_KEY not set")
+        client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+
+    def _builtin_hypotheses(self) -> dict:
+        """Rule-based hypothesis engine (runs when Claude API has no credits).
+        Generates structured experiments based on Yii2 patterns and known behaviour."""
+        orders = STATE.get("orders", {})
+        disc   = STATE.get("discovered", {})
+
+        exps = []
+        eid  = [0]
+        def nid():
+            eid[0] += 1
+            return f"EXP-{eid[0]:03d}"
+
+        # — Yii2 order detail page (check if refill form is hidden there)
+        for oid in OLD_ORDERS:
+            exps.append({"id": nid(), "method": "GET",
+                "url": f"/orders/{oid}/view",
+                "headers": {}, "body": {},
+                "success_signal": "refill form or button in HTML",
+                "reasoning": "Yii2 /controller/id/action — view action may expose refill form"})
+
+        # — POST the refill form directly with CSRF
+        exps.append({"id": nid(), "method": "POST",
+            "url": "/orders/{order_id}/refill",
+            "headers": {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+            "body": {"_csrf": "__CSRF__"},
+            "success_signal": '{"status":"success"}',
+            "reasoning": "Panel JS uses GET but POST may bypass cooldown guard"})
+
+        # — Try /orders/{id}/force-refill Yii2 dash action
+        exps.append({"id": nid(), "method": "GET",
+            "url": "/orders/{order_id}/force-refill",
+            "headers": {"X-Requested-With": "XMLHttpRequest"},
+            "body": {},
+            "success_signal": "success in response",
+            "reasoning": "Yii2 dash-action naming convention for admin shortcut"})
+
+        # — Panel account settings — look for hidden admin flags
+        exps.append({"id": nid(), "method": "GET",
+            "url": "/account/settings",
+            "headers": {}, "body": {},
+            "success_signal": "settings page with extra fields",
+            "reasoning": "Account settings may expose service-level toggles"})
+
+        # — Service management page
+        exps.append({"id": nid(), "method": "GET",
+            "url": "/services/8140",
+            "headers": {}, "body": {},
+            "success_signal": "page with refill toggle",
+            "reasoning": "Service detail page may allow per-user refill override"})
+
+        # — Order detail page
+        for oid in OLD_ORDERS[:2]:
+            exps.append({"id": nid(), "method": "GET",
+                "url": f"/order/{oid}",
+                "headers": {}, "body": {},
+                "success_signal": "page with refill button",
+                "reasoning": "Alternative singular /order/ route in Yii2"})
+
+        # — Try /refill/create with POST body
+        exps.append({"id": nid(), "method": "POST",
+            "url": "/refill/create",
+            "headers": {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+            "body": {"order_id": "{order_id}", "_csrf": "__CSRF__"},
+            "success_signal": "success or refill id",
+            "reasoning": "Yii2 /refill/create is the standard create action"})
+
+        # — Try /refill/do
+        exps.append({"id": nid(), "method": "POST",
+            "url": "/refill/do",
+            "headers": {"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+            "body": {"id": "{order_id}", "_csrf": "__CSRF__"},
+            "success_signal": "success in body",
+            "reasoning": "Yii2 /refill/do may be the AJAX handler for the #setRefill modal"})
+
+        # — Try history page for setRefill modal form action
+        exps.append({"id": nid(), "method": "GET",
+            "url": "/history",
+            "headers": {}, "body": {},
+            "success_signal": "#setRefill modal with form action exposed",
+            "reasoning": "siteHistory JS module uses #setRefill modal — it lives on /history page"})
+
+        # — /user/orders or /user/order for alternative routing
+        exps.append({"id": nid(), "method": "GET",
+            "url": "/user/orders",
+            "headers": {}, "body": {},
+            "success_signal": "page loads with refill buttons",
+            "reasoning": "Alternative Yii2 user-scoped order controller"})
+
+        # — Direct API refill with 'orders' (plural) key
+        exps.append({"id": nid(), "method": "POST",
+            "url": "/api/v2",
+            "headers": {}, "body": {"action": "refill", "orders": "61218148,61218147,61218151,61218154"},
+            "success_signal": "refill key in response",
+            "reasoning": "Bulk refill may use plural 'orders' instead of 'order'"})
+
+        # — Check order-specific detail using numeric /orders?search=
+        for oid in OLD_ORDERS[:2]:
+            exps.append({"id": nid(), "method": "GET",
+                "url": f"/orders?search={oid}",
+                "headers": {}, "body": {},
+                "success_signal": "refill button rendered for this order",
+                "reasoning": "Search view may render different action buttons"})
+
+        return {
+            "analysis": (
+                "Service 8140 has refill disabled at panel level (no UI button, API blocked). "
+                "New orders (12452/13139) are in 24h cooldown. "
+                "Built-in hypothesis engine active (Claude API credits not loaded yet)."
+            ),
+            "experiments": exps,
+            "unexplored_pages": ["/history", "/account/settings", "/services/8140",
+                                  "/order/refill", "/user/orders", "/user/profile",
+                                  "/orders/history", "/refill/index"],
+            "priority_action": "Check /history page for #setRefill modal form action"
+        }
+
+    def _build_context(self) -> str:
+        orders   = STATE.get("orders", {})
+        disc     = STATE.get("discovered", {})
+        probed   = STATE.get("probed", [])
+        refills  = STATE.get("refills", {})
+        bal      = STATE.get("balance", "0")
+        cooldown = disc.get("refill_cooldown", "unknown")
+        prev_exp = STATE.get(self._EXP_KEY, [])[-10:]  # last 10 experiments
+
+        order_summary = []
+        for oid, info in orders.items():
+            order_summary.append(
+                f"  #{oid}: status={info.get('status')} remains={info.get('remains')} "
+                f"service={'8140' if oid in OLD_ORDERS else '12452/13139'}"
+            )
+
+        disc_summary = []
+        for k, v in disc.items():
+            if not k.startswith("panel_refill_err") and k != "refill_cooldown":
+                disc_summary.append(f"  {k}: {str(v)[:120]}")
+
+        return f"""You are analyzing a Yii2 PHP panel at https://smmfollows.com (SMM panel).
+Goal: trigger refill for orders that are either (a) past 24h cooldown or (b) on service 8140 which has refill "disabled".
+
+CURRENT STATE
+=============
+Balance: ${bal}
+Refill cooldown (new orders 12452/13139): {cooldown}
+Orders already refilled: {list(refills.keys())}
+
+ORDER STATUSES
+==============
+{chr(10).join(order_summary)}
+
+OLD ORDERS (service 8140 — "Refill is disabled for this service"):
+  #61218148 Completed remains=0
+  #61218147 Partial   remains=4
+  #61218151 Partial   remains=11
+  #61218154 Partial   remains=11
+
+NEW ORDERS (services 12452/13139 — 24h cooldown active):
+  #61450840 likes     Completed
+  #61450841 retweets  Completed
+  #61450843 likes     Completed
+  #61450844 retweets  Completed
+  #61450846 likes     Completed
+  #61450847 retweets  Completed
+
+ALREADY DISCOVERED
+==================
+{chr(10).join(disc_summary) if disc_summary else "  (none yet)"}
+
+ALREADY PROBED (action names / endpoint keys):
+{json.dumps(probed[:40], indent=2)}
+
+PREVIOUS AI EXPERIMENTS
+=======================
+{json.dumps(prev_exp, indent=2)}
+
+KNOWN PANEL BEHAVIOUR
+=====================
+- POST https://smmfollows.com/api/v2 with key+action — standard v2 API
+- GET  /orders/{{id}}/refill (AJAX) → {{"status":"error","error":"Error"}} during cooldown
+- GET  /orders/{{id}}/refill → expect {{"status":"success","btn_text":"..."}} when ready
+- Service 8140 API: returns "Refill is disabled for this service"
+- Panel HTML: service 8140 order rows have NO refill button, only re-order
+- Panel HTML: new orders show countdown badge <span data-status="Refill" title="...">
+- Admin routes (/admin/refill/create etc.) return 500 (need admin session)
+- Yii2 framework: routes are /controller/action-name
+- JS bundle je348cke2pr1agxl.js: siteHistory module uses #setRefill modal
+  that POSTs to form action= (unknown endpoint, need to find the modal in HTML)
+- /refill page = refill history search (not a trigger)
+- CSRF token available from <meta name="csrf-token"> or <input name="_csrf">
+
+TASK
+====
+1. Identify the MOST PROMISING untried approach to trigger refill for the
+   old service-8140 orders (impossible via standard API — need creative path).
+2. Identify best approach for new orders once cooldown expires.
+3. Suggest 5–10 concrete experiments: each must specify:
+   - HTTP method, URL path, headers, body params
+   - What response would indicate success vs failure
+   - Why this might work (reasoning)
+4. Also: what panel pages/routes have we NOT explored that might reveal
+   the actual refill mechanism? (Yii2 admin controllers, user profile,
+   order detail page, etc.)
+
+Reply in this exact JSON format (no markdown, pure JSON):
+{{
+  "analysis": "2-3 sentence summary of the situation",
+  "experiments": [
+    {{
+      "id": "EXP-001",
+      "method": "GET|POST",
+      "url": "/path/here",
+      "headers": {{"Header-Name": "value"}},
+      "body": {{"param": "value"}},
+      "success_signal": "what response means success",
+      "reasoning": "why this might work"
+    }}
+  ],
+  "unexplored_pages": ["/path1", "/path2"],
+  "priority_action": "single most important thing to try right now"
+}}"""
+
+    def _execute_experiment(self, exp: dict, sess: requests.Session | None,
+                             csrf: str = "") -> dict:
+        method  = exp.get("method", "GET").upper()
+        path    = exp.get("url", "")
+        headers = exp.get("headers", {})
+        body    = {k: (v.replace("__CSRF__", csrf) if isinstance(v, str) else v)
+                   for k, v in exp.get("body", {}).items()}
+
+        if not path.startswith("http"):
+            url = PANEL + path
+        else:
+            url = path
+
+        result = {"id": exp.get("id"), "url": url, "method": method,
+                  "status": None, "body": None, "success": False}
+        try:
+            base_headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+                            "Referer": PANEL + "/orders"}
+            base_headers.update(headers)
+
+            req_sess = sess or requests.Session()
+            if method == "GET":
+                r = req_sess.get(url, headers=base_headers, timeout=12, allow_redirects=False)
+            else:
+                r = req_sess.post(url, data=body, headers={
+                    **base_headers, "Content-Type": "application/x-www-form-urlencoded"
+                }, timeout=12, allow_redirects=False)
+
+            result["status"] = r.status_code
+            result["body"] = r.text[:300]
+
+            content_type = r.headers.get("Content-Type", "")
+            is_json = "application/json" in content_type or r.text.lstrip().startswith("{")
+
+            if r.status_code == 200 and is_json:
+                try:
+                    jdata = r.json()
+                    if jdata.get("status") == "success":
+                        result["success"] = True
+                        self.log(f"  {C['green']}JSON SUCCESS {exp['id']}: {r.text[:150]}")
+                        STATE.record_discovery(f"ai_success:{exp['id']}", result)
+                    else:
+                        self.log(f"  {exp['id']} JSON: {r.text[:120]}")
+                except Exception:
+                    pass
+            elif r.status_code == 200 and not is_json:
+                # HTML page — record it for manual review, but log summary
+                snippet = r.text[:120].replace("\n", " ").strip()
+                self.log(f"  {exp['id']} HTML-200 {path}: {snippet[:80]}")
+                STATE.record_discovery(f"ai_page:{path}", r.url)
+            elif r.status_code not in (404, 400, 403):
+                snippet = r.text[:80].replace("\n", " ").strip()
+                self.log(f"  {exp['id']} {method} {path} → {r.status_code}: {snippet}")
+
+        except Exception as exc:
+            result["error"] = str(exc)
+            self.log(f"  {exp['id']} failed: {exc}", "warning")
+
+        return result
+
+    def _inject_order_ids(self, exp: dict) -> list[dict]:
+        """Expand one experiment template into per-order experiments."""
+        body = exp.get("body", {})
+        # If body has a placeholder order field, expand per order
+        has_order_placeholder = any(
+            "{order_id}" in str(v) for v in body.values()
+        ) or any(
+            "{order_id}" in str(v) for v in [exp.get("url", "")]
+        )
+        if not has_order_placeholder:
+            return [exp]
+
+        expanded = []
+        for oid in OLD_ORDERS + [o["id"] for o in NEW_ORDERS if o["refillable"]]:
+            import copy
+            e = copy.deepcopy(exp)
+            e["id"] = f"{exp['id']}-{oid}"
+            e["url"] = e.get("url", "").replace("{order_id}", oid)
+            e["body"] = {k: v.replace("{order_id}", oid) if isinstance(v, str) else v
+                         for k, v in e.get("body", {}).items()}
+            expanded.append(e)
+        return expanded
+
+    def cycle(self):
+        self.log("Querying Claude for research hypotheses...")
+        data = None
+
+        # Try Claude API first; fall back to built-in engine on credit/network errors
+        try:
+            context = self._build_context()
+            reply   = self._ask_claude(context)
+            try:
+                clean = re.sub(r"```json|```", "", reply).strip()
+                data  = json.loads(clean)
+                self.log(f"  {C['green']}Claude API active — using AI hypotheses")
+            except Exception:
+                self.log(f"Claude non-JSON reply: {reply[:200]}", "warning")
+                STATE.record_discovery("ai_raw_reply", reply[:500])
+        except ValueError:
+            self.log(f"  {C['yellow']}ANTHROPIC_API_KEY not set — using built-in engine")
+            data = self._builtin_hypotheses()
+        except anthropic.BadRequestError as exc:
+            if "credit balance" in str(exc).lower():
+                self.log(f"  {C['yellow']}Claude credits not loaded — using built-in engine")
+                data = self._builtin_hypotheses()
+            else:
+                self.log(f"Claude BadRequest: {exc}", "error")
+                data = self._builtin_hypotheses()
+        except Exception as exc:
+            self.log(f"Claude error: {exc} — using built-in engine", "warning")
+            data = self._builtin_hypotheses()
+
+        if not data:
+            return
+
+        analysis  = data.get("analysis", "")
+        priority  = data.get("priority_action", "")
+        exps      = data.get("experiments", [])
+        unexplored = data.get("unexplored_pages", [])
+
+        self.log(f"Analysis: {analysis}")
+        self.log(f"Priority: {C['yellow']}{priority}")
+        self.log(f"Experiments: {len(exps)} | Unexplored pages: {len(unexplored)}")
+
+        # Log unexplored pages to STATE for EndpointExplorer
+        for page in unexplored:
+            STATE.record_discovery(f"ai_unexplored:{page}", "suggested by AI")
+
+        # Get a web session + CSRF token for execution
+        sess = web_session()
+        csrf = ""
+        if sess:
+            try:
+                r_csrf = sess.get(f"{PANEL}/orders", timeout=12)
+                soup_c = BeautifulSoup(r_csrf.text, "html.parser")
+                meta = soup_c.find("meta", {"name": "csrf-token"})
+                inp  = soup_c.find("input", {"name": "_csrf"})
+                csrf = meta["content"] if meta else (inp["value"] if inp else "")
+            except Exception:
+                pass
+
+        # Execute each experiment
+        experiment_log = STATE.get(self._EXP_KEY, [])
+        for exp_template in exps:
+            expanded = self._inject_order_ids(exp_template)
+            for exp in expanded:
+                exp_key = f"ai_exp:{exp['id']}:{exp.get('url','')}"
+                if STATE.already_probed(exp_key):
+                    continue
+                STATE.mark_probed(exp_key)
+
+                result = self._execute_experiment(exp, sess, csrf)
+                experiment_log.append({
+                    "at": datetime.now().isoformat(),
+                    "exp": exp,
+                    "result": result,
+                })
+                if result.get("success"):
+                    self.log(f"  {C['green']}EXPERIMENT {exp['id']} SUCCEEDED!")
+                    STATE.record_discovery("ai_breakthrough", exp)
+
+        STATE.set(self._EXP_KEY, experiment_log[-50:])
+        self.log(f"Cycle complete. Total AI experiments: {len(experiment_log)}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LAUNCH
 # ══════════════════════════════════════════════════════════════════════════════
 def banner():
     print(f"""{C['bold']}{C['cyan']}
 ╔══════════════════════════════════════════════════════════════════════╗
-║        10-AGENT DEEP PROBE — SMMFOLLOWS  (NO TICKET POSTING)       ║
+║      11-AGENT DEEP PROBE + AI RESEARCH — SMMFOLLOWS                ║
 ║  BALANCE · TRACKER · REFILL-API · TICKET-WATCH · LIKES · RETWEETS  ║
-║  COMMENTS · ENDPOINT · JS-ANALYZE · COORD                           ║
+║  COMMENTS · ENDPOINT · JS-ANALYZE · COORD · AI-RESEARCH            ║
 ╚══════════════════════════════════════════════════════════════════════╝
 {C['reset']}""")
 
@@ -783,9 +1196,10 @@ def main():
         EndpointExplorer(halt, args.once),  # 8
         JSBundleAnalyzer(halt, args.once),  # 9
         MasterCoordinator(halt, args.once), # 10
+        AIResearcher(halt, args.once),      # 11 — Claude-powered hypothesis engine
     ]
 
-    log.info(f"Launching {len(agents)} agents (no ticket posting)...")
+    log.info(f"Launching {len(agents)} agents (no ticket posting, AI research active)...")
     for a in agents:
         a.start()
         time.sleep(0.4)
