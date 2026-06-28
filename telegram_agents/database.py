@@ -10,8 +10,11 @@ class Database:
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self):
-        self._db = await aiosqlite.connect(self.path)
+        self._db = await aiosqlite.connect(self.path, timeout=30)
         self._db.row_factory = aiosqlite.Row
+        await self._db.execute("PRAGMA journal_mode=WAL")
+        await self._db.execute("PRAGMA busy_timeout=10000")
+        await self._db.commit()
         await self._create_tables()
 
     async def close(self):
