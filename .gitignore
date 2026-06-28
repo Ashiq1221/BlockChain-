@@ -22,3 +22,4 @@ bin-release/
 *.log
 __pycache__/
 *.pyc
+agent_state.json
