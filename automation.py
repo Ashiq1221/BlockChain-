@@ -1590,15 +1590,38 @@ def _strip_think(raw: str) -> str:
     return re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
 
 def _parse_json(text: str) -> dict | None:
+    text = text.strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        if m:
-            try:
-                return json.loads(m.group())
-            except Exception:
-                pass
+        pass
+    # Extract first balanced { } block — avoids greedy multi-object mis-match
+    if '{' in text:
+        start = text.index('{')
+        depth = 0
+        in_str = False
+        escape = False
+        for i, ch in enumerate(text[start:], start):
+            if escape:
+                escape = False
+                continue
+            if ch == '\\' and in_str:
+                escape = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start:i + 1])
+                    except Exception:
+                        break
     return None
 
 # ── Ensemble AI Cycle ──────────────────────────────────────────────────────────────
