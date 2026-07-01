@@ -179,6 +179,34 @@
       "remains": "0",
       "added_at": "2026-07-01T00:00:00+00:00",
       "completed_at": "2026-07-01T00:00:00+00:00"
+    },
+    "61500415": {
+      "id": "61500415",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 16465,
+      "refillable": false,
+      "status": "Pending",
+      "start_count": "0",
+      "remains": "100",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": null
+    },
+    "61500416": {
+      "id": "61500416",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 9018,
+      "refillable": false,
+      "status": "Pending",
+      "start_count": "0",
+      "remains": "100",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -254,6 +282,10 @@
     {
       "at": "2026-07-01T07:30:56.652204+00:00",
       "msg": "Checked account balance ($4.45) and order status. Triggered refill for order 61450840 with 0 cooldown. Checked refill status for pending refills. No new orders needed as pending_posts is empty. All or"
+    },
+    {
+      "at": "2026-07-01T00:00:00+00:00",
+      "msg": "Placed orders #61500415 (100 likes) and #61500416 (100 retweets) for post 2064283937091035590 via smmfollows"
     }
   ]
 }
