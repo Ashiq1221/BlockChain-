@@ -620,7 +620,7 @@ def _ai_order_agent(kind: str, quantity: int, link: str,
     finds all services where min <= quantity <= max, asks AI to pick the best one, places
     the order. Never inflates quantity. Falls back through remaining viable services on rejection.
     """
-    PLATFORM_KW = ["twitter", "x.com", "tweet", "x "]
+    PLATFORM_KW = ["twitter", "x.com", "tweet"]
     KIND_KW = {
         "likes":    ["like", "heart"],
         "retweets": ["retweet", " rt"],
@@ -1399,7 +1399,15 @@ def tool_place_order(state: dict, link: str, kind: str, quantity: int,
         return json.dumps({"error": str(exc)})
 
 def tool_get_services() -> str:
-    return json.dumps(SERVICES)
+    return json.dumps({
+        "note": (
+            "These are REFERENCE defaults only. place_order fetches the FULL live catalog "
+            "from all panels and finds services with much lower minimums — e.g. retweets "
+            "available from qty=10. Always call place_order directly with the exact quantity; "
+            "do NOT skip an order just because the min shown here seems too high."
+        ),
+        "defaults": SERVICES,
+    })
 
 def tool_get_pending_posts(state: dict) -> str:
     return json.dumps({"pending_posts": state.get("pending_posts", [])})
