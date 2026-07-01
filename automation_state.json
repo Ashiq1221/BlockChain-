@@ -163,7 +163,7 @@
       "quantity": 100,
       "refillable": true,
       "status": "Completed",
-      "start_count": "0",
+      "start_count": "15",
       "remains": "0",
       "added_at": "2026-07-01T00:00:00+00:00",
       "completed_at": "2026-07-01T00:00:00+00:00"
@@ -175,7 +175,7 @@
       "quantity": 50,
       "refillable": true,
       "status": "Completed",
-      "start_count": "15",
+      "start_count": "0",
       "remains": "0",
       "added_at": "2026-07-01T00:00:00+00:00",
       "completed_at": "2026-07-01T00:00:00+00:00"
@@ -188,11 +188,11 @@
       "panel": "smmfollows",
       "service_id": 16465,
       "refillable": false,
-      "status": "Pending",
-      "start_count": "0",
-      "remains": "100",
+      "status": "Completed",
+      "start_count": "10",
+      "remains": "0",
       "added_at": "2026-07-01T00:00:00+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
     },
     "61500416": {
       "id": "61500416",
@@ -202,11 +202,11 @@
       "panel": "smmfollows",
       "service_id": 9018,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "start_count": "0",
-      "remains": "100",
+      "remains": "0",
       "added_at": "2026-07-01T00:00:00+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
     },
     "61501437": {
       "id": "61501437",
@@ -216,11 +216,11 @@
       "panel": "smmfollows",
       "service_id": 8140,
       "refillable": true,
-      "status": "Pending",
-      "start_count": null,
-      "remains": null,
+      "status": "Completed",
+      "start_count": "28",
+      "remains": "0",
       "added_at": "2026-07-01T12:41:44.318918+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
     },
     "61501438": {
       "id": "61501438",
@@ -230,11 +230,11 @@
       "panel": "smmfollows",
       "service_id": 8140,
       "refillable": true,
-      "status": "Pending",
-      "start_count": null,
-      "remains": null,
+      "status": "Completed",
+      "start_count": "38",
+      "remains": "0",
       "added_at": "2026-07-01T12:41:44.318918+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
     },
     "61501439": {
       "id": "61501439",
@@ -244,11 +244,11 @@
       "panel": "smmfollows",
       "service_id": 8140,
       "refillable": true,
-      "status": "Pending",
-      "start_count": null,
-      "remains": null,
+      "status": "Completed",
+      "start_count": "26",
+      "remains": "0",
       "added_at": "2026-07-01T12:41:44.318918+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
     }
   },
   "refills": {
@@ -332,6 +332,10 @@
     {
       "at": "2026-07-01T12:41:44.318918+00:00",
       "msg": "Placed orders #61501437 #61501438 #61501439 \u2014 100 non-drop likes (svc 8140, No/Less Drops + 30-day refill) for posts 2065705610163941467, 2064879295843983840, 2064283340849738045"
+    },
+    {
+      "at": "2026-07-01T14:50:57.745034+00:00",
+      "msg": "[Rule-based \u2014 14:50 UTC] | In cooldown: ['61498649', '61498651', '61501437', '61501438', '61501439'] | Refills done: ['61450840'] | Issues: #61450841: refill failed \u2014 Error; #61450843: refill failed \u2014"
     }
   ]
 }
