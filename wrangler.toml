@@ -2,6 +2,7 @@ name            = "smm-sentinel"
 main            = "worker/index.js"
 compatibility_date  = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev     = false
 
 # ── Cron Triggers — every 15 minutes ─────────────────────────────────────────
 [triggers]
