@@ -54,7 +54,7 @@ index_name = "smm-episodic-memory"
 
 # ── Public env vars ───────────────────────────────────────────────────────────
 [vars]
-X_ACCOUNT_HANDLE = ""     # Set to your Twitter/X handle (no @), e.g. "ashiq1221"
+X_ACCOUNT_HANDLE = "lingoAI_io"
 SMM_LIKES_QTY    = "100"
 SMM_RETWEETS_QTY = "100"
 CF_ACCOUNT_ID    = "17b8b27a0a8af8d5f1d1622bfbfb9d8a"
