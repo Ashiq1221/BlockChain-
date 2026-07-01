@@ -89,8 +89,8 @@ CRITICAL_TOOLS = {"submit_ticket", "place_order"}
 
 # Service catalogue
 SERVICES = {
-    "likes":    {"id": 12452, "name": "Twitter Likes Turkey HQ", "refill": True,  "min": 10,  "max": 15000,       "rate_per_k": 0.88},
-    "retweets": {"id": 13139, "name": "Twitter Retweets HQ",     "refill": True,  "min": 10,  "max": 1_000_000,   "rate_per_k": 0.54},
+    "likes":    {"id": 16465, "name": "Twitter Likes+Impressions USA", "refill": False, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
+    "retweets": {"id": 9018,  "name": "Twitter Retweets Organic Global", "refill": False, "min": 100, "max": 3000,        "rate_per_k": 2.10},
     "comments": {"id": 7338,  "name": "Twitter Comments USA",    "refill": False, "min": 5,   "max": 150,         "rate_per_k": 28.13},
     "views":    {"id": 17682, "name": "Twitter Views HQ",        "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
 }
