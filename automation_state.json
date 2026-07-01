@@ -155,6 +155,30 @@
       "remains": "0",
       "added_at": "2026-06-30T03:45:38+00:00",
       "completed_at": "2026-06-30T03:45:38+00:00"
+    },
+    "61498649": {
+      "id": "61498649",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "refillable": true,
+      "status": "Pending",
+      "start_count": "0",
+      "remains": "100",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": null
+    },
+    "61498651": {
+      "id": "61498651",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 50,
+      "refillable": true,
+      "status": "Pending",
+      "start_count": "0",
+      "remains": "50",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": null
     }
   },
   "refills": {
