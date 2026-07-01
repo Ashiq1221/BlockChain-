@@ -117,16 +117,18 @@ CF_EMAIL      = os.environ.get("CF_EMAIL", "")
 CF_SCOPED_KEY = os.environ.get("DEEPSEEK_API_KEY", "")   # cfut_ token for inference
 
 # Cloudflare AI models
-CF_REASON_MODEL = os.environ.get("CF_AI_MODEL", "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b")
+CF_REASON_MODEL = os.environ.get("CF_AI_MODEL", "@cf/deepseek-ai/deepseek-r1-distill-llama-70b")
 CF_FAST_MODEL   = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 CF_EMBED_MODEL  = "@cf/baai/bge-large-en-v1.5"
 CF_EMBED_DIMS   = 1024
 
 # Cloudflare service names (auto-provisioned)
-CF_GATEWAY_ID    = os.environ.get("CF_GATEWAY_ID",       "smm-manager")
+CF_GATEWAY_ID    = os.environ.get("CF_GATEWAY_ID",       "smm-sentinel")
 CF_VECTORIZE_IDX = os.environ.get("CF_VECTORIZE_INDEX",  "smm-episodic-memory")
 CF_D1_DB_NAME    = os.environ.get("CF_D1_DB_NAME",       "smm-state")
 CF_KV_TITLE      = os.environ.get("CF_KV_TITLE",         "smm-cache")
+CF_R2_BUCKET     = os.environ.get("CF_R2_BUCKET",        "smm-logs")
+X_ACCOUNT_HANDLE = os.environ.get("X_ACCOUNT_HANDLE",    "")
 
 # Fallback AI keys
 ANTHROPIC_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -379,6 +381,24 @@ class CloudflarePlatform:
             )
         except Exception:
             pass
+
+    def r2_backup(self, state: dict) -> None:
+        """Push a JSON snapshot of state to R2 for immutable audit log."""
+        if not CF_ACCOUNT_ID or not CF_GLOBAL_KEY or not CF_R2_BUCKET:
+            return
+        try:
+            today  = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            ts     = datetime.now(timezone.utc).strftime("%H%M%S")
+            key    = f"logs/{today}/state-{ts}.json"
+            self._s.put(
+                f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/r2/buckets/{CF_R2_BUCKET}/objects/{key}",
+                data=json.dumps(state, default=str).encode(),
+                headers={"Content-Type": "application/json"},
+                timeout=15,
+            )
+            log.debug("[R2] Backup saved: %s", key)
+        except Exception as exc:
+            log.debug("[R2] Backup skipped: %s", exc)
 
     # ── Provision all ───────────────────────────────────────────────────────────────
 
@@ -1363,14 +1383,14 @@ def main() -> None:
         summary = run_agent_cycle(state, task, cf)
         log_agent(state, f"[REFILL] {summary[:200]}")
         save_state(state)
-        sync_to_d1(state, cf)
+        sync_to_d1(state, cf); cf.r2_backup(state)
         return
 
     if args.once or args.post:
         summary = run_agent_cycle(state, MONITOR_TASK, cf)
         log_agent(state, summary[:200])
         save_state(state)
-        sync_to_d1(state, cf)
+        sync_to_d1(state, cf); cf.r2_backup(state)
         return
 
     log.info("=== SMMFollows AI — Cloudflare Intelligence Platform (interval=%ds) ===", args.interval)
@@ -1383,7 +1403,7 @@ def main() -> None:
             summary = run_agent_cycle(state, MONITOR_TASK, cf)
             log_agent(state, summary[:200])
             save_state(state)
-            sync_to_d1(state, cf)
+            sync_to_d1(state, cf); cf.r2_backup(state)
         except KeyboardInterrupt:
             log.info("Stopped.")
             break

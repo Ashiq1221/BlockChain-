@@ -1,0 +1,69 @@
+name            = "smm-sentinel"
+main            = "worker/index.js"
+compatibility_date  = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# ── Cron Triggers ─────────────────────────────────────────────────────────────
+[triggers]
+crons = ["*/15 * * * *"]   # every 15 minutes
+
+# ── AI (Workers AI binding) ───────────────────────────────────────────────────
+[ai]
+binding = "AI"
+
+# ── AI Gateway ── routes AI calls through the gateway for caching/analytics ──
+# Gateway name: smm-sentinel (matches CF_GATEWAY_ID in automation.py)
+# Set in Cloudflare dashboard → AI Gateway → create "smm-sentinel"
+
+# ── Browser Rendering ─────────────────────────────────────────────────────────
+[browser]
+binding = "BROWSER"
+
+# ── D1 SQL Database ───────────────────────────────────────────────────────────
+[[d1_databases]]
+binding      = "DB"
+database_name = "smm-state"
+database_id  = "YOUR_D1_DB_ID"   # wrangler d1 create smm-state
+
+# ── KV Cache ──────────────────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "KV"
+id      = "YOUR_KV_NS_ID"        # wrangler kv namespace create smm-cache
+
+# ── Queues ────────────────────────────────────────────────────────────────────
+[[queues.producers]]
+binding = "ORDER_QUEUE"
+queue   = "smm-orders"           # wrangler queues create smm-orders
+
+[[queues.consumers]]
+queue          = "smm-orders"
+max_batch_size = 10
+max_retries    = 5
+dead_letter_queue = "smm-orders-dlq"
+
+# ── R2 Audit Log ──────────────────────────────────────────────────────────────
+[[r2_buckets]]
+binding     = "R2"
+bucket_name = "smm-logs"         # wrangler r2 bucket create smm-logs
+
+# ── Vectorize (episodic memory) ───────────────────────────────────────────────
+[[vectorize]]
+binding        = "VECTORIZE"
+index_name     = "smm-episodic-memory"
+# wrangler vectorize create smm-episodic-memory --dimensions=1024 --metric=cosine
+
+# ── Env vars (non-secret) ─────────────────────────────────────────────────────
+[vars]
+X_ACCOUNT_HANDLE  = ""          # Your Twitter/X handle, e.g. "ashiq1221" (no @)
+SMM_LIKES_QTY     = "100"
+SMM_RETWEETS_QTY  = "100"
+CF_ACCOUNT_ID     = "17b8b27a0a8af8d5f1d1622bfbfb9d8a"
+
+# ── Secrets (set via CLI or GitHub Actions) ───────────────────────────────────
+# wrangler secret put SMM_API_KEY
+# wrangler secret put SMMWIZ_API_KEY
+# wrangler secret put ASTRA_API_KEY
+# wrangler secret put SMMWIZ_USER
+# wrangler secret put SMMWIZ_PASS
+# wrangler secret put ASTRA_USER
+# wrangler secret put ASTRA_PASS
