@@ -523,7 +523,7 @@ def _get_live_rate(panel: dict, kind: str) -> float:
 
     return fallback
 
-def _place_order_multi(kind: str, link: str, quantity: int) -> dict:
+def _place_order_multi(kind: str, link: str, quantity: int, extra: dict | None = None) -> dict:
     """Fetch live rates from all panels in parallel, order from cheapest, fall back on failure."""
     eligible = [p for p in PANELS if p["key"] and p["services"].get(kind, {}).get("id")]
     if not eligible:
@@ -541,8 +541,11 @@ def _place_order_multi(kind: str, link: str, quantity: int) -> dict:
         svc = panel["services"][kind]
         svc_id = svc["id"]
         qty = max(quantity, svc.get("min", quantity))
+        payload = {"action": "add", "service": svc_id, "link": link, "quantity": qty}
+        if extra:
+            payload.update(extra)
         try:
-            res = _api_panel(panel, {"action": "add", "service": svc_id, "link": link, "quantity": qty})
+            res = _api_panel(panel, payload)
             if res.get("order"):
                 log.info("[%s] ✓ placed %s×%d → order #%s @ live $%.2f/k",
                          panel["name"], kind, qty, res["order"], rate)
@@ -824,11 +827,69 @@ def tool_submit_ticket(state: dict, order_ids: list, subject_type: str, message:
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 
-def tool_place_order(state: dict, link: str, kind: str, quantity: int) -> str:
+def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform | None" = None) -> str:
+    """Use Workers AI (or Anthropic fallback) to generate custom comments for a post."""
+    prompt = (
+        f"Generate {count} unique, authentic Twitter comments for this post.\n"
+        "Rules:\n"
+        "- Each comment must be directly relevant to the post topic\n"
+        "- Vary the style: some enthusiastic, some thoughtful, some short, some with emojis\n"
+        "- Sound like real users — no bots, no generic praise\n"
+        "- No hashtags, no @mentions\n"
+        "- Return ONLY a JSON array of strings, nothing else\n\n"
+        f'Post: "{post_text[:400]}"'
+    )
+    # Try Workers AI
+    if cf and CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
+        try:
+            result = cf.ai_run(CF_FAST_MODEL, {"messages": [{"role": "user", "content": prompt}], "max_tokens": 1200})
+            text = re.sub(r"<think>.*?</think>", "", result.get("response", ""), flags=re.DOTALL).strip()
+            m = re.search(r"\[[\s\S]*\]", text)
+            if m:
+                arr = json.loads(m.group())
+                if isinstance(arr, list) and arr:
+                    log.info("[Comments] Generated %d custom comments via Workers AI", len(arr))
+                    return "\n".join(str(c) for c in arr[:count])
+        except Exception as exc:
+            log.debug("[Comments] Workers AI failed: %s", exc)
+    # Try Anthropic
+    if ANTHROPIC_AVAILABLE and ANTHROPIC_KEY:
+        try:
+            ai = _anthropic_mod.Anthropic(api_key=ANTHROPIC_KEY)
+            resp = ai.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=1200,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = resp.content[0].text if resp.content else ""
+            m = re.search(r"\[[\s\S]*\]", text)
+            if m:
+                arr = json.loads(m.group())
+                if isinstance(arr, list) and arr:
+                    log.info("[Comments] Generated %d custom comments via Claude", len(arr))
+                    return "\n".join(str(c) for c in arr[:count])
+        except Exception as exc:
+            log.debug("[Comments] Anthropic failed: %s", exc)
+    # Fallback
+    fallback = [
+        "This is amazing! 🔥", "Love this content!", "Great post!", "So true 💯",
+        "This resonates with me", "Absolutely spot on", "Keep it up! 👏",
+        "Brilliant take", "Couldn't agree more", "This needs more attention",
+        "Well said!", "Pure gold 🙌", "This is the content I needed today",
+        "Facts 💪", "Sharing this immediately", "You always deliver 🎯",
+        "This is exactly right", "Underrated post", "More people need to see this",
+        "Excellent point!",
+    ]
+    return "\n".join(fallback[:count])
+
+def tool_place_order(state: dict, link: str, kind: str, quantity: int,
+                     post_text: str = "", cf: "CloudflarePlatform | None" = None) -> str:
     if kind not in SERVICES:
         return json.dumps({"error": f"Unknown kind: {kind}. Valid: {list(SERVICES)}"})
     try:
-        res = _place_order_multi(kind, link, quantity)
+        extra: dict = {}
+        if kind == "comments":
+            extra["comments"] = _generate_comments(post_text, quantity, cf)
+        res = _place_order_multi(kind, link, quantity, extra)
         if not res.get("success"):
             return json.dumps({"error": res.get("error", "All panels failed")})
         oid = str(res["order"])

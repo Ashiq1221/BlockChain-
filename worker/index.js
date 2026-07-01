@@ -149,6 +149,7 @@ async function runSentinelCycle(env) {
   const memories = await recallMemories(env, { newPosts, orderUpdates, deliveryIssues });
 
   // Phase 5 — AI Decision
+  state.newPosts = newPosts; // make post text available to executeDecision
   const context = {
     balance,
     newPosts,
@@ -418,12 +419,18 @@ function buildRuleBasedDecision(ctx) {
 async function executeDecision(env, state, decision) {
   let ordersPlaced = 0, refills = 0;
 
+  // Build link → post text lookup for comment generation
+  const postTextMap = Object.fromEntries(
+    (state.newPosts || []).map(p => [p.link, p.text || ""])
+  );
+
   // Queue orders (auto-retry via CF Queues)
   for (const order of decision.place_orders || []) {
     try {
       await env.ORDER_QUEUE.send({
         type: "place_order",
         ...order,
+        postText: postTextMap[order.link] || "",
         requestedAt: new Date().toISOString(),
       });
       ordersPlaced++;
@@ -465,6 +472,49 @@ async function executeDecision(env, state, decision) {
   return { ordersPlaced, refills };
 }
 
+// ── AI Comment Generator ──────────────────────────────────────────────────────
+async function generateComments(env, postText, count = 20) {
+  const prompt = `Generate ${count} unique, authentic Twitter comments for this post.
+Rules:
+- Each comment must be relevant to the post topic
+- Vary the style: some enthusiastic, some thoughtful, some short, some with emojis
+- Sound like real users — no bots, no generic praise
+- No hashtags, no @mentions
+- Return ONLY a JSON array of strings, nothing else
+
+Post: "${(postText || "").slice(0, 300)}"`;
+
+  try {
+    const res = await env.AI.run(FAST_MODEL, {
+      messages: [{ role: "user", content: prompt }],
+      max_tokens: 1200,
+    });
+    const text = (res.response || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) {
+      const arr = JSON.parse(match[0]);
+      if (Array.isArray(arr) && arr.length) {
+        console.log(`[Comments] Generated ${arr.length} custom comments for post`);
+        return arr.slice(0, count).join("\n");
+      }
+    }
+  } catch (err) {
+    console.warn("[Comments] AI generation failed, using fallback:", err.message);
+  }
+
+  // Fallback: generic but still varied comments
+  const fallback = [
+    "This is amazing! 🔥", "Love this content!", "Great post!", "So true 💯",
+    "This resonates with me", "Absolutely spot on", "Keep it up! 👏",
+    "Brilliant take", "Couldn't agree more", "This needs more attention",
+    "Well said!", "Pure gold 🙌", "This is the content I needed today",
+    "Facts 💪", "Sharing this immediately", "You always deliver 🎯",
+    "This is exactly right", "Underrated post", "More people need to see this",
+    "Excellent point!",
+  ];
+  return fallback.slice(0, count).join("\n");
+}
+
 // ── Queue Consumer ────────────────────────────────────────────────────────────
 async function processQueueMsg(msg, env) {
   if (msg.type === "queue_post") {
@@ -475,7 +525,14 @@ async function processQueueMsg(msg, env) {
   }
 
   if (msg.type === "place_order") {
-    const result = await placeOrderMultiPanel(env, msg.link, msg.kind, msg.quantity || 100);
+    // For comment orders: generate AI comments from post text first
+    let extraPayload = {};
+    if (msg.kind === "comments") {
+      const commentText = await generateComments(env, msg.postText || "", msg.quantity || 20);
+      extraPayload.comments = commentText;
+    }
+
+    const result = await placeOrderMultiPanel(env, msg.link, msg.kind, msg.quantity || 100, extraPayload);
     if (!result.success) throw new Error(`All panels failed: ${result.error}`);
 
     await env.DB.prepare(
@@ -487,7 +544,6 @@ async function processQueueMsg(msg, env) {
             msg.requestedAt || new Date().toISOString(), new Date().toISOString())
       .run();
 
-    // Clear from pending_posts if it was queued
     await env.DB.prepare("DELETE FROM pending_posts WHERE link = ?").bind(msg.link).run();
     console.log(`[Queue] Placed #${result.orderId} ${msg.kind}×${result.quantity} via ${result.panel}`);
   }
@@ -520,7 +576,7 @@ async function fetchLiveRate(env, panel, kind) {
 }
 
 // ── Multi-Panel SMM ───────────────────────────────────────────────────────────
-async function placeOrderMultiPanel(env, link, kind, quantity) {
+async function placeOrderMultiPanel(env, link, kind, quantity, extraPayload = {}) {
   const candidates = PANELS.filter(p => env[p.keyVar] && p.svc[kind]);
 
   // Fetch all live rates in parallel
@@ -543,6 +599,7 @@ async function placeOrderMultiPanel(env, link, kind, quantity) {
     try {
       const res = await smmPost(panel.defaultUrl, key, {
         action: "add", service: svcId, link, quantity: qty,
+        ...extraPayload,
       });
 
       if (res.order) {
