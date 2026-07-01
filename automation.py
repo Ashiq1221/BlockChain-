@@ -162,6 +162,78 @@ NEW_POST_PACKAGE = [
     {"kind": "views",    "quantity": 30000},
 ]
 
+# ── 10-Agent Order Placement Council ─────────────────────────────────────────────
+ORDER_COUNCIL_AGENTS = [
+    {"name": "Cost Maximizer",
+     "role": "You are an obsessive cost optimizer with 300 IQ. Hunt the absolute cheapest option. Interrogate every penny spent. Challenge any agent who ignores price. Your motto: 'Why pay more?'"},
+    {"name": "Quality Guardian",
+     "role": "You are a quality perfectionist with 300 IQ. Only elite services survive your scrutiny. You know drop rates, retention patterns, and provider reputation cold. Reject anything substandard."},
+    {"name": "Risk Assessor",
+     "role": "You are a paranoid risk analyst with 300 IQ. Every order hides a threat. Find them all: bot detection risk, account bans, provider fraud, delivery failure. Expose every vulnerability."},
+    {"name": "Timing Strategist",
+     "role": "You are a timing genius with 300 IQ. Twitter's algorithm rewards immediate engagement velocity. You know the exact windows, when to strike, when to wait. Call out bad timing aggressively."},
+    {"name": "Quantity Validator",
+     "role": "You are a numbers specialist with 300 IQ. Quantities must be precise — never over, never under. Verify every limit, every constraint. Wrong quantities get accounts flagged; you prevent that."},
+    {"name": "Panel Inspector",
+     "role": "You are a panel intelligence expert with 300 IQ. You know which panels have fraud history, slow delivery, or support nightmares. Cross-examine every service option with extreme prejudice."},
+    {"name": "Budget Controller",
+     "role": "You are a financial hawk with 300 IQ. You protect the balance fiercely. ROI must justify every order. If balance is low, you raise hell. If cost is wrong, you veto immediately."},
+    {"name": "SMM Strategist",
+     "role": "You are a social media mastermind with 300 IQ. You see the long game. Does this order serve the account's growth? Is the engagement ratio natural? Does this align with platform health?"},
+    {"name": "Devil's Advocate",
+     "role": "You are the adversarial contrarian with 300 IQ. Your ONLY job is to argue AGAINST placing this order. Find every flaw, every reason to reject it, every alternative. Be relentlessly hostile."},
+    {"name": "Chief Arbitrator",
+     "role": "You are the supreme decision authority with 300 IQ. You hear all arguments, weigh evidence ruthlessly, and issue the FINAL binding verdict. You cut through noise and see the truth clearly."},
+]
+
+# ── 20-Agent Order Management Council (4 teams of 5) ─────────────────────────────
+MANAGEMENT_AGENTS = [
+    # ── Status Team (5) ─────────────────────────────────────────────────────────
+    {"name": "Order Tracker",        "team": "status",
+     "role": "Track every order status change with surgical precision. Nothing escapes your monitoring."},
+    {"name": "Delivery Verifier",    "team": "status",
+     "role": "Verify actual delivery counts ruthlessly. Expose false completions. Demand proof of delivery."},
+    {"name": "Anomaly Detector",     "team": "status",
+     "role": "Detect suspicious patterns in status changes. Any deviation triggers your alarm systems."},
+    {"name": "Timeline Analyst",     "team": "status",
+     "role": "Analyze delivery timelines vs benchmarks. Late deliveries are your nemesis; you expose them."},
+    {"name": "Status Synthesizer",   "team": "status",
+     "role": "Compile all status intelligence into sharp, actionable conclusions. You see the big picture."},
+    # ── Refill Team (5) ─────────────────────────────────────────────────────────
+    {"name": "Eligibility Auditor",  "team": "refill",
+     "role": "Enforce refill eligibility conditions with zero tolerance. Block any premature refill attempt."},
+    {"name": "Drop Rate Analyst",    "team": "refill",
+     "role": "Measure actual engagement drops precisely. If drop rate doesn't justify refill, veto it hard."},
+    {"name": "Timing Optimizer",     "team": "refill",
+     "role": "Find the perfect refill window. Too early = provider rejection. Too late = reputation damage."},
+    {"name": "Refill Historian",     "team": "refill",
+     "role": "Review every past refill outcome for this service. History predicts the future; use it."},
+    {"name": "Refill Strategist",    "team": "refill",
+     "role": "Orchestrate the full refill strategy. Balance cost, timing, success probability, and impact."},
+    # ── Ticket Team (5) ─────────────────────────────────────────────────────────
+    {"name": "Issue Classifier",     "team": "ticket",
+     "role": "Classify if this issue truly warrants a ticket. False alarms waste political capital; you prevent them."},
+    {"name": "Evidence Curator",     "team": "ticket",
+     "role": "Collect irrefutable evidence before any ticket. No proof = no ticket. You are the gatekeeper."},
+    {"name": "Escalation Judge",     "team": "ticket",
+     "role": "Judge escalation necessity with cold logic. Default to patience. Tickets are weapons, not toys."},
+    {"name": "Ticket Writer",        "team": "ticket",
+     "role": "Craft airtight, professional tickets that force resolution. Your tickets cannot be ignored."},
+    {"name": "Anti-Spam Enforcer",   "team": "ticket",
+     "role": "VETO any unnecessary ticket aggressively. Spam kills support relationships; you are the last line."},
+    # ── Quality Team (5) ─────────────────────────────────────────────────────────
+    {"name": "Quality Auditor",      "team": "quality",
+     "role": "Audit delivery quality with extreme rigor. Zero tolerance for substandard engagement."},
+    {"name": "Authenticity Tester",  "team": "quality",
+     "role": "Test if engagement looks authentic to Twitter's algorithm. Bot patterns = immediate flag."},
+    {"name": "Panel Rater",          "team": "quality",
+     "role": "Rate panel performance based on this order's outcome. Underperformers get blacklisted."},
+    {"name": "Benchmark Analyst",    "team": "quality",
+     "role": "Compare all metrics against industry benchmarks. Pass or fail — no grey area."},
+    {"name": "Quality Arbiter",      "team": "quality",
+     "role": "Issue the final quality verdict. Your word is law on whether this panel earns future business."},
+]
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -613,6 +685,18 @@ def _ai_order_agent(kind: str, quantity: int, link: str,
              len(viable), quantity, kind,
              top_options[0]["panel"], top_options[0]["service_id"], top_options[0]["rate"])
 
+    # ── Convene 10-agent Order Placement Council ─────────────────────────────────
+    council = _order_placement_council(kind, quantity, link, viable, cf)
+    if not council["approved"]:
+        rejection_msg = (
+            f"Order REJECTED by 10-agent council ({council['reason']}). "
+            f"Council debate:\n{council['debate_log']}"
+        )
+        log.warning("[OrderCouncil] Order blocked: %s", council["reason"])
+        return {"success": False, "error": rejection_msg}
+
+    log.info("[OrderCouncil] Order APPROVED — proceeding to execution")
+
     chosen = None
     if cf and (CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY)):
         opts_str = "\n".join(
@@ -674,6 +758,204 @@ def _ai_order_agent(kind: str, quantity: int, link: str,
             log.warning("[Agent] %s error: %s", option["panel"], e)
 
     return {"success": False, "error": f"All {len(viable)} viable services rejected the order for {quantity}× {kind}"}
+
+# ── Multi-Agent Debate Engine ─────────────────────────────────────────────────────
+
+def _run_debate_round(agents: list, context: str, prior_debate: str,
+                      cf: "CloudflarePlatform", label: str) -> list:
+    """
+    Run one debate round — all agents analyze in parallel via Workers AI.
+    Each agent sees the full prior debate and must engage with it.
+    """
+    prior_section = (
+        f"\n\n{'='*60}\nFULL DEBATE SO FAR (read carefully, challenge specific agents by name):\n{prior_debate}\n{'='*60}"
+        if prior_debate else ""
+    )
+
+    def _agent_turn(agent: dict) -> dict:
+        is_round2_plus = bool(prior_debate)
+        challenge_instruction = (
+            "\nYou MUST directly challenge at least one other agent by name if you disagree with them. "
+            "Use: 'I challenge [Agent Name]: [specific reason why they are wrong]'. "
+            "Be aggressive and precise."
+        ) if is_round2_plus else ""
+        prompt = (
+            f"You are {agent['name']} — {agent['role']}\n\n"
+            f"SITUATION UNDER REVIEW:\n{context}"
+            f"{prior_section}\n\n"
+            f"Deliver your expert analysis. Be direct, sharp, 300 IQ level insight.{challenge_instruction}\n\n"
+            f"Return ONLY valid JSON — no markdown, no extra text:\n"
+            f'{{"agent":"{agent["name"]}","verdict":"APPROVE","confidence":85,'
+            f'"argument":"your detailed reasoning (3-5 sentences)",'
+            f'"challenge":"[Agent Name]: reason you disagree (or empty string if you agree with all)"}}'
+            f'\nverdict must be exactly APPROVE, REJECT, or ABSTAIN'
+        )
+        try:
+            result = cf.ai_run(CF_FAST_MODEL, {
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 450,
+            })
+            raw  = result.get("response", "")
+            text = re.sub(r"<think>.*?</think>",
+                          "", raw if isinstance(raw, str) else json.dumps(raw),
+                          flags=re.DOTALL).strip()
+            m = re.search(r"\{.*?\}", text, re.DOTALL)
+            if m:
+                data = json.loads(m.group())
+                if "verdict" in data:
+                    data["agent"] = agent["name"]
+                    return data
+        except Exception as exc:
+            log.debug("[Council] %s/%s failed: %s", agent["name"], label, exc)
+        return {"agent": agent["name"], "verdict": "ABSTAIN", "confidence": 0,
+                "argument": "Analysis unavailable", "challenge": ""}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(agents), 10)) as pool:
+        opinions = list(pool.map(_agent_turn, agents))
+
+    votes = {"APPROVE": 0, "REJECT": 0, "ABSTAIN": 0}
+    for o in opinions:
+        v = o.get("verdict", "ABSTAIN")
+        if v not in votes:
+            v = "ABSTAIN"
+        votes[v] += 1
+
+    log.info("[Council/%s] APPROVE=%d  REJECT=%d  ABSTAIN=%d",
+             label, votes["APPROVE"], votes["REJECT"], votes["ABSTAIN"])
+    return opinions
+
+
+def _format_debate_round(opinions: list, round_name: str) -> str:
+    lines = [f"--- {round_name} ---"]
+    for o in opinions:
+        v   = o.get("verdict", "?")
+        c   = o.get("confidence", 0)
+        arg = o.get("argument", "")
+        chall = o.get("challenge", "")
+        line = f"  [{o['agent']}] {v}({c}%) | {arg}"
+        if chall:
+            line += f"\n    >> CHALLENGES: {chall}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _council_decide(agents: list, context: str, cf: "CloudflarePlatform | None",
+                    approve_threshold: float = 0.60, label: str = "Council") -> dict:
+    """
+    3-round multi-agent deliberation:
+      R1 — Independent analysis (parallel, no prior)
+      R2 — Cross-examination  (agents read R1, challenge each other)
+      R3 — Final binding vote  (full debate visible, Chief Arbitrator uses deep model)
+    Returns {approved, votes, debate_log, reason}
+    """
+    if not cf or not (CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY)):
+        log.warning("[%s] CF AI unavailable — auto-approving", label)
+        return {"approved": True, "votes": {}, "debate_log": "CF AI unavailable",
+                "reason": "Auto-approved: no AI configured"}
+
+    n = len(agents)
+    log.info("[%s] Convening %d-agent council — 3-round debate begins", label, n)
+
+    # ── Round 1: Independent ────────────────────────────────────────────────────
+    r1 = _run_debate_round(agents, context, "", cf, f"{label}/R1")
+    debate_log = _format_debate_round(r1, "ROUND 1 — Independent Analysis")
+
+    # ── Round 2: Cross-Examination ───────────────────────────────────────────────
+    r2 = _run_debate_round(agents, context, debate_log, cf, f"{label}/R2")
+    debate_log += "\n\n" + _format_debate_round(r2, "ROUND 2 — Cross-Examination")
+
+    # ── Round 3: Final Vote ──────────────────────────────────────────────────────
+    r3 = _run_debate_round(agents, context, debate_log, cf, f"{label}/R3")
+    debate_log += "\n\n" + _format_debate_round(r3, "ROUND 3 — Final Vote")
+
+    # ── Tally R3 votes ───────────────────────────────────────────────────────────
+    votes: dict = {"APPROVE": 0, "REJECT": 0, "ABSTAIN": 0}
+    for o in r3:
+        v = o.get("verdict", "ABSTAIN")
+        if v not in votes:
+            v = "ABSTAIN"
+        votes[v] += 1
+
+    total_decisive = votes["APPROVE"] + votes["REJECT"]
+    if total_decisive == 0:
+        approved = True
+        reason   = "All agents abstained — defaulting to APPROVE"
+    else:
+        rate     = votes["APPROVE"] / total_decisive
+        approved = rate >= approve_threshold
+        reason   = (
+            f"{votes['APPROVE']}/{n} APPROVE, {votes['REJECT']}/{n} REJECT, "
+            f"{votes['ABSTAIN']}/{n} ABSTAIN — "
+            f"{'APPROVED' if approved else 'REJECTED'} "
+            f"({rate:.0%} approval vs {approve_threshold:.0%} threshold)"
+        )
+
+    log.info("[%s] ═══ FINAL: %s | %s ═══", label, "APPROVED ✓" if approved else "REJECTED ✗", reason)
+
+    # Log every agent's final word for visibility
+    for o in r3:
+        log.info("[%s]   %s → %s(%d%%) | %s",
+                 label, o["agent"], o.get("verdict","?"), o.get("confidence",0),
+                 o.get("argument","")[:120])
+
+    return {"approved": approved, "votes": votes, "debate_log": debate_log, "reason": reason}
+
+
+def _order_placement_council(kind: str, quantity: int, link: str,
+                              viable_options: list, cf: "CloudflarePlatform | None") -> dict:
+    """Convene 10-agent Order Placement Council before placing any order."""
+    opts_str = "\n".join(
+        f"  • Panel={o['panel']} | ServiceID={o['service_id']} | Name=\"{o['name']}\" "
+        f"| Min={o['min']} | Max={o['max']} | Rate=${o['rate']:.4f}/k"
+        for o in viable_options[:15]
+    )
+    # Try to get balance for context
+    balance_str = "Unknown"
+    try:
+        bal = _api({"action": "balance"})
+        balance_str = f"${bal.get('balance','?')} {bal.get('currency','USD')}"
+    except Exception:
+        pass
+
+    context = (
+        f"ORDER PLACEMENT REQUEST\n"
+        f"{'─'*50}\n"
+        f"  Service type : {kind}\n"
+        f"  Quantity     : {quantity:,}\n"
+        f"  Post link    : {link}\n"
+        f"  Account bal  : {balance_str}\n\n"
+        f"VIABLE SERVICES ({len(viable_options)} found across all panels):\n{opts_str}\n\n"
+        f"DEBATE THIS THOROUGHLY. Should we place this order? "
+        f"Consider: cost, quality, risk, timing, quantity safety, provider reputation, ROI."
+    )
+    return _council_decide(
+        ORDER_COUNCIL_AGENTS, context, cf,
+        approve_threshold=0.60, label="OrderCouncil"
+    )
+
+
+def _management_council(action: str, context_data: dict,
+                        cf: "CloudflarePlatform | None",
+                        team: str = "all") -> dict:
+    """Convene the relevant management team (or full 20-agent council) before any action."""
+    if team == "all":
+        agents = MANAGEMENT_AGENTS
+    else:
+        agents = [a for a in MANAGEMENT_AGENTS if a["team"] == team]
+
+    context = (
+        f"MANAGEMENT ACTION REQUESTED: {action.upper()}\n"
+        f"{'─'*50}\n"
+        f"{json.dumps(context_data, indent=2, default=str)[:2500]}\n\n"
+        f"Should we proceed with this action? "
+        f"Debate rigorously from your specialist perspective."
+    )
+    threshold = 0.55 if action == "status_review" else 0.65
+    return _council_decide(
+        agents, context, cf,
+        approve_threshold=threshold, label=f"MgmtCouncil/{action}"
+    )
+
 
 def _place_order_multi(kind: str, link: str, quantity: int, extra: dict | None = None) -> dict:
     """Fetch live rates from all panels in parallel, order from cheapest, fall back on failure."""
@@ -916,12 +1198,38 @@ def tool_check_orders(state: dict) -> str:
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 
-def tool_trigger_refill(state: dict, order_id: str) -> str:
+def tool_trigger_refill(state: dict, order_id: str,
+                        cf: "CloudflarePlatform | None" = None) -> str:
     order = state["orders"].get(order_id)
     if not order:
         return json.dumps({"error": f"Order {order_id} not tracked."})
     if not order.get("refillable"):
         return json.dumps({"error": f"Order {order_id} is not refillable."})
+
+    # ── Convene 5-agent Refill Council ───────────────────────────────────────────
+    refill_history = state.get("refills", {}).get(order_id)
+    council_ctx = {
+        "order_id": order_id,
+        "kind": order.get("kind"),
+        "link": order.get("link"),
+        "status": order.get("status"),
+        "quantity": order.get("quantity"),
+        "remains": order.get("remains"),
+        "completed_at": order.get("completed_at"),
+        "panel": order.get("panel"),
+        "past_refill_on_this_order": refill_history,
+        "all_refills": state.get("refills", {}),
+    }
+    council = _management_council("trigger_refill", council_ctx, cf, team="refill")
+    if not council["approved"]:
+        log.warning("[RefillCouncil] Refill blocked for #%s: %s", order_id, council["reason"])
+        return json.dumps({
+            "blocked": True,
+            "reason": council["reason"],
+            "council_debate": council["debate_log"],
+        })
+    log.info("[RefillCouncil] Refill APPROVED for #%s — proceeding", order_id)
+
     try:
         res = _api({"action": "refill", "order": order_id})
         if "refill" in res:
@@ -964,7 +1272,29 @@ def tool_check_refill_status(state: dict, order_id: str) -> str:
     except Exception as exc:
         return json.dumps({"error": str(exc), "cached": refill})
 
-def tool_submit_ticket(state: dict, order_ids: list, subject_type: str, message: str) -> str:
+def tool_submit_ticket(state: dict, order_ids: list, subject_type: str, message: str,
+                       cf: "CloudflarePlatform | None" = None) -> str:
+    # ── Convene 5-agent Ticket Council ───────────────────────────────────────────
+    orders_detail = {oid: state["orders"].get(oid, {}) for oid in order_ids}
+    refills_detail = {oid: state["refills"].get(oid) for oid in order_ids if oid in state.get("refills", {})}
+    council_ctx = {
+        "subject_type": subject_type,
+        "message": message,
+        "order_ids": order_ids,
+        "orders": orders_detail,
+        "past_refills": refills_detail,
+        "total_refills_attempted": len(state.get("refills", {})),
+    }
+    council = _management_council("submit_ticket", council_ctx, cf, team="ticket")
+    if not council["approved"]:
+        log.warning("[TicketCouncil] Ticket BLOCKED for %s: %s", order_ids, council["reason"])
+        return json.dumps({
+            "blocked": True,
+            "reason": council["reason"],
+            "council_debate": council["debate_log"],
+        })
+    log.info("[TicketCouncil] Ticket APPROVED for %s — proceeding", order_ids)
+
     sess = _panel_session()
     if not sess:
         return json.dumps({"error": "Panel login failed."})
@@ -1219,9 +1549,9 @@ def dispatch_tool(name: str, args: dict, state: dict, cf: CloudflarePlatform) ->
     mapping = {
         "get_balance":         lambda: tool_get_balance(cf),
         "check_orders":        lambda: tool_check_orders(state),
-        "trigger_refill":      lambda: tool_trigger_refill(state, args["order_id"]),
+        "trigger_refill":      lambda: tool_trigger_refill(state, args["order_id"], cf),
         "check_refill_status": lambda: tool_check_refill_status(state, args["order_id"]),
-        "submit_ticket":       lambda: tool_submit_ticket(state, args["order_ids"], args["subject_type"], args["message"]),
+        "submit_ticket":       lambda: tool_submit_ticket(state, args["order_ids"], args["subject_type"], args["message"], cf),
         "place_order":         lambda: tool_place_order(state, args["link"], args["kind"], args["quantity"], cf=cf),
         "get_services":        lambda: tool_get_services(),
         "get_pending_posts":   lambda: tool_get_pending_posts(state),

@@ -55,6 +55,48 @@ const NEW_POST_PACKAGE = [
   { kind: "views",    quantity: 30000 },
 ];
 
+// ── 10-Agent Order Placement Council ─────────────────────────────────────────
+const ORDER_COUNCIL_AGENTS = [
+  { name: "Cost Maximizer",    role: "You are an obsessive cost optimizer with 300 IQ. Hunt the absolute cheapest option. Interrogate every penny. Challenge any agent who ignores price." },
+  { name: "Quality Guardian",  role: "You are a quality perfectionist with 300 IQ. Only elite services survive your scrutiny. Know drop rates, retention, and provider reputation cold." },
+  { name: "Risk Assessor",     role: "You are a paranoid risk analyst with 300 IQ. Find every threat: bot detection, account bans, provider fraud, delivery failure. Expose all vulnerabilities." },
+  { name: "Timing Strategist", role: "You are a timing genius with 300 IQ. Twitter rewards immediate engagement velocity. Know exact windows, when to strike, when to wait. Call out bad timing." },
+  { name: "Quantity Validator",role: "You are a numbers specialist with 300 IQ. Quantities must be precise — never over, never under. Wrong quantities get accounts flagged; you prevent that." },
+  { name: "Panel Inspector",   role: "You are a panel intelligence expert with 300 IQ. Know which panels have fraud history or slow delivery. Cross-examine every service with extreme prejudice." },
+  { name: "Budget Controller", role: "You are a financial hawk with 300 IQ. Protect the balance fiercely. ROI must justify every order. If cost is wrong you veto immediately." },
+  { name: "SMM Strategist",    role: "You are a social media mastermind with 300 IQ. See the long game. Does this order serve account growth? Is the engagement ratio natural?" },
+  { name: "Devil's Advocate",  role: "You are the adversarial contrarian with 300 IQ. Your ONLY job is to argue AGAINST this order. Find every flaw, every reason to reject. Be relentlessly hostile." },
+  { name: "Chief Arbitrator",  role: "You are the supreme decision authority with 300 IQ. Hear all arguments, weigh evidence ruthlessly, issue the FINAL binding verdict." },
+];
+
+// ── 20-Agent Order Management Council (4 teams × 5) ──────────────────────────
+const MANAGEMENT_AGENTS = [
+  // Status Team
+  { name: "Order Tracker",       team: "status",  role: "Track every order status change with surgical precision. Nothing escapes your monitoring." },
+  { name: "Delivery Verifier",   team: "status",  role: "Verify actual delivery counts ruthlessly. Expose false completions. Demand proof." },
+  { name: "Anomaly Detector",    team: "status",  role: "Detect suspicious patterns. Any deviation from normal triggers your alarm systems." },
+  { name: "Timeline Analyst",    team: "status",  role: "Analyze delivery timelines vs benchmarks. Late deliveries are your nemesis." },
+  { name: "Status Synthesizer",  team: "status",  role: "Compile all status intelligence into sharp, actionable conclusions." },
+  // Refill Team
+  { name: "Eligibility Auditor", team: "refill",  role: "Enforce refill eligibility conditions with zero tolerance. Block any premature refill." },
+  { name: "Drop Rate Analyst",   team: "refill",  role: "Measure actual engagement drops precisely. If drop rate doesn't justify refill, veto it." },
+  { name: "Timing Optimizer",    team: "refill",  role: "Find perfect refill window. Too early = rejection. Too late = reputation damage." },
+  { name: "Refill Historian",    team: "refill",  role: "Review every past refill outcome for this service. History predicts the future." },
+  { name: "Refill Strategist",   team: "refill",  role: "Orchestrate full refill strategy: cost, timing, success probability, and impact." },
+  // Ticket Team
+  { name: "Issue Classifier",    team: "ticket",  role: "Classify if this issue truly warrants a ticket. False alarms waste political capital." },
+  { name: "Evidence Curator",    team: "ticket",  role: "Collect irrefutable evidence before any ticket. No proof = no ticket." },
+  { name: "Escalation Judge",    team: "ticket",  role: "Judge escalation necessity with cold logic. Default to patience. Tickets are weapons, not toys." },
+  { name: "Ticket Writer",       team: "ticket",  role: "Craft airtight professional tickets that force resolution. Your tickets cannot be ignored." },
+  { name: "Anti-Spam Enforcer",  team: "ticket",  role: "VETO any unnecessary ticket aggressively. Spam kills support relationships; you are the last line." },
+  // Quality Team
+  { name: "Quality Auditor",     team: "quality", role: "Audit delivery quality with extreme rigor. Zero tolerance for substandard engagement." },
+  { name: "Authenticity Tester", team: "quality", role: "Test if engagement looks authentic to Twitter's algorithm. Bot patterns = immediate flag." },
+  { name: "Panel Rater",         team: "quality", role: "Rate panel performance based on this order's outcome. Underperformers get blacklisted." },
+  { name: "Benchmark Analyst",   team: "quality", role: "Compare metrics against industry benchmarks. Pass or fail — no grey area." },
+  { name: "Quality Arbiter",     team: "quality", role: "Issue the final quality verdict. Your word is law on whether this panel earns future business." },
+];
+
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are SMM Sentinel — an elite autonomous social media marketing agent.
 You manage SMM orders across multiple panels (smmfollows, smmwiz, astrasmm).
@@ -454,9 +496,26 @@ async function executeDecision(env, state, decision) {
     }
   }
 
-  // Trigger refills directly
+  // Trigger refills — each goes through 5-agent refill council first
   for (const orderId of decision.trigger_refills || []) {
     try {
+      const orderInfo = (state.orders || []).find(o => o.id === orderId) || { id: orderId };
+      const refillCouncil = await managementCouncil(env, "trigger_refill", {
+        order_id: orderId,
+        kind: orderInfo.kind,
+        link: orderInfo.link,
+        status: orderInfo.status,
+        quantity: orderInfo.quantity,
+        remains: orderInfo.remains,
+        panel: orderInfo.panel,
+      }, "refill");
+
+      if (!refillCouncil.approved) {
+        console.warn(`[RefillCouncil] Refill BLOCKED for #${orderId}: ${refillCouncil.reason}`);
+        continue;
+      }
+      console.log(`[RefillCouncil] Refill APPROVED for #${orderId} — proceeding`);
+
       const res = await smmApiCall(env, PANELS[0], { action: "refill", order: orderId });
       if (res.refill) {
         await env.DB.prepare(
@@ -648,6 +707,14 @@ async function aiOrderAgent(env, link, kind, quantity, extraPayload = {}) {
 
   console.log(`[Agent] ${viable.length} viable services for ${quantity}× ${kind}; cheapest: ${topOptions[0].panel.name} svc#${topOptions[0].svcId} @ $${topOptions[0].rate}/k`);
 
+  // ── Convene 10-agent Order Placement Council ──────────────────────────────────
+  const council = await orderPlacementCouncil(env, kind, quantity, link, viable);
+  if (!council.approved) {
+    console.warn(`[OrderCouncil] Order BLOCKED: ${council.reason}`);
+    return { success: false, error: `Council rejected order (${council.reason}). Debate:\n${council.debateLog}` };
+  }
+  console.log(`[OrderCouncil] Order APPROVED — proceeding to execution`);
+
   // Ask AI to pick the best option
   let chosen = null;
   if (env.AI) {
@@ -696,6 +763,145 @@ async function aiOrderAgent(env, link, kind, quantity, extraPayload = {}) {
     }
   }
   return { success: false, error: `All ${viable.length} viable services rejected the order for ${quantity}× ${kind}` };
+}
+
+// ── Multi-Agent Debate Engine ─────────────────────────────────────────────────
+
+async function runDebateRound(agents, context, priorDebate, env, label) {
+  const priorSection = priorDebate
+    ? `\n\n${"=".repeat(60)}\nFULL DEBATE SO FAR (read carefully, challenge specific agents by name):\n${priorDebate}\n${"=".repeat(60)}`
+    : "";
+
+  async function agentTurn(agent) {
+    const isRound2Plus = priorDebate.length > 0;
+    const challengeInstruction = isRound2Plus
+      ? "\nYou MUST directly challenge at least one other agent by name if you disagree. Use: 'I challenge [Agent Name]: [specific reason why they are wrong]'. Be aggressive and precise."
+      : "";
+    const prompt =
+      `You are ${agent.name} — ${agent.role}\n\n` +
+      `SITUATION UNDER REVIEW:\n${context}${priorSection}\n\n` +
+      `Deliver your expert analysis. Be direct, sharp, 300 IQ level insight.${challengeInstruction}\n\n` +
+      `Return ONLY valid JSON — no markdown, no extra text:\n` +
+      `{"agent":"${agent.name}","verdict":"APPROVE","confidence":85,` +
+      `"argument":"your detailed reasoning (3-5 sentences)",` +
+      `"challenge":"[Agent Name]: reason you disagree (or empty string)"}\n` +
+      `verdict must be exactly APPROVE, REJECT, or ABSTAIN`;
+    try {
+      const res = await env.AI.run(FAST_MODEL, {
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 450,
+      });
+      const text = (res.response || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      const m = text.match(/\{[\s\S]*?\}/);
+      if (m) {
+        const data = JSON.parse(m[0]);
+        if (data.verdict) { data.agent = agent.name; return data; }
+      }
+    } catch (err) {
+      console.warn(`[Council/${label}] ${agent.name} failed:`, err.message);
+    }
+    return { agent: agent.name, verdict: "ABSTAIN", confidence: 0,
+             argument: "Analysis unavailable", challenge: "" };
+  }
+
+  const opinions = await Promise.all(agents.map(a => agentTurn(a)));
+  const votes = { APPROVE: 0, REJECT: 0, ABSTAIN: 0 };
+  for (const o of opinions) {
+    const v = ["APPROVE","REJECT","ABSTAIN"].includes(o.verdict) ? o.verdict : "ABSTAIN";
+    votes[v]++;
+  }
+  console.log(`[Council/${label}] APPROVE=${votes.APPROVE} REJECT=${votes.REJECT} ABSTAIN=${votes.ABSTAIN}`);
+  return opinions;
+}
+
+function formatDebateRound(opinions, roundName) {
+  const lines = [`--- ${roundName} ---`];
+  for (const o of opinions) {
+    let line = `  [${o.agent}] ${o.verdict}(${o.confidence}%) | ${o.argument}`;
+    if (o.challenge) line += `\n    >> CHALLENGES: ${o.challenge}`;
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+async function councilDecide(agents, context, env, approveThreshold = 0.60, label = "Council") {
+  if (!env.AI) {
+    console.warn(`[${label}] AI binding unavailable — auto-approving`);
+    return { approved: true, votes: {}, debateLog: "AI unavailable", reason: "Auto-approved" };
+  }
+  const n = agents.length;
+  console.log(`[${label}] Convening ${n}-agent council — 3-round debate begins`);
+
+  // Round 1 — Independent
+  const r1 = await runDebateRound(agents, context, "", env, `${label}/R1`);
+  let debateLog = formatDebateRound(r1, "ROUND 1 — Independent Analysis");
+
+  // Round 2 — Cross-Examination
+  const r2 = await runDebateRound(agents, context, debateLog, env, `${label}/R2`);
+  debateLog += "\n\n" + formatDebateRound(r2, "ROUND 2 — Cross-Examination");
+
+  // Round 3 — Final Vote
+  const r3 = await runDebateRound(agents, context, debateLog, env, `${label}/R3`);
+  debateLog += "\n\n" + formatDebateRound(r3, "ROUND 3 — Final Vote");
+
+  const votes = { APPROVE: 0, REJECT: 0, ABSTAIN: 0 };
+  for (const o of r3) {
+    const v = ["APPROVE","REJECT","ABSTAIN"].includes(o.verdict) ? o.verdict : "ABSTAIN";
+    votes[v]++;
+  }
+
+  const decisive = votes.APPROVE + votes.REJECT;
+  let approved, reason;
+  if (decisive === 0) {
+    approved = true;
+    reason = "All agents abstained — defaulting to APPROVE";
+  } else {
+    const rate = votes.APPROVE / decisive;
+    approved = rate >= approveThreshold;
+    reason = `${votes.APPROVE}/${n} APPROVE, ${votes.REJECT}/${n} REJECT, ${votes.ABSTAIN}/${n} ABSTAIN — ` +
+             `${approved ? "APPROVED" : "REJECTED"} (${Math.round(rate*100)}% approval vs ${Math.round(approveThreshold*100)}% threshold)`;
+  }
+
+  console.log(`[${label}] ═══ FINAL: ${approved ? "APPROVED ✓" : "REJECTED ✗"} | ${reason} ═══`);
+  for (const o of r3) {
+    console.log(`[${label}]   ${o.agent} → ${o.verdict}(${o.confidence}%) | ${(o.argument||"").slice(0,100)}`);
+  }
+
+  return { approved, votes, debateLog, reason };
+}
+
+async function orderPlacementCouncil(env, kind, quantity, link, viableOptions) {
+  const optsStr = viableOptions.slice(0, 15).map(o =>
+    `  • Panel=${o.panel.name} | ServiceID=${o.svcId} | Name="${o.name}" | Min=${o.min} | Max=${o.max} | Rate=$${o.rate}/k`
+  ).join("\n");
+
+  let balance = "Unknown";
+  try {
+    const bal = await smmPost(PANELS[0].defaultUrl, env.SMM_API_KEY, { action: "balance" });
+    balance = `$${bal.balance || "?"} USD`;
+  } catch (_) {}
+
+  const context =
+    `ORDER PLACEMENT REQUEST\n${"─".repeat(50)}\n` +
+    `  Service type : ${kind}\n` +
+    `  Quantity     : ${quantity.toLocaleString()}\n` +
+    `  Post link    : ${link}\n` +
+    `  Account bal  : ${balance}\n\n` +
+    `VIABLE SERVICES (${viableOptions.length} found across all panels):\n${optsStr}\n\n` +
+    `DEBATE THIS THOROUGHLY. Should we place this order? ` +
+    `Consider: cost, quality, risk, timing, quantity safety, provider reputation, ROI.`;
+
+  return councilDecide(ORDER_COUNCIL_AGENTS, context, env, 0.60, "OrderCouncil");
+}
+
+async function managementCouncil(env, action, contextData, team = "all") {
+  const agents = team === "all" ? MANAGEMENT_AGENTS : MANAGEMENT_AGENTS.filter(a => a.team === team);
+  const context =
+    `MANAGEMENT ACTION REQUESTED: ${action.toUpperCase()}\n${"─".repeat(50)}\n` +
+    JSON.stringify(contextData, null, 2).slice(0, 2500) + "\n\n" +
+    `Should we proceed with this action? Debate rigorously from your specialist perspective.`;
+  const threshold = action === "status_review" ? 0.55 : 0.65;
+  return councilDecide(agents, context, env, threshold, `MgmtCouncil/${action}`);
 }
 
 // ── Multi-Panel SMM (kept as utility; aiOrderAgent is used for new orders) ────
@@ -791,7 +997,20 @@ async function syncOrderStatus(state, env) {
   }
 
   const all = await env.DB.prepare("SELECT * FROM orders ORDER BY added_at DESC LIMIT 50").all();
-  return all.results || [];
+  const orders = all.results || [];
+
+  // ── 5-agent Status Team reviews orders after every sync ──────────────────────
+  const activeOrders = orders.filter(o => !["Completed","Canceled"].includes(o.status));
+  if (activeOrders.length > 0) {
+    managementCouncil(env, "status_review", {
+      active_orders: activeOrders.slice(0, 10),
+      total_tracked: orders.length,
+    }, "status").then(c => {
+      console.log(`[StatusCouncil] Review complete — ${c.reason}`);
+    }).catch(() => {});
+  }
+
+  return orders;
 }
 
 // ── Vectorize Episodic Memory ─────────────────────────────────────────────────
