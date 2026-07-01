@@ -1636,7 +1636,18 @@ def _build_system_with_tools() -> str:
 
 def _cf_ai_turn(model: str, messages: list, cf: CloudflarePlatform) -> str:
     result = cf.ai_run(model, {"messages": messages, "max_tokens": 2048})
-    return _strip_think(result.get("response", ""))
+    raw = result.get("response", "")
+    # CF AI Gateway may return response as a dict (OpenAI-compat) or nest it under choices
+    if isinstance(raw, dict):
+        raw = raw.get("content", "") or raw.get("text", "") or json.dumps(raw)
+    elif not isinstance(raw, str):
+        # Fall back to OpenAI-compatible choices path
+        choices = result.get("choices", [])
+        if choices:
+            raw = choices[0].get("message", {}).get("content", "") or str(choices[0])
+        else:
+            raw = str(raw)
+    return _strip_think(raw)
 
 def _process_cmd(cmd: dict | None, text: str, messages: list,
                  state: dict, cf: CloudflarePlatform) -> str | None:
