@@ -3,67 +3,59 @@ main            = "worker/index.js"
 compatibility_date  = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# ── Cron Triggers ─────────────────────────────────────────────────────────────
+# ── Cron Triggers — every 15 minutes ─────────────────────────────────────────
 [triggers]
-crons = ["*/15 * * * *"]   # every 15 minutes
+crons = ["*/15 * * * *"]
 
-# ── AI (Workers AI binding) ───────────────────────────────────────────────────
+# ── Workers AI (routes through AI Gateway smm-sentinel) ──────────────────────
 [ai]
 binding = "AI"
-
-# ── AI Gateway ── routes AI calls through the gateway for caching/analytics ──
-# Gateway name: smm-sentinel (matches CF_GATEWAY_ID in automation.py)
-# Set in Cloudflare dashboard → AI Gateway → create "smm-sentinel"
 
 # ── Browser Rendering ─────────────────────────────────────────────────────────
 [browser]
 binding = "BROWSER"
 
-# ── D1 SQL Database ───────────────────────────────────────────────────────────
+# ── D1 SQL — provisioned: smm-state ──────────────────────────────────────────
 [[d1_databases]]
-binding      = "DB"
+binding       = "DB"
 database_name = "smm-state"
-database_id  = "YOUR_D1_DB_ID"   # wrangler d1 create smm-state
+database_id   = "b21d583e-9dc2-4004-b24b-64bac673741d"
 
-# ── KV Cache ──────────────────────────────────────────────────────────────────
+# ── KV Cache — provisioned: smm-cache ────────────────────────────────────────
 [[kv_namespaces]]
 binding = "KV"
-id      = "YOUR_KV_NS_ID"        # wrangler kv namespace create smm-cache
+id      = "6759754413f745edaa47d5f9a4d424be"
 
-# ── Queues ────────────────────────────────────────────────────────────────────
+# ── Queues — provisioned: smm-orders + smm-orders-dlq ────────────────────────
 [[queues.producers]]
 binding = "ORDER_QUEUE"
-queue   = "smm-orders"           # wrangler queues create smm-orders
+queue   = "smm-orders"
 
 [[queues.consumers]]
-queue          = "smm-orders"
-max_batch_size = 10
-max_retries    = 5
+queue             = "smm-orders"
+max_batch_size    = 10
+max_retries       = 5
 dead_letter_queue = "smm-orders-dlq"
 
-# ── R2 Audit Log ──────────────────────────────────────────────────────────────
-[[r2_buckets]]
-binding     = "R2"
-bucket_name = "smm-logs"         # wrangler r2 bucket create smm-logs
-
-# ── Vectorize (episodic memory) ───────────────────────────────────────────────
+# ── Vectorize — provisioned: smm-episodic-memory (1024-dim cosine) ───────────
 [[vectorize]]
-binding        = "VECTORIZE"
-index_name     = "smm-episodic-memory"
-# wrangler vectorize create smm-episodic-memory --dimensions=1024 --metric=cosine
+binding    = "VECTORIZE"
+index_name = "smm-episodic-memory"
 
-# ── Env vars (non-secret) ─────────────────────────────────────────────────────
+# ── R2 Audit Log — enable at: dash.cloudflare.com → R2 → Enable ──────────────
+# Uncomment after enabling R2 in Cloudflare Dashboard:
+# [[r2_buckets]]
+# binding     = "R2"
+# bucket_name = "smm-logs"
+
+# ── Public env vars ───────────────────────────────────────────────────────────
 [vars]
-X_ACCOUNT_HANDLE  = ""          # Your Twitter/X handle, e.g. "ashiq1221" (no @)
-SMM_LIKES_QTY     = "100"
-SMM_RETWEETS_QTY  = "100"
-CF_ACCOUNT_ID     = "17b8b27a0a8af8d5f1d1622bfbfb9d8a"
+X_ACCOUNT_HANDLE = ""     # Set to your Twitter/X handle (no @), e.g. "ashiq1221"
+SMM_LIKES_QTY    = "100"
+SMM_RETWEETS_QTY = "100"
+CF_ACCOUNT_ID    = "17b8b27a0a8af8d5f1d1622bfbfb9d8a"
+CF_GATEWAY_ID    = "smm-sentinel"
 
-# ── Secrets (set via CLI or GitHub Actions) ───────────────────────────────────
-# wrangler secret put SMM_API_KEY
-# wrangler secret put SMMWIZ_API_KEY
-# wrangler secret put ASTRA_API_KEY
-# wrangler secret put SMMWIZ_USER
-# wrangler secret put SMMWIZ_PASS
-# wrangler secret put ASTRA_USER
-# wrangler secret put ASTRA_PASS
+# ── Secrets (set via GitHub Actions or wrangler secret put) ──────────────────
+# SMM_API_KEY  SMMWIZ_API_KEY  ASTRA_API_KEY
+# SMM_USER  SMM_PASS  SMMWIZ_USER  SMMWIZ_PASS  ASTRA_USER  ASTRA_PASS

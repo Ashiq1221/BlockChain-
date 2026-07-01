@@ -301,7 +301,9 @@ Respond ONLY with JSON:
   "strategy_note": "any market observation"
 }`;
 
-  // Scout pass: Llama 3.3 70B — fast, cheap
+  const gateway = { id: env.CF_GATEWAY_ID || "smm-sentinel", skipCache: false, cacheTtl: 300 };
+
+  // Scout pass: Llama 3.3 70B — fast, cheap, cached via AI Gateway
   let scoutHint = "";
   try {
     const scout = await env.AI.run(FAST_MODEL, {
@@ -310,14 +312,14 @@ Respond ONLY with JSON:
         { role: "user", content: `Quick scan — top 2 actions needed? JSON only.\n${userPrompt}` },
       ],
       max_tokens: 400,
-    });
+    }, { gateway });
     scoutHint = scout.response || "";
     console.log("[AI Scout]", scoutHint.slice(0, 100));
   } catch (err) {
     console.warn("[AI Scout] Failed:", err.message);
   }
 
-  // Deep pass: DeepSeek R1 llama-70b — full reasoning
+  // Deep pass: DeepSeek R1 llama-70b — full reasoning, cached via AI Gateway
   try {
     const deep = await env.AI.run(REASON_MODEL, {
       messages: [
@@ -328,7 +330,7 @@ Respond ONLY with JSON:
         },
       ],
       max_tokens: 1024,
-    });
+    }, { gateway });
 
     let text = (deep.response || "")
       .replace(/<think>[\s\S]*?<\/think>/g, "") // strip DeepSeek think blocks
@@ -536,7 +538,7 @@ async function recallMemories(env, context) {
   if (!env.VECTORIZE) return "";
   try {
     const text = `orders:${context.orderUpdates?.length} new:${context.newPosts?.length} issues:${context.deliveryIssues?.length}`;
-    const emb = await env.AI.run(EMBED_MODEL, { text });
+    const emb = await env.AI.run(EMBED_MODEL, { text }, { gateway: { id: env.CF_GATEWAY_ID || "smm-sentinel", skipCache: false, cacheTtl: 3600 } });
     const results = await env.VECTORIZE.query(emb.data[0], { topK: 3, returnMetadata: true });
     return (results.matches || [])
       .map((m) => m.metadata?.summary || "")
@@ -551,7 +553,7 @@ async function storeMemory(env, data) {
   if (!env.VECTORIZE) return;
   try {
     const text = `${data.decision || ""} balance:${data.balance} placed:${data.results?.ordersPlaced}`;
-    const emb = await env.AI.run(EMBED_MODEL, { text });
+    const emb = await env.AI.run(EMBED_MODEL, { text }, { gateway: { id: env.CF_GATEWAY_ID || "smm-sentinel", skipCache: false, cacheTtl: 3600 } });
     await env.VECTORIZE.upsert([{
       id: data.cycle,
       values: emb.data[0],
