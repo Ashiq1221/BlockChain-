@@ -17,20 +17,32 @@ jobs:
         with:
           ref: claude/smmfollows-api-access-4q2rqv
 
-      - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
+      - uses: actions/setup-node@v4
         with:
-          apiToken: ${{ secrets.CF_API_TOKEN }}
-          accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          wranglerVersion: '3'
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@3
+
+      - name: Set Worker secrets
         env:
-          # SMM panel secrets injected at deploy time
-          SMM_API_KEY:    ${{ secrets.SMM_API_KEY }}
-          SMMWIZ_API_KEY: ${{ secrets.SMMWIZ_API_KEY }}
-          ASTRA_API_KEY:  ${{ secrets.ASTRA_API_KEY }}
-          SMM_USER:       ${{ secrets.SMM_USER }}
-          SMM_PASS:       ${{ secrets.SMM_PASS }}
-          SMMWIZ_USER:    ${{ secrets.SMMWIZ_USER }}
-          SMMWIZ_PASS:    ${{ secrets.SMMWIZ_PASS }}
-          ASTRA_USER:     ${{ secrets.ASTRA_USER }}
-          ASTRA_PASS:     ${{ secrets.ASTRA_PASS }}
+          CLOUDFLARE_API_KEY:   ${{ secrets.CF_GLOBAL_API_KEY }}
+          CLOUDFLARE_EMAIL:     ${{ secrets.CF_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          echo "${{ secrets.SMM_API_KEY }}"    | wrangler secret put SMM_API_KEY
+          echo "${{ secrets.SMMWIZ_API_KEY }}" | wrangler secret put SMMWIZ_API_KEY
+          echo "${{ secrets.ASTRA_API_KEY }}"  | wrangler secret put ASTRA_API_KEY
+          echo "${{ secrets.SMM_USER }}"        | wrangler secret put SMM_USER
+          echo "${{ secrets.SMM_PASS }}"        | wrangler secret put SMM_PASS
+          echo "${{ secrets.SMMWIZ_USER }}"     | wrangler secret put SMMWIZ_USER
+          echo "${{ secrets.SMMWIZ_PASS }}"     | wrangler secret put SMMWIZ_PASS
+          echo "${{ secrets.ASTRA_USER }}"      | wrangler secret put ASTRA_USER
+          echo "${{ secrets.ASTRA_PASS }}"      | wrangler secret put ASTRA_PASS
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_KEY:    ${{ secrets.CF_GLOBAL_API_KEY }}
+          CLOUDFLARE_EMAIL:      ${{ secrets.CF_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: wrangler deploy
