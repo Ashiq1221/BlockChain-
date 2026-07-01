@@ -76,10 +76,10 @@ PANELS = [
         "url":  "https://smmwiz.com/api/v2",
         "key":  os.environ.get("SMMWIZ_API_KEY", ""),
         "services": {
-            "likes":    {"id": 17712, "min": 20,  "max": 5000,    "rate_per_k": 0.94},
+            "likes":    {"id": 17712, "min": 20,  "max": 5000,  "rate_per_k": 0.94},
             "retweets": {"id": 18535, "min": 100, "max": 100_000, "rate_per_k": 2.16},
-            "comments": {"id": 0,     "min": 5,   "max": 0,       "rate_per_k": 0},
-            "views":    {"id": 0,     "min": 100, "max": 0,       "rate_per_k": 0},
+            "comments": {"id": 0,     "min": 5,   "max": 0,     "rate_per_k": 0},
+            "views":    {"id": 0,     "min": 100, "max": 0,     "rate_per_k": 0},
         },
     },
     {
@@ -87,10 +87,10 @@ PANELS = [
         "url":  "https://astrasmm.com/api/v2",
         "key":  os.environ.get("ASTRA_API_KEY", ""),
         "services": {
-            "likes":    {"id": 18718, "min": 10,  "max": 50_000,  "rate_per_k": 2.40},
-            "retweets": {"id": 12109, "min": 100, "max": 10_000,  "rate_per_k": 1.33},
-            "comments": {"id": 0,     "min": 5,   "max": 0,       "rate_per_k": 0},
-            "views":    {"id": 0,     "min": 100, "max": 0,       "rate_per_k": 0},
+            "likes":    {"id": 18718, "min": 10,  "max": 50_000, "rate_per_k": 2.40},
+            "retweets": {"id": 12109, "min": 100, "max": 10_000, "rate_per_k": 1.33},
+            "comments": {"id": 0,     "min": 5,   "max": 0,     "rate_per_k": 0},
+            "views":    {"id": 0,     "min": 100, "max": 0,     "rate_per_k": 0},
         },
     },
 ]
@@ -962,6 +962,10 @@ def _cf_ai_turn(model: str, messages: list, cf: CloudflarePlatform) -> str:
 
 def _process_cmd(cmd: dict | None, text: str, messages: list,
                  state: dict, cf: CloudflarePlatform) -> str | None:
+    """
+    Process a parsed AI command.
+    Returns final string if cycle should end, None if it should continue.
+    """
     if cmd is None:
         return text or "Cycle complete."
     if cmd.get("done"):
@@ -988,6 +992,12 @@ def _process_cmd(cmd: dict | None, text: str, messages: list,
 
 def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
                               max_iters: int = 25) -> str:
+    """
+    Two-stage ensemble:
+    Stage 1 — Llama 3.3 70B fast: collects data, makes preliminary decision.
+    Stage 2 — DeepSeek R1 (if confidence < threshold OR critical action):
+               reviews full context, makes final decision.
+    """
     memories = retrieve_memories(task[:300], cf)
     augmented_task = task
     if memories:
@@ -999,6 +1009,7 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
         {"role": "user",   "content": augmented_task},
     ]
 
+    # ── Stage 1: Fast model ────────────────────────────────────────────────────
     log.info("[ENSEMBLE] Stage 1 — Llama 3.3 70B (scout)")
     fast_summary = ""
     confidence   = 1.0
@@ -1029,6 +1040,7 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
             store_memory(result, state, cf)
             return result
 
+    # ── Stage 2: Deep model ───────────────────────────────────────────────────
     log.info("[ENSEMBLE] Stage 2 — DeepSeek R1 (strategist, conf was %.0f%%)", confidence*100)
     messages.append({
         "role": "user",
@@ -1064,6 +1076,9 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
 
 def run_agent_cycle(state: dict, task: str, cf: CloudflarePlatform,
                     max_iters: int = 25) -> str:
+    """
+    Priority: CF Ensemble (Llama+DeepSeek) → DeepSeek direct → Claude → rule-based.
+    """
     if CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
         try:
             log.info("[AI] Cloudflare ensemble (Llama 3.3 70B + DeepSeek R1)")
