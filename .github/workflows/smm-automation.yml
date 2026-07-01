@@ -1,0 +1,56 @@
+name: SMM Automation
+
+on:
+  schedule:
+    - cron: '0 */2 * * *'   # every 2 hours
+  workflow_dispatch:          # manual trigger from Actions tab
+
+jobs:
+  automate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/smmfollows-api-access-4q2rqv
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run SMM cycle
+        env:
+          SMM_API_KEY:      ${{ secrets.SMM_API_KEY }}
+          SMMWIZ_API_KEY:   ${{ secrets.SMMWIZ_API_KEY }}
+          ASTRA_API_KEY:    ${{ secrets.ASTRA_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMM_USER:         ${{ secrets.SMM_USER }}
+          SMM_PASS:         ${{ secrets.SMM_PASS }}
+          SMMWIZ_USER:      ${{ secrets.SMMWIZ_USER }}
+          SMMWIZ_PASS:      ${{ secrets.SMMWIZ_PASS }}
+          ASTRA_USER:       ${{ secrets.ASTRA_USER }}
+          ASTRA_PASS:       ${{ secrets.ASTRA_PASS }}
+          CF_ACCOUNT_ID:    ${{ secrets.CF_ACCOUNT_ID }}
+          CF_GLOBAL_API_KEY: ${{ secrets.CF_GLOBAL_API_KEY }}
+          CF_EMAIL:         ${{ secrets.CF_EMAIL }}
+          CF_AI_MODEL:      ${{ secrets.CF_AI_MODEL }}
+          SMM_LIKES_QTY:    '100'
+          SMM_RETWEETS_QTY: '100'
+          SMM_COMMENTS_QTY: '5'
+        run: python automation.py --once
+
+      - name: Commit state
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add automation_state.json
+          if ! git diff --staged --quiet; then
+            git commit -m "state: auto-update $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git push origin claude/smmfollows-api-access-4q2rqv
+          fi
