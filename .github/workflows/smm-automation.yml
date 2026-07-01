@@ -24,22 +24,26 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      # AI engine: Cloudflare Workers AI (Llama 3.3 70B + DeepSeek R1)
+      # Fallback chain: CF ensemble → DeepSeek direct → rule-based
       - name: Run SMM cycle
         env:
+          # ── SMM panels ────────────────────────────────────────────
           SMM_API_KEY:      ${{ secrets.SMM_API_KEY }}
           SMMWIZ_API_KEY:   ${{ secrets.SMMWIZ_API_KEY }}
           ASTRA_API_KEY:    ${{ secrets.ASTRA_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SMM_USER:         ${{ secrets.SMM_USER }}
           SMM_PASS:         ${{ secrets.SMM_PASS }}
           SMMWIZ_USER:      ${{ secrets.SMMWIZ_USER }}
           SMMWIZ_PASS:      ${{ secrets.SMMWIZ_PASS }}
           ASTRA_USER:       ${{ secrets.ASTRA_USER }}
           ASTRA_PASS:       ${{ secrets.ASTRA_PASS }}
+          # ── Cloudflare AI (primary intelligence engine) ───────────
           CF_ACCOUNT_ID:    ${{ secrets.CF_ACCOUNT_ID }}
           CF_GLOBAL_API_KEY: ${{ secrets.CF_GLOBAL_API_KEY }}
           CF_EMAIL:         ${{ secrets.CF_EMAIL }}
           CF_AI_MODEL:      ${{ secrets.CF_AI_MODEL }}
+          # ── Order quantities ──────────────────────────────────────
           SMM_LIKES_QTY:    '100'
           SMM_RETWEETS_QTY: '100'
           SMM_COMMENTS_QTY: '5'
