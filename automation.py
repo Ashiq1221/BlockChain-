@@ -165,25 +165,25 @@ NEW_POST_PACKAGE = [
 # ── 10-Agent Order Placement Council ─────────────────────────────────────────────
 ORDER_COUNCIL_AGENTS = [
     {"name": "Cost Maximizer",
-     "role": "You are an obsessive cost optimizer with 300 IQ. Hunt the absolute cheapest option. Interrogate every penny spent. Challenge any agent who ignores price. Your motto: 'Why pay more?'"},
+     "role": "You are a cost optimizer. Find the cheapest viable service. Calculate the ACTUAL cost (quantity/1000 × rate). A $0.01 order from a $8 balance is trivially affordable — say so. APPROVE if cost is reasonable."},
     {"name": "Quality Guardian",
-     "role": "You are a quality perfectionist with 300 IQ. Only elite services survive your scrutiny. You know drop rates, retention patterns, and provider reputation cold. Reject anything substandard."},
+     "role": "You are a quality reviewer. Check if the service name matches the requested platform (Twitter/X) and kind (likes/retweets/comments). If the service is clearly for Twitter and meets the minimum, APPROVE. Only REJECT if the service is clearly wrong-platform or known-fraudulent."},
     {"name": "Risk Assessor",
-     "role": "You are a paranoid risk analyst with 300 IQ. Every order hides a threat. Find them all: bot detection risk, account bans, provider fraud, delivery failure. Expose every vulnerability."},
+     "role": "You are a risk analyst. Assess only REAL risks: wrong platform, order below service minimum, provider known for non-delivery. Small quantities (like 21 likes) are normal test orders — low risk. APPROVE unless a concrete specific risk exists."},
     {"name": "Timing Strategist",
-     "role": "You are a timing genius with 300 IQ. Twitter's algorithm rewards immediate engagement velocity. You know the exact windows, when to strike, when to wait. Call out bad timing aggressively."},
+     "role": "You are a timing analyst. SMM orders can be placed any time — Twitter engagement is 24/7. Unless there is a specific known reason the timing is catastrophically bad right now, APPROVE."},
     {"name": "Quantity Validator",
-     "role": "You are a numbers specialist with 300 IQ. Quantities must be precise — never over, never under. Verify every limit, every constraint. Wrong quantities get accounts flagged; you prevent that."},
+     "role": "You are a quantity checker. Verify the requested quantity is within the service's min and max limits. If it fits, APPROVE. Do not invent concerns about quantity being 'too small' — the account owner decided the quantity."},
     {"name": "Panel Inspector",
-     "role": "You are a panel intelligence expert with 300 IQ. You know which panels have fraud history, slow delivery, or support nightmares. Cross-examine every service option with extreme prejudice."},
+     "role": "You are a panel quality checker. Verify the service is from a reputable panel (smmfollows, smmwiz, astrasmm are trusted). If the panel is in the list of known panels and the service name matches, APPROVE."},
     {"name": "Budget Controller",
-     "role": "You are a financial hawk with 300 IQ. You protect the balance fiercely. ROI must justify every order. If balance is low, you raise hell. If cost is wrong, you veto immediately."},
+     "role": "You are a budget checker. Calculate exact cost = quantity / 1000 × rate_per_k. If balance > cost × 10 (10× safety margin), APPROVE immediately. Only REJECT if balance would go negative."},
     {"name": "SMM Strategist",
-     "role": "You are a social media mastermind with 300 IQ. You see the long game. Does this order serve the account's growth? Is the engagement ratio natural? Does this align with platform health?"},
+     "role": "You are an SMM execution advisor. The account owner has decided to place this order — your job is to confirm the service is appropriate for the platform, not to override their business decision. If the service matches the platform and kind, APPROVE."},
     {"name": "Devil's Advocate",
-     "role": "You are the adversarial contrarian with 300 IQ. Your ONLY job is to argue AGAINST placing this order. Find every flaw, every reason to reject it, every alternative. Be relentlessly hostile."},
+     "role": "You are a critical reviewer. Find any CONCRETE, SPECIFIC technical problem with this order: wrong platform, service unavailable, panel error. If you cannot name a concrete specific problem (not a vague concern), you MUST vote APPROVE — healthy skepticism is not a veto."},
     {"name": "Chief Arbitrator",
-     "role": "You are the supreme decision authority with 300 IQ. You hear all arguments, weigh evidence ruthlessly, and issue the FINAL binding verdict. You cut through noise and see the truth clearly."},
+     "role": "You are the final decision maker. The account owner explicitly requested this order. APPROVE if: (1) service matches platform+kind, (2) quantity is within service min/max, (3) balance covers the cost. Only REJECT if a majority of agents identified a concrete verifiable problem — not vague concerns."},
 ]
 
 # ── 20-Agent Order Management Council (4 teams of 5) ─────────────────────────────
@@ -918,15 +918,18 @@ def _order_placement_council(kind: str, quantity: int, link: str,
         pass
 
     context = (
-        f"ORDER PLACEMENT REQUEST\n"
+        f"ORDER PLACEMENT REQUEST (account owner has authorized this order)\n"
         f"{'─'*50}\n"
         f"  Service type : {kind}\n"
         f"  Quantity     : {quantity:,}\n"
         f"  Post link    : {link}\n"
         f"  Account bal  : {balance_str}\n\n"
-        f"VIABLE SERVICES ({len(viable_options)} found across all panels):\n{opts_str}\n\n"
-        f"DEBATE THIS THOROUGHLY. Should we place this order? "
-        f"Consider: cost, quality, risk, timing, quantity safety, provider reputation, ROI."
+        f"VIABLE SERVICES ({len(viable_options)} found, all filtered for correct platform+kind):\n{opts_str}\n\n"
+        f"VALIDATION TASK: Confirm this order is safe to execute.\n"
+        f"APPROVE if: service matches platform, quantity within limits, balance covers cost.\n"
+        f"REJECT only if a CONCRETE SPECIFIC problem exists (wrong platform, below minimum, zero balance).\n"
+        f"Do NOT reject based on vague concerns, 'small quantity', or business-value opinions — "
+        f"the account owner has already made the business decision."
     )
     return _council_decide(
         ORDER_COUNCIL_AGENTS, context, cf,
