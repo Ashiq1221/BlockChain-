@@ -456,20 +456,49 @@ async function processQueueMsg(msg, env) {
   }
 }
 
-// ── Multi-Panel SMM ───────────────────────────────────────────────────────────
-async function placeOrderMultiPanel(env, link, kind, quantity) {
-  // Sort eligible panels by cheapest rate for this kind
-  const eligible = PANELS
-    .filter(p => env[p.keyVar] && p.svc[kind])
-    .sort((a, b) => (a.rate[kind] ?? 999) - (b.rate[kind] ?? 999));
+// ── Live Rate Fetch (KV-cached 5 min) ────────────────────────────────────────
+async function fetchLiveRate(env, panel, kind) {
+  const cacheKey = `live-rate:${panel.name}:${kind}`;
 
-  if (eligible.length) {
-    const best = eligible[0];
-    console.log(`[SMM] Best deal for ${kind}: ${best.name} @ $${best.rate[kind]}/k`
-      + (eligible.length > 1 ? ` (fallback: ${eligible.slice(1).map(p => p.name).join(", ")})` : ""));
+  if (env.KV) {
+    const hit = await env.KV.get(cacheKey);
+    if (hit !== null) return parseFloat(hit);
   }
 
-  for (const panel of eligible) {
+  const key = env[panel.keyVar];
+  if (!key) return panel.rate[kind] ?? 999;
+
+  try {
+    const services = await smmPost(panel.defaultUrl, key, { action: "services" });
+    const svcId = String(panel.svc[kind]);
+    const svc = Array.isArray(services) && services.find(s => String(s.service) === svcId);
+    const rate = svc ? parseFloat(svc.rate) : (panel.rate[kind] ?? 999);
+
+    if (env.KV) await env.KV.put(cacheKey, String(rate), { expirationTtl: 300 });
+    return rate;
+  } catch (err) {
+    console.warn(`[Rates] ${panel.name} live fetch failed, using fallback:`, err.message);
+    return panel.rate[kind] ?? 999;
+  }
+}
+
+// ── Multi-Panel SMM ───────────────────────────────────────────────────────────
+async function placeOrderMultiPanel(env, link, kind, quantity) {
+  const candidates = PANELS.filter(p => env[p.keyVar] && p.svc[kind]);
+
+  // Fetch all live rates in parallel
+  const rates = await Promise.all(candidates.map(p => fetchLiveRate(env, p, kind)));
+
+  // Sort cheapest first
+  const ranked = candidates
+    .map((p, i) => ({ panel: p, rate: rates[i] }))
+    .sort((a, b) => a.rate - b.rate);
+
+  console.log(`[SMM] Live rates for ${kind}: `
+    + ranked.map(r => `${r.panel.name}=$${r.rate}/k`).join(" | ")
+    + ` → placing with ${ranked[0]?.panel.name}`);
+
+  for (const { panel, rate } of ranked) {
     const key = env[panel.keyVar];
     const svcId = panel.svc[kind];
     const qty = Math.max(quantity, panel.min[kind] || quantity);
@@ -480,12 +509,12 @@ async function placeOrderMultiPanel(env, link, kind, quantity) {
       });
 
       if (res.order) {
-        console.log(`[SMM] Placed via ${panel.name} (rate $${panel.rate[kind]}/k)`);
-        return { success: true, orderId: String(res.order), panel: panel.name, quantity: qty };
+        console.log(`[SMM] ✓ ${panel.name} @ $${rate}/k — order #${res.order}`);
+        return { success: true, orderId: String(res.order), panel: panel.name, quantity: qty, rate };
       }
-      console.warn(`[SMM] ${panel.name} rejected (trying next):`, res);
+      console.warn(`[SMM] ${panel.name} rejected (trying next cheapest):`, res);
     } catch (err) {
-      console.warn(`[SMM] ${panel.name} error (trying next):`, err.message);
+      console.warn(`[SMM] ${panel.name} error (trying next cheapest):`, err.message);
     }
   }
   return { success: false, error: "All panels exhausted" };

@@ -470,35 +470,63 @@ def _api_panel(panel: dict, payload: dict) -> dict:
     except Exception:
         return {"raw": r.text[:200]}
 
+_live_rate_cache: dict = {}  # (panel_name, kind) → (rate, expires_epoch)
+
+def _get_live_rate(panel: dict, kind: str) -> float:
+    """Fetch current rate for this service from panel API. Cached 5 min in memory."""
+    import time
+    key = (panel["name"], kind)
+    cached = _live_rate_cache.get(key)
+    if cached and time.time() < cached[1]:
+        return cached[0]
+
+    svc = panel["services"].get(kind, {})
+    svc_id = svc.get("id")
+    fallback = svc.get("rate_per_k", 999)
+    if not svc_id or not panel["key"]:
+        return fallback
+
+    try:
+        services = _api_panel(panel, {"action": "services"})
+        if isinstance(services, list):
+            for s in services:
+                if str(s.get("service", "")) == str(svc_id):
+                    rate = float(s.get("rate", fallback))
+                    _live_rate_cache[key] = (rate, time.time() + 300)
+                    return rate
+    except Exception as exc:
+        log.debug("[Rates] %s live fetch failed: %s", panel["name"], exc)
+
+    return fallback
+
 def _place_order_multi(kind: str, link: str, quantity: int) -> dict:
-    """Sort panels by cheapest rate for this kind, try in order until one succeeds."""
-    eligible = [
-        p for p in PANELS
-        if p["key"] and p["services"].get(kind, {}).get("id")
-    ]
-    eligible.sort(key=lambda p: p["services"][kind].get("rate_per_k", 999))
+    """Fetch live rates from all panels in parallel, order from cheapest, fall back on failure."""
+    eligible = [p for p in PANELS if p["key"] and p["services"].get(kind, {}).get("id")]
+    if not eligible:
+        return {"success": False, "error": "No panels available"}
 
-    if eligible:
-        best = eligible[0]
-        others = [p["name"] for p in eligible[1:]]
-        log.info("[SMM] Best deal for %s: %s @ $%.2f/k%s",
-                 kind, best["name"], best["services"][kind].get("rate_per_k", 0),
-                 f" (fallback: {', '.join(others)})" if others else "")
+    # Parallel live-rate fetch
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(eligible)) as pool:
+        live_rates = list(pool.map(lambda p: _get_live_rate(p, kind), eligible))
 
-    for panel in eligible:
+    ranked = sorted(zip(eligible, live_rates), key=lambda x: x[1])
+    comparison = " | ".join(f"{p['name']} ${r:.2f}/k" for p, r in ranked)
+    log.info("[SMM] Live rates for %s: %s → placing with %s", kind, comparison, ranked[0][0]["name"])
+
+    for panel, rate in ranked:
         svc = panel["services"][kind]
         svc_id = svc["id"]
         qty = max(quantity, svc.get("min", quantity))
         try:
             res = _api_panel(panel, {"action": "add", "service": svc_id, "link": link, "quantity": qty})
             if res.get("order"):
-                log.info("[%s] placed %s×%d → order #%s (rate $%.2f/k)",
-                         panel["name"], kind, qty, res["order"], svc.get("rate_per_k", 0))
+                log.info("[%s] ✓ placed %s×%d → order #%s @ live $%.2f/k",
+                         panel["name"], kind, qty, res["order"], rate)
                 return {"success": True, "order": str(res["order"]), "panel": panel["name"],
                         "service_id": svc_id, "quantity": qty}
-            log.warning("[%s] order rejected (trying next): %s", panel["name"], res)
+            log.warning("[%s] rejected (trying next cheapest): %s", panel["name"], res)
         except Exception as e:
-            log.warning("[%s] panel error (trying next): %s", panel["name"], e)
+            log.warning("[%s] error (trying next cheapest): %s", panel["name"], e)
     return {"success": False, "error": "All panels failed"}
 
 def _api_cached(payload: dict, cf: CloudflarePlatform, ttl: int = 60) -> dict:
