@@ -540,21 +540,30 @@ def _place_order_multi(kind: str, link: str, quantity: int, extra: dict | None =
     for panel, rate in ranked:
         svc = panel["services"][kind]
         svc_id = svc["id"]
-        qty = max(quantity, svc.get("min", quantity))
-        payload = {"action": "add", "service": svc_id, "link": link, "quantity": qty}
+        min_qty = svc.get("min", 1)
+        max_qty = svc.get("max", 10_000_000)
+        if quantity < min_qty:
+            log.warning("[%s] skipped — quantity %d below minimum %d for %s",
+                        panel["name"], quantity, min_qty, kind)
+            continue
+        if quantity > max_qty:
+            log.warning("[%s] skipped — quantity %d above maximum %d for %s",
+                        panel["name"], quantity, max_qty, kind)
+            continue
+        payload = {"action": "add", "service": svc_id, "link": link, "quantity": quantity}
         if extra:
             payload.update(extra)
         try:
             res = _api_panel(panel, payload)
             if res.get("order"):
                 log.info("[%s] ✓ placed %s×%d → order #%s @ live $%.2f/k",
-                         panel["name"], kind, qty, res["order"], rate)
+                         panel["name"], kind, quantity, res["order"], rate)
                 return {"success": True, "order": str(res["order"]), "panel": panel["name"],
-                        "service_id": svc_id, "quantity": qty}
+                        "service_id": svc_id, "quantity": quantity}
             log.warning("[%s] rejected (trying next cheapest): %s", panel["name"], res)
         except Exception as e:
             log.warning("[%s] error (trying next cheapest): %s", panel["name"], e)
-    return {"success": False, "error": "All panels failed"}
+    return {"success": False, "error": f"No panel can fulfill {quantity}× {kind} (check minimums)"}
 
 def _api_cached(payload: dict, cf: CloudflarePlatform, ttl: int = 60) -> dict:
     """SMM API with KV caching for balance and services lookups."""

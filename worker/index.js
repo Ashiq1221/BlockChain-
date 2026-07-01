@@ -594,24 +594,29 @@ async function placeOrderMultiPanel(env, link, kind, quantity, extraPayload = {}
   for (const { panel, rate } of ranked) {
     const key = env[panel.keyVar];
     const svcId = panel.svc[kind];
-    const qty = Math.max(quantity, panel.min[kind] || quantity);
+    const minQty = panel.min[kind] || 1;
+
+    if (quantity < minQty) {
+      console.warn(`[SMM] ${panel.name} skipped — ${quantity} below minimum ${minQty} for ${kind}`);
+      continue;
+    }
 
     try {
       const res = await smmPost(panel.defaultUrl, key, {
-        action: "add", service: svcId, link, quantity: qty,
+        action: "add", service: svcId, link, quantity,
         ...extraPayload,
       });
 
       if (res.order) {
         console.log(`[SMM] ✓ ${panel.name} @ $${rate}/k — order #${res.order}`);
-        return { success: true, orderId: String(res.order), panel: panel.name, quantity: qty, rate };
+        return { success: true, orderId: String(res.order), panel: panel.name, quantity, rate };
       }
       console.warn(`[SMM] ${panel.name} rejected (trying next cheapest):`, res);
     } catch (err) {
       console.warn(`[SMM] ${panel.name} error (trying next cheapest):`, err.message);
     }
   }
-  return { success: false, error: "All panels exhausted" };
+  return { success: false, error: `No panel can fulfill ${quantity}× ${kind} (check minimums)` };
 }
 
 async function smmApiCall(env, panel, payload) {
