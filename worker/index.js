@@ -532,7 +532,7 @@ async function processQueueMsg(msg, env) {
       extraPayload.comments = commentText;
     }
 
-    const result = await placeOrderMultiPanel(env, msg.link, msg.kind, msg.quantity || 100, extraPayload);
+    const result = await aiOrderAgent(env, msg.link, msg.kind, msg.quantity || 100, extraPayload);
     if (!result.success) throw new Error(`All panels failed: ${result.error}`);
 
     await env.DB.prepare(
@@ -575,7 +575,130 @@ async function fetchLiveRate(env, panel, kind) {
   }
 }
 
-// ── Multi-Panel SMM ───────────────────────────────────────────────────────────
+// ── Full Service Catalog Fetch (KV-cached 5 min) ──────────────────────────────
+async function fetchAllPanelServices(env, panel) {
+  const cacheKey = `svc-catalog:${panel.name}`;
+  if (env.KV) {
+    const hit = await env.KV.get(cacheKey);
+    if (hit) return JSON.parse(hit);
+  }
+  const key = env[panel.keyVar];
+  if (!key) return [];
+  try {
+    const services = await smmPost(panel.defaultUrl, key, { action: "services" });
+    if (Array.isArray(services)) {
+      if (env.KV) await env.KV.put(cacheKey, JSON.stringify(services), { expirationTtl: 300 });
+      return services;
+    }
+  } catch (err) {
+    console.warn(`[Agent] ${panel.name} catalog fetch failed:`, err.message);
+  }
+  return [];
+}
+
+// ── AI Order Agent ────────────────────────────────────────────────────────────
+async function aiOrderAgent(env, link, kind, quantity, extraPayload = {}) {
+  const PLATFORM_KW = ["twitter", "x.com", "tweet", "x "];
+  const KIND_KW = {
+    likes:    ["like", "heart"],
+    retweets: ["retweet", " rt"],
+    comments: ["comment", "reply"],
+    views:    ["view", "impression"],
+  };
+  const kindKws = KIND_KW[kind] || [kind];
+
+  function matchesSvc(svc) {
+    const name = ((svc.name || "") + " " + (svc.category || "")).toLowerCase();
+    return kindKws.some(kw => name.includes(kw)) && PLATFORM_KW.some(kw => name.includes(kw));
+  }
+
+  // Fetch all panel catalogs in parallel
+  const activePanels = PANELS.filter(p => env[p.keyVar]);
+  const catalogs = await Promise.all(
+    activePanels.map(p => fetchAllPanelServices(env, p).then(svcs => ({ panel: p, svcs })))
+  );
+
+  const viable = [];
+  const alternatives = [];
+  for (const { panel, svcs } of catalogs) {
+    for (const svc of svcs) {
+      if (!matchesSvc(svc)) continue;
+      const svcMin  = parseInt(svc.min  || "0", 10);
+      const svcMax  = parseInt(svc.max  || "0", 10);
+      const svcRate = parseFloat(svc.rate || "999");
+      const svcId   = String(svc.service || "");
+      if (!svcId || svcMax <= 0) continue;
+      const entry = { panel, svcId, name: (svc.name || "").slice(0, 80), min: svcMin, max: svcMax, rate: svcRate };
+      if (svcMin <= quantity && quantity <= svcMax) viable.push(entry);
+      else alternatives.push(entry);
+    }
+  }
+
+  if (!viable.length) {
+    if (alternatives.length) {
+      const opts = alternatives.sort((a, b) => a.min - b.min || a.rate - b.rate).slice(0, 5);
+      const desc = opts.map(o => `${o.panel.name} svc#${o.svcId} min=${o.min} max=${o.max} $${o.rate}/k`).join(" | ");
+      return { success: false, error: `No service can fulfill exactly ${quantity}× ${kind}. Options: ${desc}` };
+    }
+    return { success: false, error: `No ${kind} services found for quantity ${quantity}` };
+  }
+
+  viable.sort((a, b) => a.rate - b.rate);
+  const topOptions = viable.slice(0, 12);
+
+  console.log(`[Agent] ${viable.length} viable services for ${quantity}× ${kind}; cheapest: ${topOptions[0].panel.name} svc#${topOptions[0].svcId} @ $${topOptions[0].rate}/k`);
+
+  // Ask AI to pick the best option
+  let chosen = null;
+  if (env.AI) {
+    const optsStr = topOptions.map((o, i) =>
+      `${i+1}. Panel=${o.panel.name} ServiceID=${o.svcId} Name="${o.name}" Min=${o.min} Max=${o.max} Rate=$${o.rate}/k`
+    ).join("\n");
+    const prompt = `User needs exactly ${quantity}× ${kind} for a Twitter/X post.\nThese services can all fulfill the exact quantity:\n${optsStr}\n\nChoose the best option (cheapest reputable service). Return ONLY valid JSON:\n{"panel":"name","service_id":"12345","rate":0.94,"reason":"one line"}`;
+    try {
+      const res = await env.AI.run(FAST_MODEL, {
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 200,
+      });
+      const text = (res.response || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      const m = text.match(/\{[^{}]*\}/s);
+      if (m) {
+        const dec   = JSON.parse(m[0]);
+        const pName = (dec.panel || "").trim();
+        const svcId = String(dec.service_id || "").trim();
+        const pick  = viable.find(v => v.panel.name === pName && v.svcId === svcId);
+        if (pick) {
+          chosen = pick;
+          console.log(`[Agent] AI chose: ${pName} svc#${svcId} @ $${pick.rate}/k — ${dec.reason || ""}`);
+        }
+      }
+    } catch (err) {
+      console.warn("[Agent] AI decision failed, using cheapest:", err.message);
+    }
+  }
+
+  if (!chosen) chosen = topOptions[0];
+
+  // Try AI choice first, then remaining viable options
+  const orderedViable = [chosen, ...viable.filter(v => v !== chosen)];
+  for (const option of orderedViable) {
+    try {
+      const res = await smmPost(option.panel.defaultUrl, env[option.panel.keyVar], {
+        action: "add", service: option.svcId, link, quantity, ...extraPayload,
+      });
+      if (res.order) {
+        console.log(`[Agent] ✓ ${option.panel.name} svc#${option.svcId} → order #${res.order} @ $${option.rate}/k`);
+        return { success: true, orderId: String(res.order), panel: option.panel.name, quantity, rate: option.rate };
+      }
+      console.warn(`[Agent] ${option.panel.name} svc#${option.svcId} rejected:`, JSON.stringify(res));
+    } catch (err) {
+      console.warn(`[Agent] ${option.panel.name} error:`, err.message);
+    }
+  }
+  return { success: false, error: `All ${viable.length} viable services rejected the order for ${quantity}× ${kind}` };
+}
+
+// ── Multi-Panel SMM (kept as utility; aiOrderAgent is used for new orders) ────
 async function placeOrderMultiPanel(env, link, kind, quantity, extraPayload = {}) {
   const candidates = PANELS.filter(p => env[p.keyVar] && p.svc[kind]);
 

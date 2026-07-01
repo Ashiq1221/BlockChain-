@@ -494,7 +494,8 @@ def _api_panel(panel: dict, payload: dict) -> dict:
     except Exception:
         return {"raw": r.text[:200]}
 
-_live_rate_cache: dict = {}  # (panel_name, kind) → (rate, expires_epoch)
+_live_rate_cache: dict = {}       # (panel_name, kind) → (rate, expires_epoch)
+_services_catalog_cache: dict = {}  # panel_name → (services_list, expires_epoch)
 
 def _get_live_rate(panel: dict, kind: str) -> float:
     """Fetch current rate for this service from panel API. Cached 5 min in memory."""
@@ -522,6 +523,157 @@ def _get_live_rate(panel: dict, kind: str) -> float:
         log.debug("[Rates] %s live fetch failed: %s", panel["name"], exc)
 
     return fallback
+
+def _fetch_all_panel_services(panel: dict) -> list:
+    """Fetch full service catalog from a panel. Memory-cached 5 min."""
+    key = panel["name"]
+    cached = _services_catalog_cache.get(key)
+    if cached and time.time() < cached[1]:
+        return cached[0]
+    if not panel["key"]:
+        return []
+    try:
+        result = _api_panel(panel, {"action": "services"})
+        if isinstance(result, list):
+            _services_catalog_cache[key] = (result, time.time() + 300)
+            return result
+    except Exception as exc:
+        log.debug("[Agent] %s catalog fetch failed: %s", panel["name"], exc)
+    return []
+
+def _ai_order_agent(kind: str, quantity: int, link: str,
+                    extra: dict | None, cf: "CloudflarePlatform | None") -> dict:
+    """
+    AI order agent: fetches the full live service catalog from every panel in parallel,
+    finds all services where min <= quantity <= max, asks AI to pick the best one, places
+    the order. Never inflates quantity. Falls back through remaining viable services on rejection.
+    """
+    PLATFORM_KW = ["twitter", "x.com", "tweet", "x "]
+    KIND_KW = {
+        "likes":    ["like", "heart"],
+        "retweets": ["retweet", " rt"],
+        "comments": ["comment", "reply"],
+        "views":    ["view", "impression"],
+    }
+    kind_kws = KIND_KW.get(kind, [kind])
+
+    active = [p for p in PANELS if p["key"]]
+    if not active:
+        return {"success": False, "error": "No panels configured with API keys"}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(active)) as pool:
+        all_catalogs = list(pool.map(lambda p: (p, _fetch_all_panel_services(p)), active))
+
+    def _matches(svc: dict) -> bool:
+        name = (svc.get("name", "") + " " + svc.get("category", "")).lower()
+        return any(kw in name for kw in kind_kws) and any(kw in name for kw in PLATFORM_KW)
+
+    viable: list = []
+    alternatives: list = []
+    for panel, services in all_catalogs:
+        for svc in services:
+            if not _matches(svc):
+                continue
+            try:
+                svc_min  = int(svc.get("min", 0))
+                svc_max  = int(svc.get("max", 0))
+                svc_rate = float(svc.get("rate", 999))
+                svc_id   = str(svc.get("service", ""))
+            except (ValueError, TypeError):
+                continue
+            if not svc_id or svc_max <= 0:
+                continue
+            entry = {
+                "panel": panel["name"], "service_id": svc_id,
+                "name": svc.get("name", "")[:80], "category": svc.get("category", "")[:40],
+                "min": svc_min, "max": svc_max, "rate": svc_rate, "_panel": panel,
+            }
+            if svc_min <= quantity <= svc_max:
+                viable.append(entry)
+            else:
+                alternatives.append(entry)
+
+    if not viable:
+        if alternatives:
+            options = sorted(alternatives, key=lambda x: (x["min"], x["rate"]))[:6]
+            desc = " | ".join(
+                f"{o['panel']} svc#{o['service_id']} [{o['name'][:35]}] min={o['min']} max={o['max']} ${o['rate']:.2f}/k"
+                for o in options
+            )
+            return {
+                "success": False,
+                "error": (f"No service can fulfill exactly {quantity}× {kind}. Available: {desc}"),
+            }
+        return {"success": False, "error": f"No {kind} services found across any panel for quantity {quantity}"}
+
+    viable.sort(key=lambda x: x["rate"])
+    top_options = viable[:12]
+
+    log.info("[Agent] %d viable services for %d× %s; cheapest: %s svc#%s @ $%.4f/k",
+             len(viable), quantity, kind,
+             top_options[0]["panel"], top_options[0]["service_id"], top_options[0]["rate"])
+
+    chosen = None
+    if cf and (CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY)):
+        opts_str = "\n".join(
+            f"{i+1}. Panel={o['panel']} ServiceID={o['service_id']} "
+            f'Name="{o["name"]}" Min={o["min"]} Max={o["max"]} Rate=${o["rate"]:.4f}/k'
+            for i, o in enumerate(top_options)
+        )
+        prompt = (
+            f"User needs exactly {quantity}× {kind} for a Twitter/X post.\n"
+            f"These services can all fulfill the exact quantity:\n{opts_str}\n\n"
+            f"Choose the best option (cheapest reputable service). Return ONLY valid JSON:\n"
+            f'{{"panel":"name","service_id":"12345","rate":0.94,"reason":"one line"}}'
+        )
+        try:
+            result = cf.ai_run(CF_FAST_MODEL, {
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 200,
+            })
+            raw  = result.get("response", "")
+            text = re.sub(r"<think>.*?</think>",
+                          "", raw if isinstance(raw, str) else json.dumps(raw),
+                          flags=re.DOTALL).strip()
+            m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+            if m:
+                dec    = json.loads(m.group())
+                p_name = dec.get("panel", "").strip()
+                svc_id = str(dec.get("service_id", "")).strip()
+                reason = dec.get("reason", "AI selection")
+                match  = next((v for v in viable if v["panel"] == p_name and v["service_id"] == svc_id), None)
+                if match:
+                    chosen = match
+                    log.info("[Agent] AI chose: %s svc#%s @ $%.4f/k — %s",
+                             p_name, svc_id, match["rate"], reason)
+        except Exception as exc:
+            log.debug("[Agent] AI decision failed, using cheapest: %s", exc)
+
+    if not chosen:
+        chosen = top_options[0]
+        log.info("[Agent] Using cheapest: %s svc#%s @ $%.4f/k",
+                 chosen["panel"], chosen["service_id"], chosen["rate"])
+
+    ordered = [chosen] + [v for v in viable if v is not chosen]
+    for option in ordered:
+        payload = {"action": "add", "service": option["service_id"], "link": link, "quantity": quantity}
+        if extra:
+            payload.update(extra)
+        try:
+            res = _api_panel(option["_panel"], payload)
+            if res.get("order"):
+                log.info("[Agent] ✓ %s svc#%s → order #%s @ $%.4f/k",
+                         option["panel"], option["service_id"], res["order"], option["rate"])
+                return {
+                    "success": True, "order": str(res["order"]),
+                    "panel": option["panel"], "service_id": option["service_id"],
+                    "quantity": quantity, "rate": option["rate"],
+                }
+            log.warning("[Agent] %s svc#%s rejected: %s", option["panel"], option["service_id"], res)
+        except Exception as e:
+            log.warning("[Agent] %s error: %s", option["panel"], e)
+
+    return {"success": False, "error": f"All {len(viable)} viable services rejected the order for {quantity}× {kind}"}
 
 def _place_order_multi(kind: str, link: str, quantity: int, extra: dict | None = None) -> dict:
     """Fetch live rates from all panels in parallel, order from cheapest, fall back on failure."""
@@ -899,7 +1051,7 @@ def tool_place_order(state: dict, link: str, kind: str, quantity: int,
         extra: dict = {}
         if kind == "comments":
             extra["comments"] = _generate_comments(post_text, quantity, cf)
-        res = _place_order_multi(kind, link, quantity, extra)
+        res = _ai_order_agent(kind, quantity, link, extra or None, cf)
         if not res.get("success"):
             return json.dumps({"error": res.get("error", "All panels failed")})
         oid = str(res["order"])
@@ -1070,7 +1222,7 @@ def dispatch_tool(name: str, args: dict, state: dict, cf: CloudflarePlatform) ->
         "trigger_refill":      lambda: tool_trigger_refill(state, args["order_id"]),
         "check_refill_status": lambda: tool_check_refill_status(state, args["order_id"]),
         "submit_ticket":       lambda: tool_submit_ticket(state, args["order_ids"], args["subject_type"], args["message"]),
-        "place_order":         lambda: tool_place_order(state, args["link"], args["kind"], args["quantity"]),
+        "place_order":         lambda: tool_place_order(state, args["link"], args["kind"], args["quantity"], cf=cf),
         "get_services":        lambda: tool_get_services(),
         "get_pending_posts":   lambda: tool_get_pending_posts(state),
         "clear_pending_post":  lambda: tool_clear_pending_post(state, args["link"]),
