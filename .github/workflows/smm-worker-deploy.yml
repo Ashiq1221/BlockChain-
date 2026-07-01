@@ -6,6 +6,7 @@ on:
     paths:
       - 'worker/**'
       - 'wrangler.toml'
+      - 'package.json'
   workflow_dispatch:
 
 jobs:
@@ -21,13 +22,16 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install dependencies
+        run: npm install
+
       - name: Install Wrangler
-        run: npm install -g wrangler@3
+        run: npm install -g wrangler@latest
 
       - name: Set Worker secrets
         env:
-          CLOUDFLARE_API_KEY:   ${{ secrets.CF_GLOBAL_API_KEY }}
-          CLOUDFLARE_EMAIL:     ${{ secrets.CF_EMAIL }}
+          CLOUDFLARE_API_KEY:    ${{ secrets.CF_GLOBAL_API_KEY }}
+          CLOUDFLARE_EMAIL:      ${{ secrets.CF_EMAIL }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           echo "${{ secrets.SMM_API_KEY }}"    | wrangler secret put SMM_API_KEY
