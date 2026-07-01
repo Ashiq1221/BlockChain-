@@ -63,7 +63,10 @@ PANELS = [
     {
         "name": "smmfollows",
         "url":  "https://smmfollows.com/api/v2",
+        "web":  "https://smmfollows.com",
         "key":  os.environ.get("SMM_API_KEY", ""),
+        "user": os.environ.get("SMM_USER", "hhrh197"),
+        "pass": os.environ.get("SMM_PASS", "Yawer@123"),
         "services": {
             "likes":    {"id": 16465, "min": 10,  "max": 2_000_000, "rate_per_k": 2.10},
             "retweets": {"id": 9018,  "min": 100, "max": 3000,      "rate_per_k": 2.10},
@@ -74,23 +77,29 @@ PANELS = [
     {
         "name": "smmwiz",
         "url":  "https://smmwiz.com/api/v2",
+        "web":  "https://smmwiz.com",
         "key":  os.environ.get("SMMWIZ_API_KEY", ""),
+        "user": os.environ.get("SMMWIZ_USER", ""),
+        "pass": os.environ.get("SMMWIZ_PASS", ""),
         "services": {
-            "likes":    {"id": 17712, "min": 20,  "max": 5000,  "rate_per_k": 0.94},
+            "likes":    {"id": 17712, "min": 20,  "max": 5000,    "rate_per_k": 0.94},
             "retweets": {"id": 18535, "min": 100, "max": 100_000, "rate_per_k": 2.16},
-            "comments": {"id": 0,     "min": 5,   "max": 0,     "rate_per_k": 0},
-            "views":    {"id": 0,     "min": 100, "max": 0,     "rate_per_k": 0},
+            "comments": {"id": 0,     "min": 5,   "max": 0,       "rate_per_k": 0},
+            "views":    {"id": 0,     "min": 100, "max": 0,       "rate_per_k": 0},
         },
     },
     {
         "name": "astrasmm",
         "url":  "https://astrasmm.com/api/v2",
+        "web":  "https://astrasmm.com",
         "key":  os.environ.get("ASTRA_API_KEY", ""),
+        "user": os.environ.get("ASTRA_USER", ""),
+        "pass": os.environ.get("ASTRA_PASS", ""),
         "services": {
             "likes":    {"id": 18718, "min": 10,  "max": 50_000, "rate_per_k": 2.40},
             "retweets": {"id": 12109, "min": 100, "max": 10_000, "rate_per_k": 1.33},
-            "comments": {"id": 0,     "min": 5,   "max": 0,     "rate_per_k": 0},
-            "views":    {"id": 0,     "min": 100, "max": 0,     "rate_per_k": 0},
+            "comments": {"id": 0,     "min": 5,   "max": 0,      "rate_per_k": 0},
+            "views":    {"id": 0,     "min": 100, "max": 0,      "rate_per_k": 0},
         },
     },
 ]
@@ -469,19 +478,23 @@ def _api_cached(payload: dict, cf: CloudflarePlatform, ttl: int = 60) -> dict:
         return result
     return _api(payload)
 
-def _panel_session() -> requests.Session | None:
+def _panel_session(panel_cfg: dict | None = None) -> requests.Session | None:
+    """Login to a panel's web UI. Defaults to smmfollows if no panel_cfg given."""
+    web  = (panel_cfg or {}).get("web",  PANEL)
+    user = (panel_cfg or {}).get("user", USER)
+    pw   = (panel_cfg or {}).get("pass", PASSWD)
     sess = requests.Session()
     sess.headers["User-Agent"] = "Mozilla/5.0"
     try:
-        r = sess.get(f"{PANEL}/", timeout=20)
+        r = sess.get(f"{web}/", timeout=20)
         m = re.search(r'<input[^>]+name="_csrf"[^>]+value="([^"]+)"', r.text)
         if not m:
             return None
-        sess.post(f"{PANEL}/", data={
-            "_csrf": m.group(1), "LoginForm[username]": USER,
-            "LoginForm[password]": PASSWD, "LoginForm[remember]": "1",
+        sess.post(f"{web}/", data={
+            "_csrf": m.group(1), "LoginForm[username]": user,
+            "LoginForm[password]": pw, "LoginForm[remember]": "1",
         }, headers={"Content-Type": "application/x-www-form-urlencoded",
-                    "Referer": f"{PANEL}/", "Origin": PANEL},
+                    "Referer": f"{web}/", "Origin": web},
             allow_redirects=True, timeout=20)
         return sess if "_identity_user" in sess.cookies else None
     except Exception:
