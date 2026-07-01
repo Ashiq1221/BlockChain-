@@ -270,11 +270,11 @@
       "quantity": 100,
       "panel": "smmfollows",
       "refillable": false,
-      "status": "Pending",
-      "start_count": null,
-      "remains": null,
+      "status": "Completed",
+      "start_count": "2",
+      "remains": "0",
       "added_at": "2026-07-01T17:14:12.225720+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T18:15:56.565098+00:00"
     },
     "61505280": {
       "id": "61505280",
@@ -283,10 +283,62 @@
       "quantity": 5,
       "panel": "smmfollows",
       "refillable": false,
+      "status": "In progress",
+      "start_count": "0",
+      "remains": "5",
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
+    },
+    "61505924": {
+      "id": "61505924",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 100,
+      "refillable": false,
       "status": "Pending",
+      "panel": "smmfollows",
       "start_count": null,
       "remains": null,
-      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "added_at": "2026-07-01T18:16:23.618792+00:00",
+      "completed_at": null
+    },
+    "61505926": {
+      "id": "61505926",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 50,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T18:16:25.766435+00:00",
+      "completed_at": null
+    },
+    "61505927": {
+      "id": "61505927",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 20,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T18:16:28.073041+00:00",
+      "completed_at": null
+    },
+    "61505929": {
+      "id": "61505929",
+      "kind": "views",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 30000,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T18:16:29.942436+00:00",
       "completed_at": null
     }
   },
@@ -346,7 +398,8 @@
     "https://x.com/i/status/2064879295843983840",
     "https://x.com/i/status/2064283340849738045",
     "https://x.com/i/status/2064283937091035590",
-    "https://x.com/i/status/2070034213085274431"
+    "https://x.com/i/status/2070034213085274431",
+    "https://x.com/i/status/2069014496086217116"
   ],
   "agent_log": [
     {
@@ -384,9 +437,11 @@
     {
       "at": "2026-07-01T17:57:27.674310+00:00",
       "msg": "[TEST] {\"parallel_tools\": [\n{\"tool\": \"get_pending_posts\", \"args\": {}},\n{\"tool\": \"get_services\", \"args\": {}}\n]}\n{\"done\": false, \"summary\": \"Initiating test order process\", \"confidence\": 0.8, \"escalate\": false"
+    },
+    {
+      "at": "2026-07-01T18:16:29.942598+00:00",
+      "msg": "[TEST] [Rule-based \u2014 18:15 UTC] | In cooldown: ['61498649', '61498651', '61501437', '61501438', '61501439'] | Refills done: ['61450840'] | Actions: Placed likes\u00d7100 for tps://x.com/i/status/20690144960862171"
     }
   ],
-  "pending_posts": [
-    "https://x.com/i/status/2069014496086217116"
-  ]
+  "pending_posts": []
 }
