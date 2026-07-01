@@ -4,9 +4,12 @@ compatibility_date  = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev     = false
 
-# ── Cron Triggers — every 15 minutes ─────────────────────────────────────────
-[triggers]
-crons = ["*/15 * * * *"]
+# ── Cron Triggers — add manually in CF Dashboard after deploy ───────────────
+# The CF API key lacks schedule-write scope so wrangler can't register crons.
+# Go to: dash.cloudflare.com → Workers & Pages → smm-sentinel → Triggers →
+#         Cron Triggers → Add Cron Trigger → enter: */15 * * * *
+# [triggers]
+# crons = ["*/15 * * * *"]
 
 # ── Workers AI (routes through AI Gateway smm-sentinel) ──────────────────────
 [ai]
@@ -27,14 +30,12 @@ database_id   = "b21d583e-9dc2-4004-b24b-64bac673741d"
 binding = "KV"
 id      = "6759754413f745edaa47d5f9a4d424be"
 
-# ── Queues — producer only (consumer needs Workers Paid plan) ──────────────────
+# ── Queues — producer only ──────────────────────────────────────────────────
 [[queues.producers]]
 binding = "ORDER_QUEUE"
 queue   = "smm-orders"
 
-# Queue consumer disabled — requires Workers Paid plan + provisioned DLQ.
-# To enable: upgrade to Workers Paid ($5/mo), provision smm-orders-dlq queue,
-# then uncomment:
+# Queue consumer + DLQ require Workers Paid plan. Uncomment after upgrading:
 # [[queues.consumers]]
 # queue             = "smm-orders"
 # max_batch_size    = 10
@@ -46,7 +47,7 @@ queue   = "smm-orders"
 binding    = "VECTORIZE"
 index_name = "smm-episodic-memory"
 
-# ── R2 Audit Log — enable at: dash.cloudflare.com → R2 → Enable ──────────────
+# ── R2 Audit Log — uncomment after enabling R2 in CF Dashboard ───────────────
 # [[r2_buckets]]
 # binding     = "R2"
 # bucket_name = "smm-logs"
