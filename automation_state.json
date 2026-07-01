@@ -207,6 +207,48 @@
       "remains": "100",
       "added_at": "2026-07-01T00:00:00+00:00",
       "completed_at": null
+    },
+    "61501437": {
+      "id": "61501437",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2065705610163941467",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 8140,
+      "refillable": true,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T12:41:44.318918+00:00",
+      "completed_at": null
+    },
+    "61501438": {
+      "id": "61501438",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064879295843983840",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 8140,
+      "refillable": true,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T12:41:44.318918+00:00",
+      "completed_at": null
+    },
+    "61501439": {
+      "id": "61501439",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283340849738045",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 8140,
+      "refillable": true,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T12:41:44.318918+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -269,15 +311,15 @@
   "agent_log": [
     {
       "at": "2026-07-01T06:53:15.531091+00:00",
-      "msg": "[Rule-based cycle — 06:52 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed — Error; #61450841 (retweets): refill failed — Error; #61450843 (likes): refill failed — Error; #61450844 (ret"
+      "msg": "[Rule-based cycle \u2014 06:52 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
     },
     {
       "at": "2026-07-01T07:22:30.627014+00:00",
-      "msg": "[Rule-based cycle — 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed — Error; #61450841 (retweets): refill failed — Error; #61450843 (likes): refill failed — Error; #61450844 (ret"
+      "msg": "[Rule-based cycle \u2014 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
     },
     {
       "at": "2026-07-01T07:23:00.480283+00:00",
-      "msg": "[Rule-based cycle — 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed — Error; #61450841 (retweets): refill failed — Error; #61450843 (likes): refill failed — Error; #61450844 (ret"
+      "msg": "[Rule-based cycle \u2014 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
     },
     {
       "at": "2026-07-01T07:30:56.652204+00:00",
@@ -286,6 +328,10 @@
     {
       "at": "2026-07-01T00:00:00+00:00",
       "msg": "Placed orders #61500415 (100 likes) and #61500416 (100 retweets) for post 2064283937091035590 via smmfollows"
+    },
+    {
+      "at": "2026-07-01T12:41:44.318918+00:00",
+      "msg": "Placed orders #61501437 #61501438 #61501439 \u2014 100 non-drop likes (svc 8140, No/Less Drops + 30-day refill) for posts 2065705610163941467, 2064879295843983840, 2064283340849738045"
     }
   ]
 }
