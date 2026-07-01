@@ -380,6 +380,13 @@
     {
       "at": "2026-07-01T17:14:12.225720+00:00",
       "msg": "[TEST] 10 likes + 5 retweets + 5 custom comments \u2192 https://x.com/i/status/2070034213085274431"
+    },
+    {
+      "at": "2026-07-01T17:57:27.674310+00:00",
+      "msg": "[TEST] {\"parallel_tools\": [\n{\"tool\": \"get_pending_posts\", \"args\": {}},\n{\"tool\": \"get_services\", \"args\": {}}\n]}\n{\"done\": false, \"summary\": \"Initiating test order process\", \"confidence\": 0.8, \"escalate\": false"
     }
+  ],
+  "pending_posts": [
+    "https://x.com/i/status/2069014496086217116"
   ]
 }
