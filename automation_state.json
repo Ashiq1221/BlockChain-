@@ -114,7 +114,7 @@
       "link": "https://x.com/i/status/2064283937091035590",
       "quantity": 100,
       "refillable": true,
-      "status": "Completed",
+      "status": "Canceled",
       "start_count": "0",
       "remains": "0",
       "added_at": "2026-06-30T03:44:43+00:00",
@@ -126,7 +126,7 @@
       "link": "https://x.com/i/status/2064283937091035590",
       "quantity": 50,
       "refillable": true,
-      "status": "Completed",
+      "status": "Canceled",
       "start_count": "0",
       "remains": "0",
       "added_at": "2026-06-30T03:44:45+00:00",
@@ -161,7 +161,7 @@
     "61450840": {
       "refill_id": 10815878,
       "requested_at": "2026-07-01T04:00:00+00:00",
-      "status": "Rejected",
+      "status": "Completed",
       "ticket_sent": true
     },
     "61450841": {
@@ -217,7 +217,19 @@
   "agent_log": [
     {
       "at": "2026-07-01T06:53:15.531091+00:00",
-      "msg": "[Rule-based cycle \u2014 06:52 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
+      "msg": "[Rule-based cycle — 06:52 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed — Error; #61450841 (retweets): refill failed — Error; #61450843 (likes): refill failed — Error; #61450844 (ret"
+    },
+    {
+      "at": "2026-07-01T07:22:30.627014+00:00",
+      "msg": "[Rule-based cycle — 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed — Error; #61450841 (retweets): refill failed — Error; #61450843 (likes): refill failed — Error; #61450844 (ret"
+    },
+    {
+      "at": "2026-07-01T07:23:00.480283+00:00",
+      "msg": "[Rule-based cycle — 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed — Error; #61450841 (retweets): refill failed — Error; #61450843 (likes): refill failed — Error; #61450844 (ret"
+    },
+    {
+      "at": "2026-07-01T07:30:56.652204+00:00",
+      "msg": "Checked account balance ($4.45) and order status. Triggered refill for order 61450840 with 0 cooldown. Checked refill status for pending refills. No new orders needed as pending_posts is empty. All or"
     }
   ]
 }
