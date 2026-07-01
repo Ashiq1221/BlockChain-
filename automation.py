@@ -144,8 +144,13 @@ SERVICES = {
     "views":    {"id": 17682, "name": "Twitter Views HQ",                 "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
 }
 
-STATE_FILE = Path("automation_state.json")
-POLL_SECS  = 300
+STATE_FILE   = Path("automation_state.json")
+POLL_SECS    = 300
+ORDER_QTY    = {
+    "likes":    int(os.environ.get("SMM_LIKES_QTY",    "100")),
+    "retweets": int(os.environ.get("SMM_RETWEETS_QTY", "100")),
+    "comments": int(os.environ.get("SMM_COMMENTS_QTY", "5")),
+}
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -1223,7 +1228,7 @@ def _rule_based_cycle(state: dict) -> str:
         else:
             issues.append(f"#{oid}: refill failed — {res.get('error','?')}")
     for link in list(state.get("pending_posts",[])):
-        for kind, qty in [("likes",100),("retweets",30)]:
+        for kind, qty in [("likes", ORDER_QTY["likes"]), ("retweets", ORDER_QTY["retweets"])]:
             res = json.loads(tool_place_order(state, link, kind, qty))
             if res.get("success"):
                 actions.append(f"Placed {kind}×{qty} for {link[-40:]}")
