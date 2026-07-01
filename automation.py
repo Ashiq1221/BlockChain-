@@ -34,7 +34,11 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-import anthropic
+try:
+    import anthropic as _anthropic_mod
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
 import requests
 
 # ── Env loader ────────────────────────────────────────────────────────────────
@@ -54,9 +58,45 @@ import os
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-# SMM panel
-API_KEY = os.environ.get("SMM_API_KEY", "")
-API_URL = "https://smmfollows.com/api/v2"
+# SMM panels — tried in order, first success wins
+PANELS = [
+    {
+        "name": "smmfollows",
+        "url":  "https://smmfollows.com/api/v2",
+        "key":  os.environ.get("SMM_API_KEY", ""),
+        "services": {
+            "likes":    {"id": 16465, "min": 10,  "max": 2_000_000, "rate_per_k": 2.10},
+            "retweets": {"id": 9018,  "min": 100, "max": 3000,      "rate_per_k": 2.10},
+            "comments": {"id": 7338,  "min": 5,   "max": 150,       "rate_per_k": 28.13},
+            "views":    {"id": 17682, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
+        },
+    },
+    {
+        "name": "smmwiz",
+        "url":  "https://smmwiz.com/api/v2",
+        "key":  os.environ.get("SMMWIZ_API_KEY", ""),
+        "services": {
+            "likes":    {"id": 17712, "min": 20,  "max": 5000,    "rate_per_k": 0.94},
+            "retweets": {"id": 18535, "min": 100, "max": 100_000, "rate_per_k": 2.16},
+            "comments": {"id": 0,     "min": 5,   "max": 0,       "rate_per_k": 0},
+            "views":    {"id": 0,     "min": 100, "max": 0,       "rate_per_k": 0},
+        },
+    },
+    {
+        "name": "astrasmm",
+        "url":  "https://astrasmm.com/api/v2",
+        "key":  os.environ.get("ASTRA_API_KEY", ""),
+        "services": {
+            "likes":    {"id": 18718, "min": 10,  "max": 50_000,  "rate_per_k": 2.40},
+            "retweets": {"id": 12109, "min": 100, "max": 10_000,  "rate_per_k": 1.33},
+            "comments": {"id": 0,     "min": 5,   "max": 0,       "rate_per_k": 0},
+            "views":    {"id": 0,     "min": 100, "max": 0,       "rate_per_k": 0},
+        },
+    },
+]
+# Primary panel (backwards compat)
+API_KEY = PANELS[0]["key"]
+API_URL = PANELS[0]["url"]
 PANEL   = "https://smmfollows.com"
 USER    = os.environ.get("SMM_USER", "hhrh197")
 PASSWD  = os.environ.get("SMM_PASS", "Yawer@123")
@@ -87,12 +127,12 @@ DEEPSEEK_DIRECT = os.environ.get("DEEPSEEK_API_KEY", "")
 CONFIDENCE_THRESHOLD = 0.75
 CRITICAL_TOOLS = {"submit_ticket", "place_order"}
 
-# Service catalogue
+# Service catalogue (primary panel defaults, overridden per-panel at order time)
 SERVICES = {
-    "likes":    {"id": 16465, "name": "Twitter Likes+Impressions USA", "refill": False, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
-    "retweets": {"id": 9018,  "name": "Twitter Retweets Organic Global", "refill": False, "min": 100, "max": 3000,        "rate_per_k": 2.10},
-    "comments": {"id": 7338,  "name": "Twitter Comments USA",    "refill": False, "min": 5,   "max": 150,         "rate_per_k": 28.13},
-    "views":    {"id": 17682, "name": "Twitter Views HQ",        "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
+    "likes":    {"id": 16465, "name": "Twitter Likes+Impressions USA",    "refill": False, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
+    "retweets": {"id": 9018,  "name": "Twitter Retweets Organic Global",  "refill": False, "min": 100, "max": 3000,        "rate_per_k": 2.10},
+    "comments": {"id": 7338,  "name": "Twitter Comments USA",             "refill": False, "min": 5,   "max": 150,         "rate_per_k": 28.13},
+    "views":    {"id": 17682, "name": "Twitter Views HQ",                 "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
 }
 
 STATE_FILE = Path("automation_state.json")
@@ -386,6 +426,35 @@ def _api(payload: dict) -> dict:
     except Exception:
         return {"raw": r.text[:200]}
 
+def _api_panel(panel: dict, payload: dict) -> dict:
+    p = dict(payload)
+    p["key"] = panel["key"]
+    r = requests.post(panel["url"], data=p, timeout=20)
+    r.raise_for_status()
+    try:
+        return r.json()
+    except Exception:
+        return {"raw": r.text[:200]}
+
+def _place_order_multi(kind: str, link: str, quantity: int) -> dict:
+    """Try each panel in order until one succeeds."""
+    for panel in PANELS:
+        svc = panel["services"].get(kind, {})
+        svc_id = svc.get("id", 0)
+        if not svc_id or not panel["key"]:
+            continue
+        qty = max(quantity, svc.get("min", quantity))
+        try:
+            res = _api_panel(panel, {"action": "add", "service": svc_id, "link": link, "quantity": qty})
+            if res.get("order"):
+                log.info("[%s] placed %s×%d → order #%s", panel["name"], kind, qty, res["order"])
+                return {"success": True, "order": str(res["order"]), "panel": panel["name"],
+                        "service_id": svc_id, "quantity": qty}
+            log.warning("[%s] order rejected: %s", panel["name"], res)
+        except Exception as e:
+            log.warning("[%s] panel error: %s", panel["name"], e)
+    return {"success": False, "error": "All panels failed"}
+
 def _api_cached(payload: dict, cf: CloudflarePlatform, ttl: int = 60) -> dict:
     """SMM API with KV caching for balance and services lookups."""
     action = payload.get("action", "")
@@ -654,26 +723,23 @@ def tool_submit_ticket(state: dict, order_ids: list, subject_type: str, message:
         return json.dumps({"error": str(exc)})
 
 def tool_place_order(state: dict, link: str, kind: str, quantity: int) -> str:
-    svc = SERVICES.get(kind)
-    if not svc:
+    if kind not in SERVICES:
         return json.dumps({"error": f"Unknown kind: {kind}. Valid: {list(SERVICES)}"})
-    if not (svc["min"] <= quantity <= svc["max"]):
-        return json.dumps({"error": f"Quantity {quantity} out of range [{svc['min']},{svc['max']}]"})
     try:
-        res = _api({"action": "add", "service": svc["id"], "link": link, "quantity": quantity})
-        oid = str(res.get("order", ""))
-        if not oid:
-            return json.dumps({"error": "No order ID returned", "response": res})
+        res = _place_order_multi(kind, link, quantity)
+        if not res.get("success"):
+            return json.dumps({"error": res.get("error", "All panels failed")})
+        oid = str(res["order"])
         state["orders"][oid] = {
-            "id": oid, "kind": kind, "link": link, "quantity": quantity,
-            "refillable": svc["refill"], "status": "Pending",
+            "id": oid, "kind": kind, "link": link, "quantity": res["quantity"],
+            "refillable": False, "status": "Pending", "panel": res.get("panel", "smmfollows"),
             "start_count": None, "remains": None,
             "added_at": datetime.now(timezone.utc).isoformat(), "completed_at": None,
         }
         if link not in state["posts"]:
             state["posts"].append(link)
-        return json.dumps({"success": True, "order_id": oid, "service": svc["name"],
-                           "quantity": quantity, "link": link})
+        return json.dumps({"success": True, "order_id": oid, "panel": res.get("panel"),
+                           "service_id": res.get("service_id"), "quantity": res["quantity"], "link": link})
     except Exception as exc:
         return json.dumps({"error": str(exc)})
 
@@ -781,7 +847,7 @@ PLATFORM KNOWLEDGE
 - Twitter/X algorithm: engagement velocity, recency signals, credibility thresholds
 - Natural growth: realistic ratios (likes:retweets ~3:1), staggered delivery to avoid spam detection
 - Drop rates: SMM likes/RTs from low-quality sources get removed within 24-72h — this is normal
-- Refill mechanics: 24h cooldown after completion is standard; rejection means engagement hasn’t dropped enough yet
+- Refill mechanics: 24h cooldown after completion is standard; rejection means engagement hasn't dropped enough yet
 
 SMM STRATEGY
 - New post package: 100-200 likes + 25-50 retweets + 5k-10k views = natural baseline
@@ -802,9 +868,9 @@ CONFIDENCE GUIDANCE
 Set confidence < 0.75 and/or escalate=true when:
 - Decision involves placing orders or submitting tickets
 - Signals are contradictory or patterns are unusual
-- Refill behaviour doesn’t match past experience"""
+- Refill behaviour doesn't match past experience"""
 
-CF_TOOL_PROTOCOL = """\
+CF_TOOL_PROTOCOL = """
 
 TOOL USE PROTOCOL
 -----------------
@@ -896,10 +962,6 @@ def _cf_ai_turn(model: str, messages: list, cf: CloudflarePlatform) -> str:
 
 def _process_cmd(cmd: dict | None, text: str, messages: list,
                  state: dict, cf: CloudflarePlatform) -> str | None:
-    """
-    Process a parsed AI command.
-    Returns final string if cycle should end, None if it should continue.
-    """
     if cmd is None:
         return text or "Cycle complete."
     if cmd.get("done"):
@@ -926,12 +988,6 @@ def _process_cmd(cmd: dict | None, text: str, messages: list,
 
 def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
                               max_iters: int = 25) -> str:
-    """
-    Two-stage ensemble:
-    Stage 1 — Llama 3.3 70B fast: collects data, makes preliminary decision.
-    Stage 2 — DeepSeek R1 (if confidence < threshold OR critical action):
-               reviews full context, makes final decision.
-    """
     memories = retrieve_memories(task[:300], cf)
     augmented_task = task
     if memories:
@@ -943,7 +999,6 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
         {"role": "user",   "content": augmented_task},
     ]
 
-    # ── Stage 1: Fast model ────────────────────────────────────────────────────
     log.info("[ENSEMBLE] Stage 1 — Llama 3.3 70B (scout)")
     fast_summary = ""
     confidence   = 1.0
@@ -974,7 +1029,6 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
             store_memory(result, state, cf)
             return result
 
-    # ── Stage 2: Deep model ───────────────────────────────────────────────────
     log.info("[ENSEMBLE] Stage 2 — DeepSeek R1 (strategist, conf was %.0f%%)", confidence*100)
     messages.append({
         "role": "user",
@@ -1010,9 +1064,6 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
 
 def run_agent_cycle(state: dict, task: str, cf: CloudflarePlatform,
                     max_iters: int = 25) -> str:
-    """
-    Priority: CF Ensemble (Llama+DeepSeek) → DeepSeek direct → Claude → rule-based.
-    """
     if CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
         try:
             log.info("[AI] Cloudflare ensemble (Llama 3.3 70B + DeepSeek R1)")
@@ -1072,7 +1123,9 @@ def _run_deepseek_direct(state: dict, task: str, max_iters: int = 25) -> str:
 # ── Claude Fallback ───────────────────────────────────────────────────────────────
 
 def _run_claude_cycle(state: dict, task: str, cf: CloudflarePlatform, max_iters: int = 25) -> str:
-    ai = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    if not ANTHROPIC_AVAILABLE:
+        return "Claude unavailable (anthropic not installed)."
+    ai = _anthropic_mod.Anthropic(api_key=ANTHROPIC_KEY)
     messages = [{"role":"user","content":task}]
     for _ in range(max_iters):
         response = ai.messages.create(
