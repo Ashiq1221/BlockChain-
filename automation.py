@@ -28,7 +28,7 @@ from pathlib import Path
 import anthropic
 import requests
 
-# ── Config (loaded from environment / .env file) ──────────────────────────────
+# ── Config (loaded from environment / .env file) ──────────────────────────────────────────────
 
 def _load_env() -> None:
     env_file = Path(__file__).parent / ".env"
@@ -44,13 +44,21 @@ _load_env()
 
 import os
 
-API_KEY       = os.environ.get("SMM_API_KEY", "")
-API_URL       = "https://smmfollows.com/api/v2"
-PANEL         = "https://smmfollows.com"
-USER          = os.environ.get("SMM_USER", "hhrh197")
-PASSWD        = os.environ.get("SMM_PASS", "Yawer@123")
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-CLAUDE_MODEL  = "claude-sonnet-4-6"
+API_KEY          = os.environ.get("SMM_API_KEY", "")
+API_URL          = "https://smmfollows.com/api/v2"
+PANEL            = "https://smmfollows.com"
+USER             = os.environ.get("SMM_USER", "hhrh197")
+PASSWD           = os.environ.get("SMM_PASS", "Yawer@123")
+ANTHROPIC_KEY    = os.environ.get("ANTHROPIC_API_KEY", "")
+DEEPSEEK_KEY     = os.environ.get("DEEPSEEK_API_KEY", "")
+HAPPY_HORSE_KEY  = os.environ.get("HAPPY_HORSE_API_KEY", "")
+CF_ACCOUNT_ID    = os.environ.get("CF_ACCOUNT_ID", "")
+CF_AI_MODEL      = os.environ.get("CF_AI_MODEL", "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b")
+CLAUDE_MODEL     = "claude-sonnet-4-6"
+DEEPSEEK_MODEL   = "deepseek-chat"
+
+# AI priority: Cloudflare Workers AI (DeepSeek R1) → direct DeepSeek → Claude → rule-based
+AI_PRIORITY = ["cloudflare", "deepseek", "claude", "rules"]
 
 # Service catalogue (verified from your account)
 SERVICES = {
@@ -63,7 +71,7 @@ SERVICES = {
 STATE_FILE = Path("automation_state.json")
 POLL_SECS  = 300   # check orders every 5 min
 
-# ── Logging ───────────────────────────────────────────────────────────────────
+# ── Logging ─────────────────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
@@ -76,7 +84,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# ── State ─────────────────────────────────────────────────────────────────────
+# ── State ─────────────────────────────────────────────────────────────────────────────────
 
 def load_state() -> dict:
     if STATE_FILE.exists():
@@ -101,7 +109,7 @@ def log_agent(state: dict, msg: str) -> None:
     entry = {"at": datetime.now(timezone.utc).isoformat(), "msg": msg}
     state["agent_log"] = (state.get("agent_log", []) + [entry])[-50:]
 
-# ── API helpers ───────────────────────────────────────────────────────────────
+# ── API helpers ───────────────────────────────────────────────────────────────────────────
 
 def _api(payload: dict) -> dict:
     payload = dict(payload)
@@ -139,7 +147,7 @@ def _panel_session() -> requests.Session | None:
     except Exception:
         return None
 
-# ── Tool implementations (what the AI can call) ────────────────────────────────
+# ── Tool implementations (what the AI can call) ────────────────────────────────────────────
 
 def tool_get_balance() -> str:
     try:
@@ -177,7 +185,6 @@ def tool_check_orders(state: dict) -> str:
             if new_status in ("Completed", "Partial") and not order.get("completed_at"):
                 order["completed_at"] = now_utc.isoformat()
 
-            # Calculate hours since completion for refill window info
             cooldown_h = None
             if order.get("completed_at") and order.get("refillable"):
                 try:
@@ -215,7 +222,6 @@ def tool_trigger_refill(state: dict, order_id: str) -> str:
     if not order.get("refillable"):
         return json.dumps({"error": f"Order {order_id} service does not support refill."})
 
-    # Try API
     try:
         res = _api({"action": "refill", "order": order_id})
         if "refill" in res:
@@ -226,7 +232,6 @@ def tool_trigger_refill(state: dict, order_id: str) -> str:
             }
             return json.dumps({"success": True, "refill_id": res["refill"], "method": "api"})
         err = res.get("error", str(res))
-        # Try panel as fallback
         sess = _panel_session()
         if sess:
             r = sess.get(f"{PANEL}/orders/{order_id}/refill", timeout=10, headers={
@@ -343,7 +348,7 @@ def tool_clear_pending_post(state: dict, link: str) -> str:
     return json.dumps({"message": "Not in pending list."})
 
 
-# ── Tool definitions for Claude ───────────────────────────────────────────────
+# ── Tool definitions for Claude ───────────────────────────────────────────────────────────────────────────
 
 TOOL_DEFS = [
     {
@@ -446,7 +451,7 @@ TOOL_DEFS = [
     },
 ]
 
-# ── AI agent system prompt ────────────────────────────────────────────────────
+# ── AI agent system prompt ──────────────────────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """You are a senior social media marketing strategist and automation manager for a Twitter/X growth account. You have deep expertise in:
 
@@ -485,7 +490,7 @@ TOOL USAGE RULES
 4. place_order only when a link exists in pending_posts
 5. One clear decision per cycle — don't do everything at once"""
 
-# ── Agent cycle ───────────────────────────────────────────────────────────────
+# ── Agent cycle ─────────────────────────────────────────────────────────────────────────────────
 
 def dispatch_tool(name: str, inp: dict, state: dict) -> str:
     mapping = {
@@ -509,78 +514,277 @@ def dispatch_tool(name: str, inp: dict, state: dict) -> str:
         return json.dumps({"error": str(exc)})
 
 
+CF_TOOL_PROTOCOL = """\
+
+TOOL USE PROTOCOL
+-----------------
+When you need to call a tool, respond with ONLY this JSON (no other text):
+{"tool": "tool_name", "args": {}}
+
+When you are done, respond with ONLY this JSON:
+{"done": true, "summary": "concise strategic summary of what you did and found"}
+
+Never include <think> blocks or explanatory text alongside the JSON — output bare JSON only.
+"""
+
+
+def _run_cloudflare_ai_cycle(state: dict, task: str, max_iterations: int = 30) -> str:
+    """Run agent cycle via Cloudflare Workers AI (DeepSeek R1 distill)."""
+    if not CF_ACCOUNT_ID:
+        raise ValueError("CF_ACCOUNT_ID not set")
+
+    tools_desc = json.dumps(
+        [{"name": t["name"], "description": t["description"],
+          "parameters": t["input_schema"]} for t in TOOL_DEFS],
+        indent=2,
+    )
+    system_content = (
+        SYSTEM_PROMPT
+        + CF_TOOL_PROTOCOL
+        + f"\nAVAILABLE TOOLS:\n{tools_desc}"
+    )
+
+    messages: list[dict] = [
+        {"role": "system", "content": system_content},
+        {"role": "user",   "content": task},
+    ]
+    cf_url = (
+        f"https://api.cloudflare.com/client/v4/accounts"
+        f"/{CF_ACCOUNT_ID}/ai/run/{CF_AI_MODEL}"
+    )
+    last_text = ""
+
+    for iteration in range(max_iterations):
+        resp = requests.post(
+            cf_url,
+            json={"messages": messages, "max_tokens": 2048},
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=90,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("success"):
+            raise Exception(f"CF AI error: {data.get('errors')}")
+
+        raw = data["result"]["response"]
+        # Strip DeepSeek R1 reasoning blocks
+        text = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
+        last_text = text
+
+        if text:
+            log.info("[CF-AI] %s", text[:400])
+
+        # Try to parse as JSON command
+        cmd = None
+        try:
+            cmd = json.loads(text)
+        except json.JSONDecodeError:
+            m = re.search(r"\{.*\}", text, re.DOTALL)
+            if m:
+                try:
+                    cmd = json.loads(m.group())
+                except Exception:
+                    pass
+
+        if cmd is None:
+            return text or "Cycle complete."
+
+        if cmd.get("done"):
+            return cmd.get("summary", "Cycle complete.")
+
+        if "tool" in cmd:
+            tool_name = cmd["tool"]
+            tool_args = cmd.get("args", {})
+            log.info("  -> %s(%s)", tool_name, json.dumps(tool_args)[:120])
+            result = dispatch_tool(tool_name, tool_args, state)
+            log.info("     <- %s", result[:200])
+            messages.append({"role": "assistant", "content": text})
+            messages.append({"role": "user",
+                             "content": f"Tool result for {tool_name}: {result}"})
+            continue
+
+        return text or "Cycle complete."
+
+    return last_text or "Agent reached max iterations."
+
+
+def _run_deepseek_cycle(state: dict, task: str, max_iterations: int = 30) -> str:
+    """Run agent cycle via DeepSeek (OpenAI-compatible API with tool use)."""
+    ds_tools = []
+    for t in TOOL_DEFS:
+        ds_tools.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            }
+        })
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user",   "content": task},
+    ]
+    iteration = 0
+
+    while iteration < max_iterations:
+        iteration += 1
+        resp = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            json={
+                "model": DEEPSEEK_MODEL,
+                "messages": messages,
+                "tools": ds_tools,
+                "tool_choice": "auto",
+                "max_tokens": 4096,
+            },
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        choice  = data["choices"][0]
+        message = choice["message"]
+        finish  = choice["finish_reason"]
+
+        if message.get("content"):
+            log.info("[DeepSeek] %s", str(message["content"])[:500])
+
+        if finish == "stop" or not message.get("tool_calls"):
+            return message.get("content") or "Cycle complete."
+
+        messages.append(message)
+        for tc in message.get("tool_calls", []):
+            fn   = tc["function"]
+            name = fn["name"]
+            try:
+                inp = json.loads(fn["arguments"])
+            except Exception:
+                inp = {}
+            log.info("  -> %s(%s)", name, json.dumps(inp)[:120])
+            result = dispatch_tool(name, inp, state)
+            log.info("     <- %s", result[:200])
+            messages.append({
+                "role":         "tool",
+                "tool_call_id": tc["id"],
+                "content":      result,
+            })
+
+    return "Agent reached max iterations."
+
+
+def _run_claude_cycle(state: dict, task: str, max_iterations: int = 30) -> str:
+    """Run agent cycle via Claude (Anthropic SDK)."""
+    ai = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+    messages = [{"role": "user", "content": task}]
+    iteration = 0
+
+    while iteration < max_iterations:
+        iteration += 1
+        response = ai.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            tools=TOOL_DEFS,
+            messages=messages,
+        )
+
+        text_parts = [b.text for b in response.content if hasattr(b, "text")]
+        for t in text_parts:
+            if t.strip():
+                log.info("[Claude] %s", t[:500])
+
+        if response.stop_reason == "end_turn":
+            return " ".join(text_parts) or "Cycle complete."
+
+        if response.stop_reason != "tool_use":
+            break
+
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use":
+                continue
+            log.info("  -> %s(%s)", block.name, json.dumps(block.input)[:120])
+            result = dispatch_tool(block.name, block.input, state)
+            log.info("     <- %s", result[:200])
+            tool_results.append({
+                "type":        "tool_result",
+                "tool_use_id": block.id,
+                "content":     result,
+            })
+
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user",      "content": tool_results})
+
+    return "Agent reached max iterations."
+
+
 def run_agent_cycle(state: dict, task: str, max_iterations: int = 30) -> str:
-    """Run one Claude agent cycle. Falls back to rule-based logic if API unavailable."""
-    try:
-        ai = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-        messages = [{"role": "user", "content": task}]
-        iteration = 0
+    """
+    Run one AI agent cycle.
+    Priority: Cloudflare Workers AI (DeepSeek R1) → direct DeepSeek → Claude → rule-based.
+    """
+    # 1. Try Cloudflare Workers AI (DeepSeek R1 — fast, JSON tool-use via prompt)
+    if CF_ACCOUNT_ID and DEEPSEEK_KEY:
+        try:
+            log.info("[AI] Using Cloudflare Workers AI (%s)", CF_AI_MODEL)
+            return _run_cloudflare_ai_cycle(state, task, max_iterations)
+        except requests.HTTPError as exc:
+            log.warning("[AI] Cloudflare AI error (%s) — trying DeepSeek direct", exc)
+        except Exception as exc:
+            log.warning("[AI] Cloudflare AI error (%s) — trying DeepSeek direct", exc)
 
-        while iteration < max_iterations:
-            iteration += 1
-            response = ai.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                tools=TOOL_DEFS,
-                messages=messages,
-            )
+    # 2. Try direct DeepSeek API (OpenAI-compatible tool use)
+    if DEEPSEEK_KEY:
+        try:
+            log.info("[AI] Using DeepSeek direct API")
+            return _run_deepseek_cycle(state, task, max_iterations)
+        except requests.HTTPError as exc:
+            if exc.response is not None and exc.response.status_code in (401, 402, 429):
+                log.warning("[AI] DeepSeek unavailable (%s) — trying Claude", exc)
+            else:
+                log.warning("[AI] DeepSeek error (%s) — trying Claude", exc)
+        except Exception as exc:
+            log.warning("[AI] DeepSeek error (%s) — trying Claude", exc)
 
-            text_parts = [b.text for b in response.content if hasattr(b, "text")]
-            for t in text_parts:
-                if t.strip():
-                    log.info("[AI] %s", t[:500])
+    # 3. Try Claude (fallback)
+    if ANTHROPIC_KEY:
+        try:
+            log.info("[AI] Using Claude fallback")
+            return _run_claude_cycle(state, task, max_iterations)
+        except anthropic.BadRequestError as exc:
+            if "credit balance" in str(exc).lower():
+                log.warning("[AI] Claude no credits — using rule-based fallback")
+            else:
+                log.warning("[AI] Claude error (%s) — using rule-based fallback", exc)
+        except anthropic.APIError as exc:
+            log.warning("[AI] Claude API error (%s) — using rule-based fallback", exc)
 
-            if response.stop_reason == "end_turn":
-                return " ".join(text_parts) or "Cycle complete."
-
-            if response.stop_reason != "tool_use":
-                break
-
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-                log.info("  -> %s(%s)", block.name, json.dumps(block.input)[:120])
-                result = dispatch_tool(block.name, block.input, state)
-                log.info("     <- %s", result[:200])
-                tool_results.append({
-                    "type":        "tool_result",
-                    "tool_use_id": block.id,
-                    "content":     result,
-                })
-
-            messages.append({"role": "assistant", "content": response.content})
-            messages.append({"role": "user",      "content": tool_results})
-
-        return "Agent reached max iterations."
-
-    except anthropic.BadRequestError as exc:
-        if "credit balance" in str(exc).lower():
-            log.warning("[AI] No API credits — running rule-based fallback")
-            return _rule_based_cycle(state)
-        raise
-    except anthropic.APIError as exc:
-        log.warning("[AI] API error (%s) — running rule-based fallback", exc)
-        return _rule_based_cycle(state)
+    # 4. Rule-based fallback
+    log.info("[AI] Using rule-based fallback")
+    return _rule_based_cycle(state)
 
 
 def _rule_based_cycle(state: dict) -> str:
     """
-    Expert rule-based SMM manager — runs when Claude API is unavailable.
+    Expert rule-based SMM manager — runs when all AI options are unavailable.
     Applies the same logic the AI would: smart refill timing, no ticket spam.
     """
     now = datetime.now(timezone.utc)
     actions = []
 
-    # Balance
     try:
         bal = json.loads(tool_get_balance())
         log.info("[RULE] Balance: $%s %s", bal.get("balance"), bal.get("currency", "USD"))
     except Exception:
         pass
 
-    # Refresh all order statuses
     orders_json = json.loads(tool_check_orders(state))
     orders = orders_json.get("orders", [])
 
@@ -595,29 +799,22 @@ def _rule_based_cycle(state: dict) -> str:
         kind       = o["kind"]
         refillable = o["refillable"]
         cooldown_h = o.get("refill_cooldown_h")
-        refill_done_flag = o.get("refill_done", False)
         refill_info = state.get("refills", {}).get(oid, {})
         refill_status = refill_info.get("status")
 
         if status not in ("Completed", "Partial"):
             continue
-
         if not refillable:
             continue
-
-        # Already successfully refilled
         if refill_status == "Completed":
             refill_done.append(oid)
             continue
-
-        # Refill pending — check its status
         if refill_status == "Pending":
             result = json.loads(tool_check_refill_status(state, oid))
             new_status = state.get("refills", {}).get(oid, {}).get("status", "Pending")
             if new_status == "Completed":
                 refill_done.append(oid)
             elif new_status == "Rejected":
-                # Rejected — try once more if cooldown passed, otherwise note it
                 if cooldown_h == 0:
                     res = json.loads(tool_trigger_refill(state, oid))
                     if res.get("success"):
@@ -628,14 +825,10 @@ def _rule_based_cycle(state: dict) -> str:
                 else:
                     refill_waiting.append(oid)
             continue
-
-        # No refill yet — check cooldown
         if cooldown_h is not None and cooldown_h > 0:
             refill_waiting.append(oid)
             log.info("[RULE] #%s (%s): refill in %.1fh", oid, kind, cooldown_h)
             continue
-
-        # Cooldown passed — trigger refill
         res = json.loads(tool_trigger_refill(state, oid))
         if res.get("success"):
             refill_triggered.append(oid)
@@ -647,11 +840,9 @@ def _rule_based_cycle(state: dict) -> str:
             if "disabled" not in err.lower():
                 issues.append(f"#{oid} ({kind}): refill failed — {err}")
 
-    # Handle pending post URLs (user-queued links)
     pending = state.get("pending_posts", [])
     for link in list(pending):
         log.info("[RULE] Placing orders for queued post: %s", link)
-        # Smart quantities: conservative, natural-looking
         for kind, qty in [("likes", 100), ("retweets", 30)]:
             res = json.loads(tool_place_order(state, link, kind, qty))
             if res.get("success"):
@@ -661,7 +852,6 @@ def _rule_based_cycle(state: dict) -> str:
                 log.warning("[RULE] Order failed (%s x%d): %s", kind, qty, res.get("error"))
         tool_clear_pending_post(state, link)
 
-    # Build summary
     summary_parts = [f"[Rule-based cycle — {now.strftime('%H:%M UTC')}]"]
     if refill_triggered:
         summary_parts.append(f"Refills triggered: {refill_triggered}")
@@ -696,7 +886,7 @@ Run your standard monitoring cycle:
    what you did and why.
 """
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
+# ── Dashboard ─────────────────────────────────────────────────────────────────────────────────
 
 def print_dashboard(state: dict) -> None:
     try:
@@ -751,11 +941,11 @@ def print_dashboard(state: dict) -> None:
             print(f"  [{entry['at'][11:19]}] {entry['msg'][:120]}")
     print()
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# ── CLI ────────────────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="SMMFollows AI Manager — Claude-powered SMM strategy & monitoring"
+        description="SMMFollows AI Manager — DeepSeek R1 powered SMM strategy & monitoring"
     )
     parser.add_argument("--once",     action="store_true", help="Single AI cycle then exit")
     parser.add_argument("--status",   action="store_true", help="Print dashboard and exit")
@@ -767,7 +957,6 @@ def main() -> None:
 
     state = load_state()
 
-    # Queue a new post URL
     if args.post:
         url = args.post.strip()
         if url not in state.get("pending_posts", []):
@@ -777,12 +966,10 @@ def main() -> None:
         else:
             log.info("Already queued: %s", url)
 
-    # Dashboard
     if args.status:
         print_dashboard(state)
         return
 
-    # Refill pass
     if args.refill:
         log.info("Running refill-focused AI cycle...")
         task = (
@@ -796,16 +983,14 @@ def main() -> None:
         save_state(state)
         return
 
-    # Single cycle
     if args.once or args.post:
         summary = run_agent_cycle(state, MONITOR_TASK)
         log_agent(state, summary[:200])
         save_state(state)
         return
 
-    # Continuous loop
     log.info("=== SMMFollows AI Manager started (interval=%ds) ===", args.interval)
-    log.info("Tracking %d orders | Balance check on first cycle", len(state["orders"]))
+    log.info("Tracking %d orders | AI: Cloudflare Workers AI (DeepSeek R1)", len(state["orders"]))
     log.info("Press Ctrl+C to stop.")
 
     while True:
