@@ -27,16 +27,19 @@ database_id   = "b21d583e-9dc2-4004-b24b-64bac673741d"
 binding = "KV"
 id      = "6759754413f745edaa47d5f9a4d424be"
 
-# ── Queues — provisioned: smm-orders + smm-orders-dlq ────────────────────────
+# ── Queues — producer only (consumer needs Workers Paid plan) ──────────────────
 [[queues.producers]]
 binding = "ORDER_QUEUE"
 queue   = "smm-orders"
 
-[[queues.consumers]]
-queue             = "smm-orders"
-max_batch_size    = 10
-max_retries       = 5
-dead_letter_queue = "smm-orders-dlq"
+# Queue consumer disabled — requires Workers Paid plan + provisioned DLQ.
+# To enable: upgrade to Workers Paid ($5/mo), provision smm-orders-dlq queue,
+# then uncomment:
+# [[queues.consumers]]
+# queue             = "smm-orders"
+# max_batch_size    = 10
+# max_retries       = 5
+# dead_letter_queue = "smm-orders-dlq"
 
 # ── Vectorize — provisioned: smm-episodic-memory (1024-dim cosine) ───────────
 [[vectorize]]
@@ -44,7 +47,6 @@ binding    = "VECTORIZE"
 index_name = "smm-episodic-memory"
 
 # ── R2 Audit Log — enable at: dash.cloudflare.com → R2 → Enable ──────────────
-# Uncomment after enabling R2 in Cloudflare Dashboard:
 # [[r2_buckets]]
 # binding     = "R2"
 # bucket_name = "smm-logs"
