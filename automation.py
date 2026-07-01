@@ -843,7 +843,8 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
     if cf and CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
         try:
             result = cf.ai_run(CF_FAST_MODEL, {"messages": [{"role": "user", "content": prompt}], "max_tokens": 1200})
-            text = re.sub(r"<think>.*?</think>", "", result.get("response", ""), flags=re.DOTALL).strip()
+            raw = result.get("response", "")
+            text = re.sub(r"<think>.*?</think>", "", raw if isinstance(raw, str) else json.dumps(raw), flags=re.DOTALL).strip()
             m = re.search(r"\[[\s\S]*\]", text)
             if m:
                 arr = json.loads(m.group())

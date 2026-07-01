@@ -249,6 +249,45 @@
       "remains": "0",
       "added_at": "2026-07-01T12:41:44.318918+00:00",
       "completed_at": "2026-07-01T14:50:36.000117+00:00"
+    },
+    "30182848": {
+      "id": "30182848",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 20,
+      "panel": "smmwiz",
+      "refillable": false,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
+    },
+    "61505279": {
+      "id": "61505279",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "refillable": false,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
+    },
+    "61505280": {
+      "id": "61505280",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 5,
+      "panel": "smmfollows",
+      "refillable": false,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -306,7 +345,8 @@
     "https://x.com/i/status/2065705610163941467",
     "https://x.com/i/status/2064879295843983840",
     "https://x.com/i/status/2064283340849738045",
-    "https://x.com/i/status/2064283937091035590"
+    "https://x.com/i/status/2064283937091035590",
+    "https://x.com/i/status/2070034213085274431"
   ],
   "agent_log": [
     {
@@ -336,6 +376,10 @@
     {
       "at": "2026-07-01T14:50:57.745034+00:00",
       "msg": "[Rule-based \u2014 14:50 UTC] | In cooldown: ['61498649', '61498651', '61501437', '61501438', '61501439'] | Refills done: ['61450840'] | Issues: #61450841: refill failed \u2014 Error; #61450843: refill failed \u2014"
+    },
+    {
+      "at": "2026-07-01T17:14:12.225720+00:00",
+      "msg": "[TEST] 10 likes + 5 retweets + 5 custom comments \u2192 https://x.com/i/status/2070034213085274431"
     }
   ]
 }
