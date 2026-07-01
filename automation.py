@@ -471,22 +471,34 @@ def _api_panel(panel: dict, payload: dict) -> dict:
         return {"raw": r.text[:200]}
 
 def _place_order_multi(kind: str, link: str, quantity: int) -> dict:
-    """Try each panel in order until one succeeds."""
-    for panel in PANELS:
-        svc = panel["services"].get(kind, {})
-        svc_id = svc.get("id", 0)
-        if not svc_id or not panel["key"]:
-            continue
+    """Sort panels by cheapest rate for this kind, try in order until one succeeds."""
+    eligible = [
+        p for p in PANELS
+        if p["key"] and p["services"].get(kind, {}).get("id")
+    ]
+    eligible.sort(key=lambda p: p["services"][kind].get("rate_per_k", 999))
+
+    if eligible:
+        best = eligible[0]
+        others = [p["name"] for p in eligible[1:]]
+        log.info("[SMM] Best deal for %s: %s @ $%.2f/k%s",
+                 kind, best["name"], best["services"][kind].get("rate_per_k", 0),
+                 f" (fallback: {', '.join(others)})" if others else "")
+
+    for panel in eligible:
+        svc = panel["services"][kind]
+        svc_id = svc["id"]
         qty = max(quantity, svc.get("min", quantity))
         try:
             res = _api_panel(panel, {"action": "add", "service": svc_id, "link": link, "quantity": qty})
             if res.get("order"):
-                log.info("[%s] placed %s×%d → order #%s", panel["name"], kind, qty, res["order"])
+                log.info("[%s] placed %s×%d → order #%s (rate $%.2f/k)",
+                         panel["name"], kind, qty, res["order"], svc.get("rate_per_k", 0))
                 return {"success": True, "order": str(res["order"]), "panel": panel["name"],
                         "service_id": svc_id, "quantity": qty}
-            log.warning("[%s] order rejected: %s", panel["name"], res)
+            log.warning("[%s] order rejected (trying next): %s", panel["name"], res)
         except Exception as e:
-            log.warning("[%s] panel error: %s", panel["name"], e)
+            log.warning("[%s] panel error (trying next): %s", panel["name"], e)
     return {"success": False, "error": "All panels failed"}
 
 def _api_cached(payload: dict, cf: CloudflarePlatform, ttl: int = 60) -> dict:

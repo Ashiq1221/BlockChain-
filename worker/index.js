@@ -458,11 +458,20 @@ async function processQueueMsg(msg, env) {
 
 // ── Multi-Panel SMM ───────────────────────────────────────────────────────────
 async function placeOrderMultiPanel(env, link, kind, quantity) {
-  for (const panel of PANELS) {
+  // Sort eligible panels by cheapest rate for this kind
+  const eligible = PANELS
+    .filter(p => env[p.keyVar] && p.svc[kind])
+    .sort((a, b) => (a.rate[kind] ?? 999) - (b.rate[kind] ?? 999));
+
+  if (eligible.length) {
+    const best = eligible[0];
+    console.log(`[SMM] Best deal for ${kind}: ${best.name} @ $${best.rate[kind]}/k`
+      + (eligible.length > 1 ? ` (fallback: ${eligible.slice(1).map(p => p.name).join(", ")})` : ""));
+  }
+
+  for (const panel of eligible) {
     const key = env[panel.keyVar];
     const svcId = panel.svc[kind];
-    if (!key || !svcId) continue;
-
     const qty = Math.max(quantity, panel.min[kind] || quantity);
 
     try {
@@ -471,11 +480,12 @@ async function placeOrderMultiPanel(env, link, kind, quantity) {
       });
 
       if (res.order) {
+        console.log(`[SMM] Placed via ${panel.name} (rate $${panel.rate[kind]}/k)`);
         return { success: true, orderId: String(res.order), panel: panel.name, quantity: qty };
       }
-      console.warn(`[SMM] ${panel.name} rejected:`, res);
+      console.warn(`[SMM] ${panel.name} rejected (trying next):`, res);
     } catch (err) {
-      console.warn(`[SMM] ${panel.name} error:`, err.message);
+      console.warn(`[SMM] ${panel.name} error (trying next):`, err.message);
     }
   }
   return { success: false, error: "All panels exhausted" };
