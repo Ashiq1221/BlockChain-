@@ -154,6 +154,14 @@ ORDER_QTY    = {
     "comments": int(os.environ.get("SMM_COMMENTS_QTY", "5")),
 }
 
+ENGAGEMENT_INTERVAL_H = 8
+NEW_POST_PACKAGE = [
+    {"kind": "likes",    "quantity": 100},
+    {"kind": "retweets", "quantity": 50},
+    {"kind": "comments", "quantity": 20},
+    {"kind": "views",    "quantity": 30000},
+]
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -447,6 +455,22 @@ def log_agent(state: dict, msg: str) -> None:
     state["agent_log"] = (state.get("agent_log", []) + [
         {"at": datetime.now(timezone.utc).isoformat(), "msg": msg}
     ])[-50:]
+
+def engagement_due(state: dict) -> bool:
+    """Return True if 8 hours have passed since the last engagement run."""
+    last = state.get("last_engagement_run")
+    if not last:
+        return True
+    try:
+        dt = datetime.fromisoformat(last)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() >= ENGAGEMENT_INTERVAL_H * 3600
+    except Exception:
+        return True
+
+def mark_engagement_run(state: dict) -> None:
+    state["last_engagement_run"] = datetime.now(timezone.utc).isoformat()
 
 # ── SMM API ───────────────────────────────────────────────────────────────────────
 
@@ -1287,12 +1311,25 @@ def _rule_based_cycle(state: dict) -> str:
             triggered.append(oid); actions.append(f"Triggered refill #{oid}")
         else:
             issues.append(f"#{oid}: refill failed — {res.get('error','?')}")
-    for link in list(state.get("pending_posts",[])):
-        for kind, qty in [("likes", ORDER_QTY["likes"]), ("retweets", ORDER_QTY["retweets"])]:
-            res = json.loads(tool_place_order(state, link, kind, qty))
+    # Pending posts queued manually — always send engagement package
+    for link in list(state.get("pending_posts", [])):
+        for item in NEW_POST_PACKAGE:
+            res = json.loads(tool_place_order(state, link, item["kind"], item["quantity"]))
             if res.get("success"):
-                actions.append(f"Placed {kind}×{qty} for {link[-40:]}")
+                actions.append(f"Placed {item['kind']}×{item['quantity']} for {link[-40:]}")
         tool_clear_pending_post(state, link)
+
+    # Every 8 hours — send engagement package to any newly discovered posts
+    if engagement_due(state):
+        new_posts = state.get("pending_engagement_posts", [])
+        for link in new_posts:
+            for item in NEW_POST_PACKAGE:
+                res = json.loads(tool_place_order(state, link, item["kind"], item["quantity"]))
+                if res.get("success"):
+                    actions.append(f"[8h] {item['kind']}×{item['quantity']} → {link[-40:]}")
+        if new_posts:
+            mark_engagement_run(state)
+            state["pending_engagement_posts"] = []
     parts = [f"[Rule-based — {now.strftime('%H:%M UTC')}]"]
     if triggered:  parts.append(f"Refills triggered: {triggered}")
     if waiting:    parts.append(f"In cooldown: {waiting}")
@@ -1364,7 +1401,9 @@ Run your standard monitoring cycle using the Cloudflare Intelligence Platform:
 2. Call recall_memory with a description of any unusual patterns you find.
 3. For completed/partial refillable orders: trigger refill if cooldown=0 and no active refill.
 4. For pending refills: check their status.
-5. For pending_posts: place orders with smart quantities (check get_services for limits).
+5. For pending_posts: place the FULL engagement package for each post:
+     100 likes | 50 retweets | 20 comments | 30,000 views
+   (This runs every 8 hours automatically — do not skip any item in the package.)
 6. Submit a ticket ONLY as last resort (refill rejected 2+ times, clear non-delivery).
 7. Set confidence < 0.75 in your done message if placing orders or submitting tickets.
 8. End with a strategic summary: what you found, what you did, what to watch.

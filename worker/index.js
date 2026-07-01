@@ -46,6 +46,15 @@ const PANELS = [
   },
 ];
 
+// ── New-post engagement package (sent every 8 h per new post) ────────────────
+const ENGAGEMENT_INTERVAL_MS = 8 * 60 * 60 * 1000;
+const NEW_POST_PACKAGE = [
+  { kind: "likes",    quantity: 100   },
+  { kind: "retweets", quantity: 50    },
+  { kind: "comments", quantity: 20    },
+  { kind: "views",    quantity: 30000 },
+];
+
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are SMM Sentinel — an elite autonomous social media marketing agent.
 You manage SMM orders across multiple panels (smmfollows, smmwiz, astrasmm).
@@ -99,6 +108,17 @@ export default {
   },
 };
 
+// ── 8-hour engagement gate ────────────────────────────────────────────────────
+async function engagementDue(env) {
+  if (!env.KV) return true;
+  const last = await env.KV.get("engagement:last-run");
+  return !last || Date.now() - parseInt(last) >= ENGAGEMENT_INTERVAL_MS;
+}
+
+async function markEngagementRun(env) {
+  if (env.KV) await env.KV.put("engagement:last-run", String(Date.now()), { expirationTtl: 86400 });
+}
+
 // ── Main Sentinel Cycle ───────────────────────────────────────────────────────
 async function runSentinelCycle(env) {
   const cycleId = `cycle-${Date.now()}`;
@@ -106,23 +126,29 @@ async function runSentinelCycle(env) {
 
   await initDb(env);
 
-  // Phase 1 — Parallel data collection
-  const [state, balance, newPosts] = await Promise.all([
-    loadState(env),
-    getSmmBalance(env),
-    discoverNewPosts(env),
-  ]);
+  // Phase 1 — Always: balance + order state
+  const [state, balance] = await Promise.all([loadState(env), getSmmBalance(env)]);
 
-  // Phase 2 — Order status sync
+  // Phase 2 — Always: order status sync + delivery verification
   const orderUpdates = await syncOrderStatus(state, env);
-
-  // Phase 3 — Delivery verification (Browser Rendering)
   const deliveryIssues = await verifyDelivery(env, orderUpdates);
+
+  // Phase 3 — Every 8 h: discover new posts and send engagement package
+  let newPosts = [];
+  const runEngagement = await engagementDue(env);
+  if (runEngagement) {
+    newPosts = await discoverNewPosts(env);
+    if (newPosts.length) {
+      console.log(`[Sentinel] Engagement window — ${newPosts.length} new post(s) found`);
+    }
+  } else {
+    console.log("[Sentinel] Engagement window not due yet — skipping post discovery");
+  }
 
   // Phase 4 — Episodic memory recall
   const memories = await recallMemories(env, { newPosts, orderUpdates, deliveryIssues });
 
-  // Phase 5 — AI Decision (Llama scout → DeepSeek reasoner → rule-based)
+  // Phase 5 — AI Decision
   const context = {
     balance,
     newPosts,
@@ -130,11 +156,15 @@ async function runSentinelCycle(env) {
     deliveryIssues,
     memories,
     pendingPosts: state.pendingPosts,
+    engagementPackage: NEW_POST_PACKAGE,
   };
   const decision = await aiDecide(env, context);
 
   // Phase 6 — Execute
   const results = await executeDecision(env, state, decision);
+
+  // Mark engagement run after successful execution
+  if (runEngagement && newPosts.length) await markEngagementRun(env);
 
   // Phase 7 — Persist + backup
   const summary = `[${cycleId}] ${decision.summary || "cycle complete"} | placed:${results.ordersPlaced} refills:${results.refills} issues:${deliveryIssues.length}`;
@@ -283,7 +313,8 @@ async function verifyDelivery(env, orders) {
 async function aiDecide(env, context) {
   const userPrompt = `
 BALANCE: $${(context.balance || 0).toFixed(2)}
-NEW POSTS DETECTED: ${JSON.stringify(context.newPosts || [], null, 2)}
+NEW POSTS DETECTED (engagement window open: ${(context.newPosts || []).length > 0}): ${JSON.stringify(context.newPosts || [], null, 2)}
+ENGAGEMENT PACKAGE FOR EACH NEW POST: ${JSON.stringify(context.engagementPackage)}
 PENDING QUEUE: ${JSON.stringify(context.pendingPosts || [])}
 ORDER ISSUES: ${JSON.stringify(
     (context.orderUpdates || []).filter((o) => o.status === "Partial" || o.status === "Canceled"),
@@ -292,10 +323,15 @@ ORDER ISSUES: ${JSON.stringify(
 DELIVERY ISSUES: ${JSON.stringify(context.deliveryIssues || [], null, 2)}
 PAST MEMORY: ${context.memories || "none"}
 
+RULES:
+- For every new post detected, place ALL items in ENGAGEMENT PACKAGE (likes=100, retweets=50, comments=20, views=30000).
+- Engagement runs every 8 hours — only new posts appear here; do not skip any.
+- For order issues / delivery deficits, reorder the missing quantity.
+
 Respond ONLY with JSON:
 {
   "summary": "one sentence of what you decided",
-  "place_orders": [{"link":"…","kind":"likes|retweets|views","quantity":N}],
+  "place_orders": [{"link":"…","kind":"likes|retweets|comments|views","quantity":N}],
   "trigger_refills": ["order_id"],
   "reorder_deficits": [{"link":"…","kind":"…","quantity":N}],
   "strategy_note": "any market observation"
@@ -357,8 +393,9 @@ function buildRuleBasedDecision(ctx) {
 
   for (const p of [...(ctx.newPosts || []), ...(ctx.pendingPosts || []).map((l) => ({ link: l }))]) {
     if (!p.link) continue;
-    orders.push({ link: p.link, kind: "likes",    quantity: 100 });
-    orders.push({ link: p.link, kind: "retweets", quantity: 100 });
+    for (const item of (ctx.engagementPackage || NEW_POST_PACKAGE)) {
+      orders.push({ link: p.link, kind: item.kind, quantity: item.quantity });
+    }
   }
 
   for (const o of ctx.orderUpdates || []) {
