@@ -54,6 +54,8 @@ DEEPSEEK_KEY     = os.environ.get("DEEPSEEK_API_KEY", "")
 HAPPY_HORSE_KEY  = os.environ.get("HAPPY_HORSE_API_KEY", "")
 CF_ACCOUNT_ID    = os.environ.get("CF_ACCOUNT_ID", "")
 CF_AI_MODEL      = os.environ.get("CF_AI_MODEL", "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b")
+CF_GLOBAL_KEY    = os.environ.get("CF_GLOBAL_API_KEY", "")
+CF_EMAIL         = os.environ.get("CF_EMAIL", "")
 CLAUDE_MODEL     = "claude-sonnet-4-6"
 DEEPSEEK_MODEL   = "deepseek-chat"
 
@@ -552,16 +554,18 @@ def _run_cloudflare_ai_cycle(state: dict, task: str, max_iterations: int = 30) -
         f"https://api.cloudflare.com/client/v4/accounts"
         f"/{CF_ACCOUNT_ID}/ai/run/{CF_AI_MODEL}"
     )
+    # Prefer scoped AI token; fall back to Global API Key if not set
+    if DEEPSEEK_KEY:
+        cf_headers = {"Authorization": f"Bearer {DEEPSEEK_KEY}", "Content-Type": "application/json"}
+    else:
+        cf_headers = {"X-Auth-Key": CF_GLOBAL_KEY, "X-Auth-Email": CF_EMAIL, "Content-Type": "application/json"}
     last_text = ""
 
     for iteration in range(max_iterations):
         resp = requests.post(
             cf_url,
             json={"messages": messages, "max_tokens": 2048},
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_KEY}",
-                "Content-Type": "application/json",
-            },
+            headers=cf_headers,
             timeout=90,
         )
         resp.raise_for_status()
@@ -577,7 +581,6 @@ def _run_cloudflare_ai_cycle(state: dict, task: str, max_iterations: int = 30) -
         if text:
             log.info("[CF-AI] %s", text[:400])
 
-        # Try to parse as JSON command
         cmd = None
         try:
             cmd = json.loads(text)
@@ -731,7 +734,7 @@ def run_agent_cycle(state: dict, task: str, max_iterations: int = 30) -> str:
     Priority: Cloudflare Workers AI (DeepSeek R1) → direct DeepSeek → Claude → rule-based.
     """
     # 1. Try Cloudflare Workers AI (DeepSeek R1 — fast, JSON tool-use via prompt)
-    if CF_ACCOUNT_ID and DEEPSEEK_KEY:
+    if CF_ACCOUNT_ID and (DEEPSEEK_KEY or CF_GLOBAL_KEY):
         try:
             log.info("[AI] Using Cloudflare Workers AI (%s)", CF_AI_MODEL)
             return _run_cloudflare_ai_cycle(state, task, max_iterations)
@@ -774,7 +777,6 @@ def run_agent_cycle(state: dict, task: str, max_iterations: int = 30) -> str:
 def _rule_based_cycle(state: dict) -> str:
     """
     Expert rule-based SMM manager — runs when all AI options are unavailable.
-    Applies the same logic the AI would: smart refill timing, no ticket spam.
     """
     now = datetime.now(timezone.utc)
     actions = []
@@ -945,7 +947,7 @@ def print_dashboard(state: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="SMMFollows AI Manager — DeepSeek R1 powered SMM strategy & monitoring"
+        description="SMMFollows AI Manager — DeepSeek R1 (Cloudflare Workers AI) powered"
     )
     parser.add_argument("--once",     action="store_true", help="Single AI cycle then exit")
     parser.add_argument("--status",   action="store_true", help="Print dashboard and exit")
