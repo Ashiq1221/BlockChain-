@@ -1,0 +1,65 @@
+name            = "smm-sentinel"
+main            = "worker/index.js"
+compatibility_date  = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev     = false
+
+# ── Cron Triggers — add manually in CF Dashboard after deploy ───────────────
+# The CF API key lacks schedule-write scope so wrangler can't register crons.
+# Go to: dash.cloudflare.com → Workers & Pages → smm-sentinel → Triggers →
+#         Cron Triggers → Add Cron Trigger → enter: */15 * * * *
+# [triggers]
+# crons = ["*/15 * * * *"]
+
+# ── Workers AI (routes through AI Gateway smm-sentinel) ──────────────────────
+[ai]
+binding = "AI"
+
+# ── Browser Rendering ─────────────────────────────────────────────────────────
+[browser]
+binding = "BROWSER"
+
+# ── D1 SQL — provisioned: smm-state ──────────────────────────────────────────
+[[d1_databases]]
+binding       = "DB"
+database_name = "smm-state"
+database_id   = "b21d583e-9dc2-4004-b24b-64bac673741d"
+
+# ── KV Cache — provisioned: smm-cache ────────────────────────────────────────
+[[kv_namespaces]]
+binding = "KV"
+id      = "6759754413f745edaa47d5f9a4d424be"
+
+# ── Queues — producer only ──────────────────────────────────────────────────
+[[queues.producers]]
+binding = "ORDER_QUEUE"
+queue   = "smm-orders"
+
+# Queue consumer + DLQ require Workers Paid plan. Uncomment after upgrading:
+# [[queues.consumers]]
+# queue             = "smm-orders"
+# max_batch_size    = 10
+# max_retries       = 5
+# dead_letter_queue = "smm-orders-dlq"
+
+# ── Vectorize — provisioned: smm-episodic-memory (1024-dim cosine) ───────────
+[[vectorize]]
+binding    = "VECTORIZE"
+index_name = "smm-episodic-memory"
+
+# ── R2 Audit Log — uncomment after enabling R2 in CF Dashboard ───────────────
+# [[r2_buckets]]
+# binding     = "R2"
+# bucket_name = "smm-logs"
+
+# ── Public env vars ───────────────────────────────────────────────────────────
+[vars]
+X_ACCOUNT_HANDLE = "lingoAI_io"
+SMM_LIKES_QTY    = "100"
+SMM_RETWEETS_QTY = "100"
+CF_ACCOUNT_ID    = "17b8b27a0a8af8d5f1d1622bfbfb9d8a"
+CF_GATEWAY_ID    = "smm-sentinel"
+
+# ── Secrets (set via GitHub Actions or wrangler secret put) ──────────────────
+# SMM_API_KEY  SMMWIZ_API_KEY  ASTRA_API_KEY
+# SMM_USER  SMM_PASS  SMMWIZ_USER  SMMWIZ_PASS  ASTRA_USER  ASTRA_PASS

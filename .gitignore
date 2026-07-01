@@ -34,3 +34,10 @@ bin-debug/
 bin-release/
 [Oo]bj/
 [Bb]in/
+
+# Secrets — never commit these
+.env
+*.log
+__pycache__/
+*.pyc
+agent_state.json

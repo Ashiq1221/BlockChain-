@@ -1,0 +1,385 @@
+{
+  "orders": {
+    "61218147": {
+      "id": "61218147",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283340849738045",
+      "quantity": 200,
+      "refillable": false,
+      "status": "Partial",
+      "start_count": "22",
+      "remains": "4",
+      "added_at": "2026-06-28T00:00:00+00:00",
+      "completed_at": "2026-07-01T06:52:41.300898+00:00"
+    },
+    "61218151": {
+      "id": "61218151",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064879295843983840",
+      "quantity": 200,
+      "refillable": false,
+      "status": "Partial",
+      "start_count": "22",
+      "remains": "11",
+      "added_at": "2026-06-28T00:00:00+00:00",
+      "completed_at": "2026-07-01T06:52:41.300898+00:00"
+    },
+    "61218154": {
+      "id": "61218154",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2065705610163941467",
+      "quantity": 200,
+      "refillable": false,
+      "status": "Partial",
+      "start_count": "25",
+      "remains": "11",
+      "added_at": "2026-06-28T00:00:00+00:00",
+      "completed_at": "2026-07-01T06:52:41.300898+00:00"
+    },
+    "61450840": {
+      "id": "61450840",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2065705610163941467",
+      "quantity": 100,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "26",
+      "remains": "0",
+      "added_at": "2026-06-29T05:33:00+00:00",
+      "completed_at": "2026-06-29T05:33:00+00:00"
+    },
+    "61450841": {
+      "id": "61450841",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2065705610163941467",
+      "quantity": 50,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "0",
+      "remains": "0",
+      "added_at": "2026-06-29T05:33:00+00:00",
+      "completed_at": "2026-06-29T05:33:00+00:00"
+    },
+    "61450843": {
+      "id": "61450843",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064879295843983840",
+      "quantity": 100,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "2",
+      "remains": "0",
+      "added_at": "2026-06-29T05:33:00+00:00",
+      "completed_at": "2026-06-29T05:33:00+00:00"
+    },
+    "61450844": {
+      "id": "61450844",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064879295843983840",
+      "quantity": 50,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "3",
+      "remains": "0",
+      "added_at": "2026-06-29T05:33:00+00:00",
+      "completed_at": "2026-06-29T05:33:00+00:00"
+    },
+    "61450846": {
+      "id": "61450846",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283340849738045",
+      "quantity": 100,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "4",
+      "remains": "0",
+      "added_at": "2026-06-29T05:33:00+00:00",
+      "completed_at": "2026-06-29T05:33:00+00:00"
+    },
+    "61450847": {
+      "id": "61450847",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064283340849738045",
+      "quantity": 50,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "2",
+      "remains": "0",
+      "added_at": "2026-06-29T05:33:00+00:00",
+      "completed_at": "2026-06-29T05:33:00+00:00"
+    },
+    "61481315": {
+      "id": "61481315",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "refillable": true,
+      "status": "Canceled",
+      "start_count": "0",
+      "remains": "0",
+      "added_at": "2026-06-30T03:44:43+00:00",
+      "completed_at": "2026-06-30T03:44:43+00:00"
+    },
+    "61481316": {
+      "id": "61481316",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 50,
+      "refillable": true,
+      "status": "Canceled",
+      "start_count": "0",
+      "remains": "0",
+      "added_at": "2026-06-30T03:44:45+00:00",
+      "completed_at": "2026-06-30T03:44:45+00:00"
+    },
+    "61481317": {
+      "id": "61481317",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 20,
+      "refillable": false,
+      "status": "Completed",
+      "start_count": "0",
+      "remains": "0",
+      "added_at": "2026-06-30T03:44:47+00:00",
+      "completed_at": "2026-06-30T03:44:47+00:00"
+    },
+    "61481323": {
+      "id": "61481323",
+      "kind": "views",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 20000,
+      "refillable": false,
+      "status": "Completed",
+      "start_count": "217",
+      "remains": "0",
+      "added_at": "2026-06-30T03:45:38+00:00",
+      "completed_at": "2026-06-30T03:45:38+00:00"
+    },
+    "61498649": {
+      "id": "61498649",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "15",
+      "remains": "0",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": "2026-07-01T00:00:00+00:00"
+    },
+    "61498651": {
+      "id": "61498651",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 50,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "0",
+      "remains": "0",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": "2026-07-01T00:00:00+00:00"
+    },
+    "61500415": {
+      "id": "61500415",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 16465,
+      "refillable": false,
+      "status": "Completed",
+      "start_count": "10",
+      "remains": "0",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
+    },
+    "61500416": {
+      "id": "61500416",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2064283937091035590",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 9018,
+      "refillable": false,
+      "status": "Completed",
+      "start_count": "0",
+      "remains": "0",
+      "added_at": "2026-07-01T00:00:00+00:00",
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
+    },
+    "61501437": {
+      "id": "61501437",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2065705610163941467",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 8140,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "28",
+      "remains": "0",
+      "added_at": "2026-07-01T12:41:44.318918+00:00",
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
+    },
+    "61501438": {
+      "id": "61501438",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064879295843983840",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 8140,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "38",
+      "remains": "0",
+      "added_at": "2026-07-01T12:41:44.318918+00:00",
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
+    },
+    "61501439": {
+      "id": "61501439",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2064283340849738045",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "service_id": 8140,
+      "refillable": true,
+      "status": "Completed",
+      "start_count": "26",
+      "remains": "0",
+      "added_at": "2026-07-01T12:41:44.318918+00:00",
+      "completed_at": "2026-07-01T14:50:36.000117+00:00"
+    },
+    "30182848": {
+      "id": "30182848",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 20,
+      "panel": "smmwiz",
+      "refillable": false,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
+    },
+    "61505279": {
+      "id": "61505279",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 100,
+      "panel": "smmfollows",
+      "refillable": false,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
+    },
+    "61505280": {
+      "id": "61505280",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 5,
+      "panel": "smmfollows",
+      "refillable": false,
+      "status": "Pending",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T17:14:12.225720+00:00",
+      "completed_at": null
+    }
+  },
+  "refills": {
+    "61450840": {
+      "refill_id": 10815878,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Completed",
+      "ticket_sent": true
+    },
+    "61450841": {
+      "refill_id": 10815879,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    },
+    "61450843": {
+      "refill_id": 10815880,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    },
+    "61450844": {
+      "refill_id": 10815881,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    },
+    "61450846": {
+      "refill_id": 10815882,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    },
+    "61450847": {
+      "refill_id": 10815883,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    },
+    "61481315": {
+      "refill_id": 10815884,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    },
+    "61481316": {
+      "refill_id": 10815885,
+      "requested_at": "2026-07-01T04:00:00+00:00",
+      "status": "Rejected",
+      "ticket_sent": true
+    }
+  },
+  "tickets_sent": {},
+  "posts": [
+    "https://x.com/i/status/2065705610163941467",
+    "https://x.com/i/status/2064879295843983840",
+    "https://x.com/i/status/2064283340849738045",
+    "https://x.com/i/status/2064283937091035590",
+    "https://x.com/i/status/2070034213085274431"
+  ],
+  "agent_log": [
+    {
+      "at": "2026-07-01T06:53:15.531091+00:00",
+      "msg": "[Rule-based cycle \u2014 06:52 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
+    },
+    {
+      "at": "2026-07-01T07:22:30.627014+00:00",
+      "msg": "[Rule-based cycle \u2014 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
+    },
+    {
+      "at": "2026-07-01T07:23:00.480283+00:00",
+      "msg": "[Rule-based cycle \u2014 07:22 UTC] | Issues (no ticket yet): #61450840 (likes): refill failed \u2014 Error; #61450841 (retweets): refill failed \u2014 Error; #61450843 (likes): refill failed \u2014 Error; #61450844 (ret"
+    },
+    {
+      "at": "2026-07-01T07:30:56.652204+00:00",
+      "msg": "Checked account balance ($4.45) and order status. Triggered refill for order 61450840 with 0 cooldown. Checked refill status for pending refills. No new orders needed as pending_posts is empty. All or"
+    },
+    {
+      "at": "2026-07-01T00:00:00+00:00",
+      "msg": "Placed orders #61500415 (100 likes) and #61500416 (100 retweets) for post 2064283937091035590 via smmfollows"
+    },
+    {
+      "at": "2026-07-01T12:41:44.318918+00:00",
+      "msg": "Placed orders #61501437 #61501438 #61501439 \u2014 100 non-drop likes (svc 8140, No/Less Drops + 30-day refill) for posts 2065705610163941467, 2064879295843983840, 2064283340849738045"
+    },
+    {
+      "at": "2026-07-01T14:50:57.745034+00:00",
+      "msg": "[Rule-based \u2014 14:50 UTC] | In cooldown: ['61498649', '61498651', '61501437', '61501438', '61501439'] | Refills done: ['61450840'] | Issues: #61450841: refill failed \u2014 Error; #61450843: refill failed \u2014"
+    },
+    {
+      "at": "2026-07-01T17:14:12.225720+00:00",
+      "msg": "[TEST] 10 likes + 5 retweets + 5 custom comments \u2192 https://x.com/i/status/2070034213085274431"
+    }
+  ]
+}
