@@ -295,12 +295,12 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 100,
       "refillable": false,
-      "status": "Pending",
+      "status": "Partial",
       "panel": "smmfollows",
-      "start_count": null,
-      "remains": null,
+      "start_count": "",
+      "remains": "100",
       "added_at": "2026-07-01T18:16:23.618792+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T18:28:49.128270+00:00"
     },
     "61505926": {
       "id": "61505926",
@@ -308,12 +308,12 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 50,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-01T18:16:25.766435+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T18:28:49.128270+00:00"
     },
     "61505927": {
       "id": "61505927",
@@ -321,12 +321,12 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 20,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
-      "start_count": null,
-      "remains": null,
+      "start_count": "2",
+      "remains": "0",
       "added_at": "2026-07-01T18:16:28.073041+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-01T18:28:49.128270+00:00"
     },
     "61505929": {
       "id": "61505929",
@@ -334,11 +334,50 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 30000,
       "refillable": false,
+      "status": "Completed",
+      "panel": "smmfollows",
+      "start_count": "5206",
+      "remains": "0",
+      "added_at": "2026-07-01T18:16:29.942436+00:00",
+      "completed_at": "2026-07-01T18:28:49.128270+00:00"
+    },
+    "30183453": {
+      "id": "30183453",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 21,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmwiz",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T18:29:15.725447+00:00",
+      "completed_at": null
+    },
+    "61506092": {
+      "id": "61506092",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 10,
+      "refillable": false,
       "status": "Pending",
       "panel": "smmfollows",
       "start_count": null,
       "remains": null,
-      "added_at": "2026-07-01T18:16:29.942436+00:00",
+      "added_at": "2026-07-01T18:29:39.859665+00:00",
+      "completed_at": null
+    },
+    "30183457": {
+      "id": "30183457",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 5,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmwiz",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-01T18:30:05.995968+00:00",
       "completed_at": null
     }
   },
@@ -441,6 +480,18 @@
     {
       "at": "2026-07-01T18:16:29.942598+00:00",
       "msg": "[TEST] [Rule-based \u2014 18:15 UTC] | In cooldown: ['61498649', '61498651', '61501437', '61501438', '61501439'] | Refills done: ['61450840'] | Actions: Placed likes\u00d7100 for tps://x.com/i/status/20690144960862171"
+    },
+    {
+      "at": "2026-07-01T18:23:06.900468+00:00",
+      "msg": "[TEST] The order for 21 likes was rejected by the 10-agent council due to significant risks and mismatches in service requirements. The order for 10 retweets cannot be placed as it falls below the minimum qu"
+    },
+    {
+      "at": "2026-07-01T18:26:41.959552+00:00",
+      "msg": "[TEST] The order for 21 likes was rejected by the 10-agent council due to significant risks and mismatches in service requirements. The order for 10 retweets cannot be placed as it falls below the minimum qu"
+    },
+    {
+      "at": "2026-07-01T18:30:15.433590+00:00",
+      "msg": "[TEST] One-time test order completed: 21 likes, 5 retweets, 5 comments placed for https://x.com/i/status/2069014496086217116. Order IDs: 30183453 (likes), 61506092 (retweets), 30183457 (comments). Pending po"
     }
   ],
   "pending_posts": []
