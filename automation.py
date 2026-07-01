@@ -184,6 +184,15 @@ ORDER_COUNCIL_AGENTS = [
      "role": "You are a critical reviewer. Find any CONCRETE, SPECIFIC technical problem with this order: wrong platform, service unavailable, panel error. If you cannot name a concrete specific problem (not a vague concern), you MUST vote APPROVE — healthy skepticism is not a veto."},
     {"name": "Chief Arbitrator",
      "role": "You are the final decision maker. The account owner explicitly requested this order. APPROVE if: (1) service matches platform+kind, (2) quantity is within service min/max, (3) balance covers the cost. Only REJECT if a majority of agents identified a concrete verifiable problem — not vague concerns."},
+    {"name": "Supreme Overseer",
+     "role": (
+         "You are the MASTER AI CONTROLLER — supreme authority above all other agents. "
+         "Your single job: verify the order quantity EXACTLY matches what the account owner requested. "
+         "If the requested quantity matches the task (e.g. task says 21 likes, order is for 21 likes) → APPROVE immediately, override any rejections. "
+         "If the quantity does NOT match the task → REJECT immediately, no debate. "
+         "You are not swayed by other agents' opinions on quality, risk, or ROI. "
+         "Quantity accuracy is the only thing that matters to you. You have absolute final veto."
+     )},
 ]
 
 # ── 20-Agent Order Management Council (4 teams of 5) ─────────────────────────────
@@ -233,6 +242,60 @@ MANAGEMENT_AGENTS = [
     {"name": "Quality Arbiter",      "team": "quality",
      "role": "Issue the final quality verdict. Your word is law on whether this panel earns future business."},
 ]
+
+# ── Task Quantity Lock ────────────────────────────────────────────────────────
+# Parsed from the user's task text before any agent runs.
+# Format: {"likes": 21, "retweets": 10, "comments": 5}
+# When non-empty, EVERY order placement is validated against this lock.
+_TASK_QUANTITY_LOCK: dict = {}
+
+_STANDARD_PACKAGE_QTYS = {
+    "likes":    {100, 200},
+    "retweets": {50,  100},
+    "comments": {5,   20},
+    "views":    {20000, 30000},
+}
+
+def _parse_task_quantities(task: str) -> dict:
+    """Extract locked quantities from a task string. e.g. '21 likes' → {'likes': 21}"""
+    import re as _re
+    result: dict = {}
+    kinds = ["likes", "retweets", "comments", "views"]
+    for kind in kinds:
+        m = _re.search(r"(\d+)\s*" + kind, task, _re.IGNORECASE)
+        if m:
+            result[kind] = int(m.group(1))
+    return result
+
+def _master_controller_gate(kind: str, quantity: int) -> tuple[bool, str]:
+    """
+    Supreme overseer — called before EVERY order placement.
+    Returns (allowed, reason). Blocks quantity mismatches and standard-package
+    quantities when a task lock is active.
+    """
+    lock = _TASK_QUANTITY_LOCK
+    if not lock:
+        return True, "no task lock active"
+
+    locked_qty = lock.get(kind)
+
+    # Block: quantity doesn't match what the task requested
+    if locked_qty is not None and quantity != locked_qty:
+        msg = (f"MASTER CONTROLLER VETO — task requires {locked_qty} {kind}, "
+               f"attempted {quantity}. Order BLOCKED.")
+        log.error("[MASTER_CTRL] %s", msg)
+        return False, msg
+
+    # Block: standard-package quantity attempted while a custom lock is active
+    std_qtys = _STANDARD_PACKAGE_QTYS.get(kind, set())
+    if quantity in std_qtys and locked_qty not in std_qtys:
+        msg = (f"MASTER CONTROLLER VETO — standard-package quantity ({quantity} {kind}) "
+               f"blocked while custom task lock is active (requires {locked_qty}). "
+               f"This prevents the rule-based package from leaking through.")
+        log.error("[MASTER_CTRL] %s", msg)
+        return False, msg
+
+    return True, "ok"
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -903,7 +966,20 @@ def _council_decide(agents: list, context: str, cf: "CloudflarePlatform | None",
 
 def _order_placement_council(kind: str, quantity: int, link: str,
                               viable_options: list, cf: "CloudflarePlatform | None") -> dict:
-    """Convene 10-agent Order Placement Council before placing any order."""
+    """Convene 11-agent Order Placement Council (10 specialists + Supreme Overseer)."""
+    # ── Master AI pre-check: if task lock exists, Supreme Overseer auto-decides ─
+    lock = _TASK_QUANTITY_LOCK
+    if lock and kind in lock:
+        locked_qty = lock[kind]
+        if quantity == locked_qty:
+            log.info("[MASTER_AI] Supreme Overseer auto-APPROVE — quantity %d %s matches task lock",
+                     quantity, kind)
+            return {"approved": True, "override": "Supreme Overseer — matches task lock"}
+        else:
+            log.error("[MASTER_AI] Supreme Overseer auto-REJECT — %d %s doesn't match task lock (%d)",
+                      quantity, kind, locked_qty)
+            return {"approved": False, "reason": f"Supreme Overseer VETO: task requires {locked_qty}, got {quantity}"}
+
     opts_str = "\n".join(
         f"  • Panel={o['panel']} | ServiceID={o['service_id']} | Name=\"{o['name']}\" "
         f"| Min={o['min']} | Max={o['max']} | Rate=${o['rate']:.4f}/k"
@@ -917,13 +993,19 @@ def _order_placement_council(kind: str, quantity: int, link: str,
     except Exception:
         pass
 
+    # Include task lock info so agents know the ground truth
+    lock_line = ""
+    if lock:
+        lock_line = f"  TASK LOCK    : {json.dumps(lock)} ← Master AI mandated quantities\n"
+
     context = (
         f"ORDER PLACEMENT REQUEST (account owner has authorized this order)\n"
         f"{'─'*50}\n"
         f"  Service type : {kind}\n"
         f"  Quantity     : {quantity:,}\n"
         f"  Post link    : {link}\n"
-        f"  Account bal  : {balance_str}\n\n"
+        f"  Account bal  : {balance_str}\n"
+        f"{lock_line}\n"
         f"VIABLE SERVICES ({len(viable_options)} found, all filtered for correct platform+kind):\n{opts_str}\n\n"
         f"VALIDATION TASK: Confirm this order is safe to execute.\n"
         f"APPROVE if: service matches platform, quantity within limits, balance covers cost.\n"
@@ -1380,6 +1462,10 @@ def tool_place_order(state: dict, link: str, kind: str, quantity: int,
                      post_text: str = "", cf: "CloudflarePlatform | None" = None) -> str:
     if kind not in SERVICES:
         return json.dumps({"error": f"Unknown kind: {kind}. Valid: {list(SERVICES)}"})
+    # ── MASTER CONTROLLER GATE — supreme authority, cannot be bypassed ────────
+    allowed, mc_reason = _master_controller_gate(kind, quantity)
+    if not allowed:
+        return json.dumps({"error": mc_reason})
     try:
         extra: dict = {}
         if kind == "comments":
@@ -1777,31 +1863,46 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
 def run_agent_cycle(state: dict, task: str, cf: CloudflarePlatform,
                     max_iters: int = 25) -> str:
     """
-    Priority: CF Ensemble (Llama+DeepSeek) → DeepSeek direct → Claude → rule-based.
+    Master AI controller entry point.
+    Priority: CF Ensemble → DeepSeek direct → Claude → rule-based (refills only for custom tasks).
+    Locks task quantities before any sub-agent runs — Master Controller enforces them.
     """
-    if CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
-        try:
-            log.info("[AI] Cloudflare ensemble (Llama 3.3 70B + DeepSeek R1)")
-            return _run_cloudflare_ensemble(state, task, cf, max_iters)
-        except Exception as exc:
-            log.warning("[AI] CF ensemble failed (%s) — trying DeepSeek direct", exc)
+    global _TASK_QUANTITY_LOCK
+    # ── MASTER AI: parse and lock quantities before ANY agent gets control ─────
+    locked = _parse_task_quantities(task)
+    if locked:
+        _TASK_QUANTITY_LOCK = locked
+        log.info("[MASTER_AI] Task lock set: %s — no sub-agent can deviate from these quantities", locked)
+    else:
+        _TASK_QUANTITY_LOCK = {}
 
-    if DEEPSEEK_DIRECT and not DEEPSEEK_DIRECT.startswith("cfut_"):
-        try:
-            log.info("[AI] DeepSeek direct API")
-            return _run_deepseek_direct(state, task, max_iters)
-        except Exception as exc:
-            log.warning("[AI] DeepSeek failed (%s) — trying Claude", exc)
+    try:
+        if CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
+            try:
+                log.info("[AI] Cloudflare ensemble (Llama 3.3 70B + DeepSeek R1)")
+                return _run_cloudflare_ensemble(state, task, cf, max_iters)
+            except Exception as exc:
+                log.warning("[AI] CF ensemble failed (%s) — trying DeepSeek direct", exc)
 
-    if ANTHROPIC_KEY:
-        try:
-            log.info("[AI] Claude fallback")
-            return _run_claude_cycle(state, task, cf, max_iters)
-        except Exception as exc:
-            log.warning("[AI] Claude failed (%s) — rule-based", exc)
+        if DEEPSEEK_DIRECT and not DEEPSEEK_DIRECT.startswith("cfut_"):
+            try:
+                log.info("[AI] DeepSeek direct API")
+                return _run_deepseek_direct(state, task, max_iters)
+            except Exception as exc:
+                log.warning("[AI] DeepSeek failed (%s) — trying Claude", exc)
 
-    log.info("[AI] Rule-based fallback")
-    return _rule_based_cycle(state)
+        if ANTHROPIC_KEY:
+            try:
+                log.info("[AI] Claude fallback")
+                return _run_claude_cycle(state, task, cf, max_iters)
+            except Exception as exc:
+                log.warning("[AI] Claude failed (%s) — rule-based", exc)
+
+        log.info("[AI] Rule-based fallback")
+        return _rule_based_cycle(state, task)
+    finally:
+        # Always clear the lock after the cycle — prevents bleed-over between runs
+        _TASK_QUANTITY_LOCK = {}
 
 # ── DeepSeek Direct ───────────────────────────────────────────────────────────────
 
@@ -1866,8 +1967,45 @@ def _run_claude_cycle(state: dict, task: str, cf: CloudflarePlatform, max_iters:
 
 # ── Rule-based Fallback ─────────────────────────────────────────────────────────────
 
-def _rule_based_cycle(state: dict) -> str:
+def _rule_refills_only(state: dict) -> None:
+    """Run only refill maintenance — no order placement. Safe for custom-task fallback."""
+    orders_json = json.loads(tool_check_orders(state))
+    for o in orders_json.get("orders", []):
+        oid, status = o["order_id"], o["status"]
+        if status not in ("Completed", "Partial") or not o.get("refillable"):
+            continue
+        ri = state.get("refills", {}).get(oid, {})
+        if ri.get("status") == "Pending":
+            tool_check_refill_status(state, oid)
+        elif not ri or ri.get("status") == "Rejected":
+            if not o.get("refill_cooldown_h"):
+                tool_trigger_refill(state, oid)
+
+def _rule_based_cycle(state: dict, task: str = "") -> str:
+    """
+    Rule-based fallback — ONLY handles refills and status checks.
+    NEVER places new orders when a custom task with specific quantities is active.
+    """
     now = datetime.now(timezone.utc)
+    # ── MASTER CONTROLLER: block standard package for custom tasks ─────────────
+    custom_signals = [
+        "one-time", "one time", "test", "exact quantities", "exact",
+        "likes", "retweets", "comments",  # any mention of specific order kinds
+    ]
+    is_custom_task = task and any(sig in task.lower() for sig in custom_signals)
+    if is_custom_task or _TASK_QUANTITY_LOCK:
+        log.error(
+            "[MASTER_CTRL] Rule-based fallback BLOCKED from placing orders — "
+            "custom task active (lock=%s). Only refills allowed in fallback mode.",
+            _TASK_QUANTITY_LOCK,
+        )
+        # Still allow refill management but zero order placement
+        _rule_refills_only(state)
+        return (
+            "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. "
+            "NO orders placed — rule-based cannot process specific quantities. "
+            "Refill maintenance only. Restore AI credentials to place custom orders."
+        )
     cf  = CloudflarePlatform()
     try:
         bal = json.loads(tool_get_balance(None))
