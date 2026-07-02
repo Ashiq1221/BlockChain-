@@ -389,34 +389,29 @@
       "ticket_sent": true
     },
     "61450841": {
-      "refill_id": 10815879,
-      "requested_at": "2026-07-01T04:00:00+00:00",
-      "status": "Rejected",
-      "ticket_sent": true
+      "refill_id": 10817858,
+      "requested_at": "2026-07-02T12:13:38.129259+00:00",
+      "status": "Pending"
     },
     "61450843": {
-      "refill_id": 10815880,
-      "requested_at": "2026-07-01T04:00:00+00:00",
-      "status": "Rejected",
-      "ticket_sent": true
+      "refill_id": 10817859,
+      "requested_at": "2026-07-02T12:13:38.587586+00:00",
+      "status": "Pending"
     },
     "61450844": {
-      "refill_id": 10815881,
-      "requested_at": "2026-07-01T04:00:00+00:00",
-      "status": "Rejected",
-      "ticket_sent": true
+      "refill_id": 10817860,
+      "requested_at": "2026-07-02T12:13:39.006615+00:00",
+      "status": "Pending"
     },
     "61450846": {
-      "refill_id": 10815882,
-      "requested_at": "2026-07-01T04:00:00+00:00",
-      "status": "Rejected",
-      "ticket_sent": true
+      "refill_id": 10817861,
+      "requested_at": "2026-07-02T12:13:39.586243+00:00",
+      "status": "Pending"
     },
     "61450847": {
-      "refill_id": 10815883,
-      "requested_at": "2026-07-01T04:00:00+00:00",
-      "status": "Rejected",
-      "ticket_sent": true
+      "refill_id": 10817862,
+      "requested_at": "2026-07-02T12:13:40.082393+00:00",
+      "status": "Pending"
     },
     "61481315": {
       "refill_id": 10815884,
@@ -433,12 +428,12 @@
     "61498649": {
       "refill_id": 10817580,
       "requested_at": "2026-07-02T09:25:38.927809+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61498651": {
       "refill_id": 10817581,
       "requested_at": "2026-07-02T09:25:39.599797+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     }
   },
   "tickets_sent": {},
@@ -509,6 +504,10 @@
     },
     {
       "at": "2026-07-02T09:25:39.599856+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-02T12:13:41.024204+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
