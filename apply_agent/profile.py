@@ -20,12 +20,15 @@ PROFILE: dict = {
     "country":    "India",
     "links": {
         "linkedin": "https://linkedin.com/in/ashiq-ah-705334395",
-        "twitter":  "https://x.com/Ganaie__suhail",
+        "twitter":  "https://x.com/ganaie__suhail",
         "telegram": "@ashiq80",
         "discord":  "ashiq1581",
-        "portfolio": os.getenv("APPLY_PORTFOLIO", "https://x.com/Ganaie__suhail"),
+        "portfolio": os.getenv("APPLY_PORTFOLIO", "https://x.com/ganaie__suhail"),
         "github":   os.getenv("APPLY_GITHUB", ""),
         "website":  os.getenv("APPLY_WEBSITE", ""),
+        # Proof of work — the communities behind the resume's growth claims
+        "tg_channel": "https://t.me/icpcollectible",
+        "tg_group":   "https://t.me/icpcollectiblediscus",
     },
     "headline": ("AI Operations Specialist | Agentic AI & Automation Practitioner "
                  "| Community Builder | Content Creator"),
@@ -130,6 +133,9 @@ def profile_text(max_len: int = 3500) -> str:
         f"{PROFILE['full_name']} — {PROFILE['headline']}",
         f"Email: {PROFILE['email']} | Location: {PROFILE['location']}",
         f"Links: {PROFILE['links']['linkedin']} | {PROFILE['links']['twitter']}",
+        (f"Portfolio / proof of work: X {PROFILE['links']['twitter']} (16k+ followers) | "
+         f"Telegram channel {PROFILE['links']['tg_channel']} | "
+         f"community group {PROFILE['links']['tg_group']}"),
         "", "SUMMARY", PROFILE["summary"],
         "", "SKILLS", ", ".join(PROFILE["skills"]),
         "", "EXPERIENCE",
