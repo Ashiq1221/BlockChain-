@@ -360,12 +360,12 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 10,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-01T18:29:39.859665+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-02T04:06:46.936176+00:00"
     },
     "30183457": {
       "id": "30183457",
@@ -492,6 +492,10 @@
     {
       "at": "2026-07-01T18:30:15.433590+00:00",
       "msg": "[TEST] One-time test order completed: 21 likes, 5 retweets, 5 comments placed for https://x.com/i/status/2069014496086217116. Order IDs: 30183453 (likes), 61506092 (retweets), 30183457 (comments). Pending po"
+    },
+    {
+      "at": "2026-07-02T04:07:10.987862+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": []
