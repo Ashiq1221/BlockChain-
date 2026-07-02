@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: claude/hr-expertise-roleplay-0sa06j
+          ref: main
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -62,8 +62,8 @@ jobs:
           git config user.email "actions@github.com"
           git add autopilot_state.json
           git diff --cached --quiet || git commit -m "chore: autopilot state [skip ci]"
-          git pull --rebase origin claude/hr-expertise-roleplay-0sa06j || true
-          git push origin HEAD:claude/hr-expertise-roleplay-0sa06j
+          git pull --rebase origin main || true
+          git push origin HEAD:main
 
       - name: Upload screenshots + materials
         if: always()
