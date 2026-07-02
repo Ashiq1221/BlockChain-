@@ -91,8 +91,10 @@ async def main():
             "Prove the edge in paper mode first: run for 2-4 weeks, "
             "then analyze trades.csv before even thinking about real funds."
         )
-    if not settings.ANTHROPIC_API_KEY:
-        raise SystemExit("Set ANTHROPIC_API_KEY environment variable first.")
+    if settings.ANTHROPIC_API_KEY:
+        log.info("analyst: Claude scoring enabled (%s)", settings.CLAUDE_MODEL)
+    else:
+        log.info("analyst: no ANTHROPIC_API_KEY — free heuristic scoring mode")
 
     state = broker.load_state()
     seen: set[str] = set(state.positions)

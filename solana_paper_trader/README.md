@@ -34,6 +34,12 @@ Stop with Ctrl+C. State persists in `state.json`; open positions resume on resta
 The only dependency is `aiohttp` — the Claude API is called over plain HTTP,
 so no Rust/C toolchain is needed to install.
 
+**No API credits? It still runs.** If `ANTHROPIC_API_KEY` is unset (or a call
+fails, e.g. out of credits), the analyst scores candidates with a free
+built-in heuristic (buy/sell ratio, volume-to-liquidity, holders, rugcheck
+risk) instead of Claude. All safety filters and risk limits are unchanged —
+Claude only ever contributes the conviction score.
+
 ### Termux (Android)
 
 ```bash

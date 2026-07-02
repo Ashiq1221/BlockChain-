@@ -71,6 +71,40 @@ def hard_filters(report: dict) -> tuple[bool, str]:
     return True, ""
 
 
+def heuristic_verdict(candidate: dict, report: dict) -> dict:
+    """
+    Free fallback scorer used when no ANTHROPIC_API_KEY is set.
+    Scores 0-10 from the same momentum facts Claude would see:
+    buy pressure, volume-to-liquidity, holder spread, rugcheck risk.
+    """
+    ratio = candidate["buys_5m"] / max(candidate["sells_5m"], 1)
+    vol_liq = candidate["vol_5m"] / max(candidate["liquidity_usd"], 1)
+    holders = report.get("totalHolders") or 0
+    rc_score = report.get("score") or 999999
+
+    score = 0
+    if ratio >= 3:      score += 3
+    elif ratio >= 2:    score += 2
+    elif ratio >= 1.2:  score += 1
+
+    if vol_liq >= 0.30:   score += 3
+    elif vol_liq >= 0.15: score += 2
+    elif vol_liq >= 0.05: score += 1
+
+    if holders >= 500:  score += 2
+    elif holders >= 200: score += 1
+
+    if rc_score <= 100:  score += 2
+    elif rc_score <= 250: score += 1
+
+    return {
+        "conviction": min(score, 10),
+        "thesis": (f"heuristic: buy/sell {ratio:.1f}, vol/liq {vol_liq:.2f}, "
+                   f"{holders} holders, rugcheck {rc_score}"),
+        "biggest_risk": "no LLM analysis (heuristic mode)",
+    }
+
+
 async def claude_verdict(session: aiohttp.ClientSession, candidate: dict, report: dict) -> dict:
     """Ask Claude for a conviction score on a pre-vetted candidate.
 
@@ -117,8 +151,9 @@ async def claude_verdict(session: aiohttp.ClientSession, candidate: dict, report
         verdict["conviction"] = int(verdict.get("conviction", 0))
         return verdict
     except Exception as e:
-        log.warning("claude verdict failed: %s", e)
-        return {"conviction": 0, "thesis": "analysis failed", "biggest_risk": str(e)}
+        # covers no credits, rate limits, network errors — trade on heuristics
+        log.warning("claude verdict failed (%s) — using heuristic score", e)
+        return heuristic_verdict(candidate, report)
 
 
 async def analyze(session: aiohttp.ClientSession, candidate: dict) -> dict | None:
@@ -129,7 +164,10 @@ async def analyze(session: aiohttp.ClientSession, candidate: dict) -> dict | Non
         log.info("REJECT %s: %s", candidate["symbol"], reason)
         return None
 
-    verdict = await claude_verdict(session, candidate, report)
+    if settings.ANTHROPIC_API_KEY:
+        verdict = await claude_verdict(session, candidate, report)
+    else:
+        verdict = heuristic_verdict(candidate, report)
     if verdict["conviction"] < settings.MIN_CONVICTION:
         log.info("PASS %s: conviction %d (%s)",
                  candidate["symbol"], verdict["conviction"], verdict["thesis"])
