@@ -31,6 +31,23 @@ python orchestrator.py
 
 Stop with Ctrl+C. State persists in `state.json`; open positions resume on restart.
 
+The only dependency is `aiohttp` — the Claude API is called over plain HTTP,
+so no Rust/C toolchain is needed to install.
+
+### Termux (Android)
+
+```bash
+pkg install python git tmux
+AIOHTTP_NO_EXTENSIONS=1 pip install aiohttp   # skip C extensions
+export ANTHROPIC_API_KEY=sk-ant-...
+termux-wake-lock                              # keep Android from suspending it
+tmux new -s trader                            # survive closing the app
+python orchestrator.py
+```
+
+Detach tmux with `Ctrl+b` then `d`; reattach with `tmux attach -t trader`.
+Set Termux's battery usage to Unrestricted in Android settings.
+
 ## What it does each cycle (every 30s)
 
 1. **Monitor** open paper positions → exit on stop-loss (-20%), take-profit

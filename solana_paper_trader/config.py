@@ -16,6 +16,7 @@ class Settings:
     ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
     # ---- ENDPOINTS ----
+    ANTHROPIC_API_URL: str = "https://api.anthropic.com/v1/messages"
     DEXSCREENER_BASE: str = "https://api.dexscreener.com"
     RUGCHECK_BASE: str = "https://api.rugcheck.xyz/v1"
     JUPITER_PRICE: str = "https://lite-api.jup.ag/price/v2"   # verify at dev.jup.ag

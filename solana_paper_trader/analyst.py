@@ -8,11 +8,9 @@ Two layers:
 import json
 import logging
 import aiohttp
-from anthropic import AsyncAnthropic
 from config import settings
 
 log = logging.getLogger("analyst")
-client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 SYSTEM = """You are the analyst agent in a paper-trading research system for new Solana tokens.
 You receive verified on-chain facts about a token that already passed rug-safety filters.
@@ -73,8 +71,13 @@ def hard_filters(report: dict) -> tuple[bool, str]:
     return True, ""
 
 
-async def claude_verdict(candidate: dict, report: dict) -> dict:
-    """Ask Claude for a conviction score on a pre-vetted candidate."""
+async def claude_verdict(session: aiohttp.ClientSession, candidate: dict, report: dict) -> dict:
+    """Ask Claude for a conviction score on a pre-vetted candidate.
+
+    Calls the Messages API over raw HTTP (aiohttp) rather than the anthropic
+    SDK, so the project installs on platforms without a Rust toolchain
+    (e.g. Termux, where the SDK's jiter dependency cannot build).
+    """
     facts = {
         "symbol": candidate["symbol"],
         "age_minutes": candidate["age_min"],
@@ -87,14 +90,28 @@ async def claude_verdict(candidate: dict, report: dict) -> dict:
         "rugcheck_score": report.get("score"),
         "holder_count": report.get("totalHolders"),
     }
+    payload = {
+        "model": settings.CLAUDE_MODEL,
+        "max_tokens": settings.CLAUDE_MAX_TOKENS,
+        "system": SYSTEM,
+        "messages": [{"role": "user", "content": json.dumps(facts)}],
+    }
+    headers = {
+        "x-api-key": settings.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
     try:
-        msg = await client.messages.create(
-            model=settings.CLAUDE_MODEL,
-            max_tokens=settings.CLAUDE_MAX_TOKENS,
-            system=SYSTEM,
-            messages=[{"role": "user", "content": json.dumps(facts)}],
-        )
-        raw = "".join(b.text for b in msg.content if b.type == "text")
+        async with session.post(
+            settings.ANTHROPIC_API_URL, json=payload, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as r:
+            body = await r.json()
+            if r.status != 200:
+                err = (body.get("error") or {}).get("message", "")
+                raise RuntimeError(f"API {r.status}: {err}")
+        raw = "".join(b.get("text", "") for b in body.get("content", [])
+                      if b.get("type") == "text")
         raw = raw.replace("```json", "").replace("```", "").strip()
         verdict = json.loads(raw)
         verdict["conviction"] = int(verdict.get("conviction", 0))
@@ -112,7 +129,7 @@ async def analyze(session: aiohttp.ClientSession, candidate: dict) -> dict | Non
         log.info("REJECT %s: %s", candidate["symbol"], reason)
         return None
 
-    verdict = await claude_verdict(candidate, report)
+    verdict = await claude_verdict(session, candidate, report)
     if verdict["conviction"] < settings.MIN_CONVICTION:
         log.info("PASS %s: conviction %d (%s)",
                  candidate["symbol"], verdict["conviction"], verdict["thesis"])
