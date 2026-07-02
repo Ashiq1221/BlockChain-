@@ -130,11 +130,15 @@ async def fill_application(url: str, plan_context: str = "",
     report = FillReport(url=url)
 
     async with async_playwright() as pw:
+        # Honor egress proxies (e.g. managed cloud sandboxes).
+        proxy = ({"server": os.environ["HTTPS_PROXY"]}
+                 if os.environ.get("HTTPS_PROXY") else None)
         try:
-            browser = await pw.chromium.launch(headless=True)
+            browser = await pw.chromium.launch(headless=True, proxy=proxy)
         except Exception:
             browser = await pw.chromium.launch(
-                headless=True, executable_path="/opt/pw-browsers/chromium")
+                headless=True, proxy=proxy,
+                executable_path="/opt/pw-browsers/chromium")
         page = await browser.new_page(viewport={"width": 1280, "height": 1800})
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=45000)
