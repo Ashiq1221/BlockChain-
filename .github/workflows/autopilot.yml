@@ -1,0 +1,76 @@
+name: Apply Pilot Autopilot
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"   # every 6 hours: harvest → debate → dry-run + report
+  workflow_dispatch:
+    inputs:
+      submit_urls:
+        description: "APPROVE & SUBMIT these job URLs (comma-separated) — you reviewed them in the Telegram report"
+        required: false
+        default: ""
+      max_per_run:
+        description: "Max new leads to process this run"
+        required: false
+        default: "5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autopilot
+  cancel-in-progress: false
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/hr-expertise-roleplay-0sa06j
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install aiohttp beautifulsoup4 python-dotenv requests playwright
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      - name: Run autopilot
+        env:
+          CF_ACCOUNT_ID:      ${{ secrets.CF_ACCOUNT_ID }}
+          CF_EMAIL:           ${{ secrets.CF_EMAIL }}
+          CF_GLOBAL_API_KEY:  ${{ secrets.CF_GLOBAL_API_KEY }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID:  ${{ secrets.TELEGRAM_OWNER_ID }}
+          APPLY_PHONE:        ${{ secrets.APPLY_PHONE }}
+          # Cron runs are dry-run: debate + fill + screenshots + Telegram report.
+          # Submission happens only for URLs you explicitly approve below.
+          APPLY_AUTO_SUBMIT:  "false"
+          SUBMIT_URLS:        ${{ github.event.inputs.submit_urls || '' }}
+          AUTOPILOT_MAX:      ${{ github.event.inputs.max_per_run || '5' }}
+        run: python autopilot.py
+
+      - name: Persist state
+        run: |
+          git config user.name "apply-pilot-bot"
+          git config user.email "actions@github.com"
+          git add autopilot_state.json
+          git diff --cached --quiet || git commit -m "chore: autopilot state [skip ci]"
+          git pull --rebase origin claude/hr-expertise-roleplay-0sa06j || true
+          git push origin HEAD:claude/hr-expertise-roleplay-0sa06j
+
+      - name: Upload screenshots + materials
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autopilot-artifacts
+          path: |
+            screenshots/
+            applications/
+          if-no-files-found: ignore
