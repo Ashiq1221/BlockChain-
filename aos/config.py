@@ -34,7 +34,9 @@ class AOSConfig:
 
     # ── Telegram Bot ─────────────────────────────────────────────────────────
     BOT_TOKEN:  str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    OWNER_ID:   int = int(os.getenv("TELEGRAM_OWNER_ID", "0"))
+    # Tolerate an empty/blank/non-numeric value (e.g. a defined-but-empty CI secret).
+    OWNER_ID:   int = int((os.getenv("TELEGRAM_OWNER_ID") or "0").strip() or "0") \
+        if (os.getenv("TELEGRAM_OWNER_ID") or "0").strip().lstrip("-").isdigit() else 0
 
     # ── xAI Grok (real-time X/Twitter + web search) ──────────────────────────
     XAI_KEY:       str = os.getenv("XAI_API_KEY", "")
