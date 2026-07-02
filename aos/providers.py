@@ -145,16 +145,86 @@ async def call_openai(prompt: str, system: str = "", max_tokens: int = 1000) -> 
         return f"[openai_error: {e}]"
 
 
+async def call_cf_ai(prompt: str, system: str = "", max_tokens: int = 1000,
+                     model: str = "") -> str:
+    """Cloudflare Workers AI — auth via cfut_ scoped token or Global API Key."""
+    if not C.CF_ACCOUNT_ID or not (C.CF_AI_TOKEN or C.CF_GLOBAL_KEY):
+        return ""
+    headers = {"Content-Type": "application/json"}
+    if C.CF_AI_TOKEN.startswith("cfut_"):
+        headers["Authorization"] = f"Bearer {C.CF_AI_TOKEN}"
+    else:
+        headers["X-Auth-Key"]   = C.CF_GLOBAL_KEY
+        headers["X-Auth-Email"] = C.CF_EMAIL
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                f"https://api.cloudflare.com/client/v4/accounts/{C.CF_ACCOUNT_ID}"
+                f"/ai/run/{model or C.CF_MODEL}",
+                headers=headers,
+                json={
+                    "max_tokens": max_tokens,
+                    "messages": [
+                        {"role": "system", "content": system or "You are a helpful assistant."},
+                        {"role": "user",   "content": prompt},
+                    ],
+                },
+                timeout=_TIMEOUT,
+            ) as r:
+                data = await r.json()
+                res = data.get("result") or {}
+                if isinstance(res, dict):
+                    choices = res.get("choices") or []
+                    if choices:
+                        content = choices[0].get("message", {}).get("content")
+                        if content:
+                            return str(content).strip()
+                    resp = res.get("response")
+                    if isinstance(resp, dict):     # CF pre-parses JSON outputs
+                        return json.dumps(resp)
+                    if resp:
+                        return str(resp).strip()
+                return ""
+    except Exception as e:
+        return f"[cf_error: {e}]"
+
+
+async def cf_embed(text: str) -> list[float]:
+    """1024-dim embedding via Workers AI bge-large-en-v1.5. Empty list on failure."""
+    if not C.CF_ACCOUNT_ID or not (C.CF_AI_TOKEN or C.CF_GLOBAL_KEY):
+        return []
+    headers = {"Content-Type": "application/json"}
+    if C.CF_AI_TOKEN.startswith("cfut_"):
+        headers["Authorization"] = f"Bearer {C.CF_AI_TOKEN}"
+    else:
+        headers["X-Auth-Key"]   = C.CF_GLOBAL_KEY
+        headers["X-Auth-Email"] = C.CF_EMAIL
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                f"https://api.cloudflare.com/client/v4/accounts/{C.CF_ACCOUNT_ID}"
+                f"/ai/run/{C.CF_EMBED_MODEL}",
+                headers=headers,
+                json={"text": [text[:2000]]},
+                timeout=_TIMEOUT,
+            ) as r:
+                data = await r.json()
+                return (data.get("result") or {}).get("data", [[]])[0]
+    except Exception:
+        return []
+
+
 async def think(prompt: str, system: str = "", max_tokens: int = 1000,
                 prefer: str = "claude") -> str:
     """Auto-select provider with fallback chain."""
     order = {
-        "claude":   [call_claude, call_gemini, call_groq, call_openai],
-        "gemini":   [call_gemini, call_claude, call_groq, call_openai],
-        "groq":     [call_groq, call_claude, call_gemini, call_openai],
-        "deepseek": [call_deepseek, call_claude, call_groq, call_openai],
-        "openai":   [call_openai, call_claude, call_gemini, call_groq],
-    }.get(prefer, [call_claude, call_gemini, call_groq, call_openai])
+        "claude":   [call_claude, call_cf_ai, call_gemini, call_groq, call_openai],
+        "gemini":   [call_gemini, call_claude, call_cf_ai, call_groq, call_openai],
+        "groq":     [call_groq, call_cf_ai, call_claude, call_gemini, call_openai],
+        "deepseek": [call_deepseek, call_cf_ai, call_claude, call_groq, call_openai],
+        "openai":   [call_openai, call_claude, call_cf_ai, call_gemini, call_groq],
+        "cf":       [call_cf_ai, call_claude, call_gemini, call_groq, call_openai],
+    }.get(prefer, [call_claude, call_cf_ai, call_gemini, call_groq, call_openai])
 
     for caller in order:
         result = await caller(prompt, system, max_tokens)

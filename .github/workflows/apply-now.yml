@@ -2,6 +2,11 @@ name: Submit Applications
 
 on:
   workflow_dispatch:
+    inputs:
+      auto_submit:
+        description: "Actually submit forms (false = dry-run with screenshots)"
+        required: false
+        default: "false"
 
 jobs:
   apply:
@@ -9,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: claude/x-automation-66itrv
+          ref: claude/hr-expertise-roleplay-0sa06j
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -18,16 +23,25 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright python-dotenv
+          pip install -r requirements.txt
+          pip install playwright
           python -m playwright install chromium
           python -m playwright install-deps chromium
 
-      - name: Run applications
+      - name: Run Apply Pilot
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CF_ACCOUNT_ID:     ${{ secrets.CF_ACCOUNT_ID }}
+          CF_EMAIL:          ${{ secrets.CF_EMAIL }}
+          CF_GLOBAL_API_KEY: ${{ secrets.CF_GLOBAL_API_KEY }}
+          APPLY_AUTO_SUBMIT: ${{ github.event.inputs.auto_submit }}
         run: python apply_ci.py
 
-      - name: Upload screenshots
+      - name: Upload screenshots + materials
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: application-screenshots
-          path: screenshots/
+          name: application-artifacts
+          path: |
+            screenshots/
+            applications/

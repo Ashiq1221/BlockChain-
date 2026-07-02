@@ -23,12 +23,12 @@ binding = "BROWSER"
 [[d1_databases]]
 binding       = "DB"
 database_name = "smm-state"
-database_id   = "b21d583e-9dc2-4004-b24b-64bac673741d"
+database_id   = "bbe73d54-e891-4cc3-b165-d458acc0a437"
 
 # ── KV Cache — provisioned: smm-cache ────────────────────────────────────────
 [[kv_namespaces]]
 binding = "KV"
-id      = "6759754413f745edaa47d5f9a4d424be"
+id      = "d5310b7ebcec4352b40f50e1b61cbce1"
 
 # ── Queues — producer only ──────────────────────────────────────────────────
 [[queues.producers]]
@@ -57,7 +57,7 @@ index_name = "smm-episodic-memory"
 X_ACCOUNT_HANDLE = "lingoAI_io"
 SMM_LIKES_QTY    = "100"
 SMM_RETWEETS_QTY = "100"
-CF_ACCOUNT_ID    = "17b8b27a0a8af8d5f1d1622bfbfb9d8a"
+CF_ACCOUNT_ID    = "144767848661885c76a3c4784eaf302e"
 CF_GATEWAY_ID    = "smm-sentinel"
 
 # ── Secrets (set via GitHub Actions or wrangler secret put) ──────────────────
