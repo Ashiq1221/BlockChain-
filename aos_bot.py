@@ -773,6 +773,7 @@ WELCOME = (
     "/status — brain status\n"
     "/providers — active AI\n"
     "/apply <job link> — Apply Pilot: debate → cover letter → autofill form\n"
+    "/jobs — harvest fresh job links from TG job channels\n"
     "…or just paste a job link.\n"
     "Or ask anything — AOS 14-layer brain answers."
 )
@@ -838,6 +839,20 @@ async def handle_update(session, update, owner_id):
                    "/providers — active AI providers\n\n"
                    "_Execute queued DMs on Termux:_\n"
                    "`bash run_termux.sh` → `/execute`")
+
+    elif text in ("/jobs", "/jobs@AshiqAibot"):
+        async def _jobs():
+            try:
+                from apply_agent import harvester
+                res = await harvester.harvest()
+                leads = res["new"] or harvester.pending(15)
+                head = (f"🛰 Scanned {res['total']} links from @{', @'.join(res['channels'])}\n"
+                        f"⭐ = matches your target roles. Send /apply <link> to run one.\n")
+                await send(session, chat_id, (head + harvester.render(leads[:15]))[:4096],
+                           parse_mode=None)
+            except Exception as e:
+                await send(session, chat_id, f"❌ Job harvest error: {e}")
+        asyncio.create_task(_jobs())
 
     elif text.startswith("/apply_submit "):
         url = text.split(None, 1)[1].strip()
