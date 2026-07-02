@@ -24,6 +24,14 @@ class AOSConfig:
     OPENAI_KEY:    str = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL:  str = "gpt-4o-mini"
 
+    # ── Cloudflare Workers AI (global key or cfut_ scoped token) ─────────────
+    CF_ACCOUNT_ID: str = os.getenv("CF_ACCOUNT_ID", "")
+    CF_EMAIL:      str = os.getenv("CF_EMAIL", "")
+    CF_GLOBAL_KEY: str = os.getenv("CF_GLOBAL_API_KEY", "")
+    CF_AI_TOKEN:   str = os.getenv("CF_AI_TOKEN", "")   # optional cfut_ scoped token
+    CF_MODEL:      str = os.getenv("CF_AI_MODEL", "@cf/meta/llama-3.3-70b-instruct-fp8-fast")
+    CF_EMBED_MODEL: str = "@cf/baai/bge-large-en-v1.5"
+
     # ── Telegram Bot ─────────────────────────────────────────────────────────
     BOT_TOKEN:  str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     OWNER_ID:   int = int(os.getenv("TELEGRAM_OWNER_ID", "0"))
@@ -52,4 +60,6 @@ class AOSConfig:
         if cls.GROQ_KEY:     p.append("groq")
         if cls.DEEPSEEK_KEY: p.append("deepseek")
         if cls.OPENAI_KEY:   p.append("openai")
+        if cls.CF_ACCOUNT_ID and (cls.CF_AI_TOKEN or cls.CF_GLOBAL_KEY):
+            p.append("cloudflare")
         return p

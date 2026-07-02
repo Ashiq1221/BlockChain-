@@ -41,3 +41,8 @@ bin-release/
 __pycache__/
 *.pyc
 agent_state.json
+
+# Apply Pilot runtime output
+applications.db
+screenshots/
+applications/

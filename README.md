@@ -162,3 +162,30 @@ All state persists in `telegram_agents.db` (SQLite) — survives restarts.
 - **Anti-spam**: Never spam. The AI personalizes every message. Use responsibly.
 - **Session file**: Keep your `.session` file private — it grants full account access.
 - **Flood protection**: Pyrogram auto-handles `FloodWait` errors with backoff.
+
+## 🎼 Apply Pilot — Job-Application Agent Orchestra
+
+Share a job link, get hired. A self-learning multi-agent pipeline built on the
+AOS debate engine + Cloudflare Workers AI (runs even with only CF credentials).
+
+**Pipeline:** fetch posting → 3-agent structured debate (Recruiter / skeptical
+Hiring Manager / Career Strategist) → Moderator decision (APPLY/SKIP + fit
+score + ATS keywords) → tailored cover letter & screener answers → Playwright
+form autofill with resume upload → screenshot review → optional submit →
+outcome logged to SQLite + CF Vectorize episodic memory (each application
+teaches the next one).
+
+```bash
+python apply.py <job_url>              # evaluate + dry-run fill (screenshots)
+python apply.py <job_url> --submit     # actually submit
+python apply.py --report               # application history
+python apply.py --status <url> interview   # record outcomes → self-learning
+```
+
+**Telegram:** send `/apply <link>` to the AOS bot — or just paste a job link.
+**CI:** add links to `job_links.txt` → Actions → "Submit Applications".
+
+Safety: dry-run by default (`APPLY_AUTO_SUBMIT=false`), never bypasses
+CAPTCHAs, and the AI is forbidden from inventing facts — unknown fields are
+left blank. Personal defaults (name, phone, salary) live in `.env`
+(`APPLY_*` vars); the resume ships in `apply_agent/data/`.

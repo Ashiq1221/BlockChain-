@@ -144,6 +144,49 @@ async def edit(session, chat_id, msg_id, text, reply_markup=None):
 async def answer_cb(session, cb_id):
     await api(session, "answerCallbackQuery", callback_query_id=cb_id)
 
+async def send_photo(session, chat_id, path, caption=""):
+    try:
+        import aiohttp
+        form = aiohttp.FormData()
+        form.add_field("chat_id", str(chat_id))
+        form.add_field("caption", caption[:1024])
+        form.add_field("photo", open(path, "rb"),
+                       filename=path.rsplit("/", 1)[-1], content_type="image/png")
+        async with session.post(f"{BASE}/sendPhoto", data=form, timeout=TIMEOUT) as r:
+            return await r.json()
+    except Exception as e:
+        return {"ok": False, "description": str(e)}
+
+
+# ── Apply Pilot (job-application orchestra) ──────────────────────────────────
+
+_JOB_URL_RE = __import__("re").compile(r"https?://\S+", __import__("re").I)
+
+async def _run_apply(session, chat_id, url, submit=False):
+    await send(session, chat_id,
+               f"🎼 *Apply Pilot* — 3 agents debating this role…\n{url}",
+               parse_mode="Markdown")
+    try:
+        from apply_agent.orchestrator import evaluate_job, render_plan
+        plan = await evaluate_job(url)
+        await send(session, chat_id, render_plan(plan)[:4000], parse_mode=None)
+
+        if plan.decision == "APPLY":
+            await send(session, chat_id, "🖊️ Filling the application form (dry-run)…")
+            from apply_agent.form_filler import fill_application
+            context = plan.cover_letter + "\n" + "\n".join(
+                f"{k}: {v}" for k, v in plan.screener_answers.items())
+            rep = await fill_application(url, plan_context=context, submit=submit)
+            await send(session, chat_id, rep.summary()[:4000], parse_mode=None)
+            for shot in rep.screenshots[-2:]:
+                await send_photo(session, chat_id, shot, caption="Form preview")
+            if not rep.submitted and not rep.captcha_detected:
+                await send(session, chat_id,
+                           "Reply `/apply_submit " + url + "` to actually submit.",
+                           parse_mode=None)
+    except Exception as e:
+        await send(session, chat_id, f"❌ Apply Pilot error: {e}")
+
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────
 
@@ -729,6 +772,8 @@ WELCOME = (
     "/queue — show pending actions\n"
     "/status — brain status\n"
     "/providers — active AI\n"
+    "/apply <job link> — Apply Pilot: debate → cover letter → autofill form\n"
+    "…or just paste a job link.\n"
     "Or ask anything — AOS 14-layer brain answers."
 )
 
@@ -794,8 +839,20 @@ async def handle_update(session, update, owner_id):
                    "_Execute queued DMs on Termux:_\n"
                    "`bash run_termux.sh` → `/execute`")
 
+    elif text.startswith("/apply_submit "):
+        url = text.split(None, 1)[1].strip()
+        asyncio.create_task(_run_apply(session, chat_id, url, submit=True))
+
+    elif text.startswith("/apply "):
+        url = text.split(None, 1)[1].strip()
+        asyncio.create_task(_run_apply(session, chat_id, url))
+
     elif text.startswith("/"):
         pass
+
+    # A bare job link → run Apply Pilot on it automatically.
+    elif (m := _JOB_URL_RE.match(text)) and len(text.split()) == 1:
+        asyncio.create_task(_run_apply(session, chat_id, m.group(0)))
 
     else:
         asyncio.create_task(_run_aos(session, chat_id, text))
