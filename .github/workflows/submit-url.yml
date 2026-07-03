@@ -1,0 +1,60 @@
+name: Submit One Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Application form URL to fill + submit"
+        required: true
+      context:
+        description: "Tailored free-text answer / cover-letter context"
+        required: false
+        default: ""
+      do_submit:
+        description: "Actually submit (true) or dry-run with screenshots (false)"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install aiohttp beautifulsoup4 python-dotenv requests playwright
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      - name: Fill + submit
+        env:
+          CF_ACCOUNT_ID:      ${{ secrets.CF_ACCOUNT_ID }}
+          CF_EMAIL:           ${{ secrets.CF_EMAIL }}
+          CF_GLOBAL_API_KEY:  ${{ secrets.CF_GLOBAL_API_KEY }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID:  ${{ secrets.TELEGRAM_OWNER_ID }}
+          APPLY_PHONE:        ${{ secrets.APPLY_PHONE }}
+          SUBMIT_URL:         ${{ github.event.inputs.url }}
+          SUBMIT_CONTEXT:     ${{ github.event.inputs.context }}
+          DO_SUBMIT:          ${{ github.event.inputs.do_submit }}
+        run: python submit_one.py
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: submit-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
