@@ -218,8 +218,10 @@ async def fill_application(url: str, plan_context: str = "",
                 return report
 
             # Multi-step loop: fill the visible fields, then advance via a
-            # Continue/Next button; submit only on the final step.
-            for step in range(8):
+            # Continue/Next button; submit only on the final step. Cap is high
+            # enough for long per-question forms (Typeform / Holvia-style).
+            max_steps = int(os.getenv("MAX_FORM_STEPS", "25"))
+            for step in range(max_steps):
                 fields = await _collect_fields(page)
                 if fields:
                     await _fill_step(page, fields, plan_context, report)
