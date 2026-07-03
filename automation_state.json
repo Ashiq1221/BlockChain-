@@ -391,27 +391,27 @@
     "61450841": {
       "refill_id": 10818671,
       "requested_at": "2026-07-03T14:23:32.257320+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450843": {
       "refill_id": 10818672,
       "requested_at": "2026-07-03T14:23:32.737170+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450844": {
       "refill_id": 10818673,
       "requested_at": "2026-07-03T14:23:33.160150+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450846": {
       "refill_id": 10818674,
       "requested_at": "2026-07-03T14:23:33.589111+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450847": {
       "refill_id": 10818675,
       "requested_at": "2026-07-03T14:23:34.020161+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61481315": {
       "refill_id": 10815884,
@@ -540,6 +540,10 @@
     },
     {
       "at": "2026-07-03T14:23:50.178965+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-03T17:40:16.808337+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
