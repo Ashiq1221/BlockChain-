@@ -22,7 +22,8 @@ from .profile import PROFILE, RESUME_PATH, profile_text
 SCREENSHOT_DIR = "screenshots"
 _CAPTCHA_PAT = re.compile(r"captcha|hcaptcha|recaptcha|turnstile|cf-challenge", re.I)
 _APPLY_BTN_PAT = re.compile(r"apply", re.I)
-_SUBMIT_PAT = re.compile(r"submit|send application|apply now|finish", re.I)
+_SUBMIT_PAT = re.compile(r"submit|send application|apply now|finish|send$", re.I)
+_NEXT_PAT = re.compile(r"continue|next|proceed|step", re.I)
 
 
 @dataclass
@@ -55,12 +56,18 @@ async def _collect_fields(page) -> list[dict]:
     """Enumerate visible form fields with their best-guess labels."""
     return await page.evaluate("""() => {
         const fields = [];
+        // Clear stale indices from previous steps so selectors never collide
+        // with now-hidden fields carrying an old data-af-idx.
+        document.querySelectorAll('[data-af-idx]').forEach(e => e.removeAttribute('data-af-idx'));
         const els = document.querySelectorAll(
             'input:not([type=hidden]):not([type=submit]):not([type=button]), textarea, select');
         let i = 0;
+        const HONEY = ['website','honeypot','url','company_website'];
         for (const el of els) {
             const rect = el.getBoundingClientRect();
             if (rect.width === 0 && rect.height === 0) continue;
+            if (el.tabIndex === -1) continue;                 // honeypot / off-tab-order traps
+            if (HONEY.includes((el.name||'').toLowerCase())) continue;
             let label = '';
             if (el.id) {
                 const l = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
@@ -108,6 +115,51 @@ async def _map_fields(fields: list[dict], plan_context: str) -> dict:
         return json.loads(m.group(0)) if m else {}
     except Exception:
         return {}
+
+
+async def _fill_step(page, fields: list[dict], plan_context: str, report: "FillReport") -> None:
+    """Fill every mapped field on the current step (idempotent across steps)."""
+    mapping = await _map_fields(fields, plan_context)
+    for f in fields:
+        sel = f'[data-af-idx="{f["idx"]}"]'
+        label = f["label"] or f["name"] or f'field#{f["idx"]}'
+        try:
+            if f["type"] == "file":
+                await page.set_input_files(sel, RESUME_PATH)
+                report.resume_uploaded = True
+                report.filled.append(f"{label} ← resume")
+                continue
+            val = mapping.get(str(f["idx"]))
+            if not val:
+                report.skipped.append(label)
+                continue
+            if f["tag"] == "select":
+                await page.select_option(sel, label=str(val))
+            elif f["type"] in ("checkbox", "radio"):
+                if str(val).lower() in ("check", "true", "yes"):
+                    await page.check(sel)
+                else:
+                    report.skipped.append(label)
+                    continue
+            else:
+                await page.fill(sel, str(val))
+            report.filled.append(f"{label} ← {str(val)[:60]}")
+        except Exception:
+            report.skipped.append(label)
+
+
+async def _enabled_button(page, pattern):
+    """Return the first visible+enabled button matching pattern, else None."""
+    try:
+        loc = page.get_by_role("button", name=pattern)
+        n = min(await loc.count(), 6)
+        for i in range(n):
+            b = loc.nth(i)
+            if await b.is_visible() and await b.is_enabled():
+                return b
+    except Exception:
+        pass
+    return None
 
 
 async def _shot(page, report: FillReport, tag: str) -> None:
@@ -165,45 +217,43 @@ async def fill_application(url: str, plan_context: str = "",
                 await _shot(page, report, "nofields")
                 return report
 
-            mapping = await _map_fields(fields, plan_context)
+            # Multi-step loop: fill the visible fields, then advance via a
+            # Continue/Next button; submit only on the final step.
+            for step in range(8):
+                fields = await _collect_fields(page)
+                if fields:
+                    await _fill_step(page, fields, plan_context, report)
+                await _shot(page, report, f"step{step}")
 
-            for f in fields:
-                sel = f'[data-af-idx="{f["idx"]}"]'
-                label = f["label"] or f["name"] or f'field#{f["idx"]}'
-                try:
-                    if f["type"] == "file":
-                        await page.set_input_files(sel, RESUME_PATH)
-                        report.resume_uploaded = True
-                        report.filled.append(f"{label} ← resume")
+                if _CAPTCHA_PAT.search(await page.content()):
+                    report.captcha_detected = True
+
+                submit_btn = await _enabled_button(page, _SUBMIT_PAT)
+                next_btn = await _enabled_button(page, _NEXT_PAT) if not submit_btn else None
+
+                if submit_btn is not None:
+                    if not submit:
+                        break                         # dry-run: stop at the submit step
+                    if report.captcha_detected:
+                        report.error = "CAPTCHA present — not submitting."
+                        break
+                    try:
+                        await submit_btn.click(timeout=8000)
+                        await page.wait_for_timeout(4500)
+                        report.submitted = True
+                        await _shot(page, report, "submitted")
+                    except Exception as e:
+                        report.error = f"Submit click failed: {e}"
+                    break
+                if next_btn is not None:
+                    try:
+                        await next_btn.click(timeout=6000)
+                        await page.wait_for_timeout(1800)
                         continue
-                    val = mapping.get(str(f["idx"]))
-                    if not val:
-                        report.skipped.append(label)
-                        continue
-                    if f["tag"] == "select":
-                        await page.select_option(sel, label=str(val))
-                    elif f["type"] in ("checkbox", "radio"):
-                        if str(val).lower() in ("check", "true", "yes"):
-                            await page.check(sel)
-                        else:
-                            report.skipped.append(label)
-                            continue
-                    else:
-                        await page.fill(sel, str(val))
-                    report.filled.append(f"{label} ← {str(val)[:60]}")
-                except Exception:
-                    report.skipped.append(label)
-
-            await _shot(page, report, "filled")
-
-            if submit and not report.captcha_detected:
-                try:
-                    await page.get_by_role("button", name=_SUBMIT_PAT).first.click(timeout=8000)
-                    await page.wait_for_timeout(4000)
-                    report.submitted = True
-                    await _shot(page, report, "submitted")
-                except Exception as e:
-                    report.error = f"Submit click failed: {e}"
+                    except Exception as e:
+                        report.error = f"Continue click failed: {e}"
+                        break
+                break                                  # no actionable button — stop
         except Exception as e:
             report.error = str(e)
             try:
