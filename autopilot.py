@@ -83,7 +83,7 @@ async def submit_approved(urls: list[str]) -> str:
             if rep.submitted:
                 lines.append(f"✅ SUBMITTED — {plan.title} @ {plan.company}\n   {url}")
                 memory.set_status(url, "submitted")
-                harvester.mark(url, "submitted")
+                await _done(lead, "submitted")
                 state["submitted"].append({"url": url, "title": plan.title, "ts": time.time()})
             elif rep.captcha_detected:
                 lines.append(f"🧩 CAPTCHA blocked — finish manually: {url}")
@@ -114,39 +114,56 @@ async def run_once() -> str:
     seen = set(state["seen"])
     t0 = time.time()
 
+    # Leads from @AshiqAibot (mirrored to CF KV) take priority over the harvest.
+    from apply_agent import lead_source
+    bot_jobs = await lead_source.pull_bot_jobs(limit=MAX_PER_RUN)
+    bot_leads = [{"url": j["apply_url"], "title": j.get("title", ""),
+                  "matched": True, "_key": j["_key"], "_bot": True}
+                 for j in bot_jobs if j["apply_url"] not in seen]
+
     res = await harvester.harvest()
-    leads = [l for l in harvester.pending(60, matched_only=True)
-             if l["url"] not in seen][:MAX_PER_RUN]
+    harvest_leads = [l for l in harvester.pending(60, matched_only=True)
+                     if l["url"] not in seen]
+    leads = (bot_leads + harvest_leads)[:MAX_PER_RUN]
 
     lines = [f"🎼 Autopilot run #{state['runs'] + 1}",
+             f"From @AshiqAibot (CF KV): {len(bot_leads)} lead(s).",
              f"Harvested {res['total']} links, {len(res['new'])} new; "
              f"processing {len(leads)} matched lead(s).",
              ("Mode: SUBMIT" if AUTO_SUBMIT else
               "Mode: dry-run — approve picks via the Autopilot workflow submit_urls box")
              + f" | min fit {MIN_FIT}", ""]
 
+    async def _done(lead, status):
+        """Mark a lead processed in its source (harvester DB or bot's CF KV)."""
+        harvester.mark(lead["url"], status)
+        if lead.get("_bot"):
+            from apply_agent import lead_source
+            await lead_source.mark_processed(lead["_key"], status)
+
     for lead in leads:
         url = lead["url"]
         seen.add(url)
+        src = "🤖bot " if lead.get("_bot") else ""
         try:
             plan = await evaluate_job(url)
         except Exception as e:
-            lines.append(f"💥 {url} — evaluation error: {e}")
-            harvester.mark(url, "error")
+            lines.append(f"💥 {src}{url} — evaluation error: {e}")
+            await _done(lead, "error")
             continue
 
         tag = f"{plan.title or lead['title'][:40]} @ {plan.company or '?'}"
         if plan.decision != "APPLY":
             lines.append(f"⏭️ SKIP ({plan.fit_score}/10) {tag}")
-            harvester.mark(url, "skipped")
+            await _done(lead, "skipped")
             continue
         if plan.fit_score < MIN_FIT:
             lines.append(f"🤏 APPLY but fit {plan.fit_score} < {MIN_FIT}: {tag}\n   {url}")
-            harvester.mark(url, "low_fit")
+            await _done(lead, "low_fit")
             continue
         if not DO_FILL:
             lines.append(f"✅ APPLY ({plan.fit_score}/10) {tag} — fill skipped\n   {url}")
-            harvester.mark(url, "evaluated")
+            await _done(lead, "evaluated")
             continue
 
         from apply_agent.form_filler import fill_application
@@ -156,22 +173,22 @@ async def run_once() -> str:
             rep = await fill_application(url, plan_context=context, submit=AUTO_SUBMIT)
         except Exception as e:
             lines.append(f"💥 fill error for {tag}: {e}\n   {url}")
-            harvester.mark(url, "error")
+            await _done(lead, "error")
             continue
 
         if rep.submitted:
             lines.append(f"🚀 SUBMITTED ({plan.fit_score}/10) {tag}\n   {url}")
             memory.set_status(url, "submitted")
-            harvester.mark(url, "submitted")
+            await _done(lead, "submitted")
             state["submitted"].append({"url": url, "title": tag, "ts": time.time()})
         elif rep.captcha_detected:
             lines.append(f"🧩 CAPTCHA — needs you ({plan.fit_score}/10) {tag}\n   {url}")
-            harvester.mark(url, "manual_needed")
+            await _done(lead, "manual_needed")
         else:
             lines.append(f"📝 filled {len(rep.filled)} fields, not submitted "
                          f"({plan.fit_score}/10) {tag}\n   {url}"
                          + (f"\n   ⚠️ {rep.error}" if rep.error else ""))
-            harvester.mark(url, "filled_dryrun")
+            await _done(lead, "filled_dryrun")
 
     state["runs"] += 1
     state["seen"] = sorted(seen)
