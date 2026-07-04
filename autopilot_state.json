@@ -1,14 +1,19 @@
 {
  "seen": [
   "http://Coins.ph/",
+  "http://CryptoGroups.com/Jobs",
   "https://ats.rippling.com/perle/jobs/a6b80e78-46e9-48e3-a740-1c7b78b7e696",
   "https://boards.greenhouse.io/figure/jobs/8577621002",
   "https://boards.greenhouse.io/m0dbathenextthingltd/jobs/4289590009",
   "https://boards.greenhouse.io/robinhood/jobs/7489875?t=gh_src=&amp;gh_jid=7489875",
   "https://boards.greenhouse.io/robinhood/jobs/8011599?t=gh_src=&amp;gh_jid=8011599",
   "https://careers.tether.io/o/ai-research-engineer-kernel-inference-optimization-14",
+  "https://cryptogroups.com/jobDetails?id=1633",
+  "https://cryptogroups.com/jobDetails?id=1634",
+  "https://cryptogroups.com/jobDetails?id=1650",
   "https://cryptogroups.com/jobDetails?id=1657",
   "https://cryptogroups.com/jobDetails?id=1664",
+  "https://cvin.bio/",
   "https://eg.linkedin.com/jobs/view/performance-marketing-manager-at-axis-4428586234",
   "https://ie.linkedin.com/jobs/view/finance-director-push-at-aave-labs-4426625907",
   "https://job-boards.eu.greenhouse.io/bybit/jobs/4878044101",
@@ -34,5 +39,5 @@
   "https://www.linkedin.com/jobs/view/senior-communications-lead-media-relations-at-chainlink-labs-4426371778"
  ],
  "submitted": [],
- "runs": 7
+ "runs": 8
 }
