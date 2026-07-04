@@ -143,6 +143,13 @@ class Database:
             f"INSERT OR IGNORE INTO jobs ({cols}) VALUES ({placeholders})",
             list(kwargs.values()),
         )
+        # Bridge: mirror the find to Cloudflare KV so the Apply Pilot autopilot
+        # can pull and apply. Best-effort; never breaks the bot.
+        try:
+            from telegram_agents.tools import cf_jobs
+            cf_jobs.push_job(kwargs)
+        except Exception:
+            pass
 
     async def get_jobs(self, applied: bool | None = None):
         q, params = "SELECT * FROM jobs WHERE 1=1", []
