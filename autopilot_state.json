@@ -2,6 +2,7 @@
  "seen": [
   "http://Coins.ph/",
   "http://CryptoGroups.com/Jobs",
+  "http://Gate.io/",
   "http://dev.fun/",
   "https://ats.rippling.com/perle/jobs/a6b80e78-46e9-48e3-a740-1c7b78b7e696",
   "https://boards.greenhouse.io/figure/jobs/8577621002",
@@ -25,7 +26,9 @@
   "https://job-boards.greenhouse.io/dvtrading/jobs/4710258005",
   "https://job-boards.greenhouse.io/foundry/jobs/8002678",
   "https://job-boards.greenhouse.io/foundry/jobs/8010801",
+  "https://job-boards.greenhouse.io/janestreet/jobs/8583968002",
   "https://job-boards.greenhouse.io/orderly/jobs/5253336008",
+  "https://jobs.ashbyhq.com/Morpho/cc334581-7c86-4f87-a418-32905c2482cb",
   "https://jobs.ashbyhq.com/Sardine/58054c69-7b32-4334-acba-eca28971848e",
   "https://jobs.ashbyhq.com/nexus.xyz/e6877f82-5d71-4a52-a131-c09dd7b148dd",
   "https://jobs.ashbyhq.com/paxos/efe6cbb7-ee04-4dab-9bfe-579f50783a90",
@@ -33,9 +36,11 @@
   "https://jobs.lever.co/binance/064ae522-2dc8-44d7-84dc-edeb8e57383c",
   "https://jobs.lever.co/binance/33231ef0-179e-431f-b6ac-821f064e74df",
   "https://jobs.lever.co/coins/8338b054-423c-442e-b556-bca663e9603b",
+  "https://jobs.lever.co/gate/0b862c4c-0205-4fe1-a838-6b5a126b509b",
   "https://sg.linkedin.com/jobs/view/commercial-programme-manager-intern-at-cinch-4432080746",
   "https://spire.com/careers/job-openings/job/?gh_jid=7874484&amp;gh_jid=7874484",
   "https://stakingfacili-62c6a8.careers.hibob.com/jobs/2686584d-e3eb-4256-a539-49736ea5d7bc",
+  "https://stripe.com/jobs/search?gh_jid=7979422",
   "https://stripe.com/jobs/search?gh_jid=8017336",
   "https://tokkalabs.hire.trakstar.com/jobs/fk0z7hj/",
   "https://www.bagel.com/careers/member-of-technical-staff-physical-ai-research",
@@ -43,5 +48,5 @@
   "https://www.linkedin.com/jobs/view/senior-communications-lead-media-relations-at-chainlink-labs-4426371778"
  ],
  "submitted": [],
- "runs": 12
+ "runs": 13
 }
