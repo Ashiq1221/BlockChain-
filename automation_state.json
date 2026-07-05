@@ -399,12 +399,12 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 40,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
-      "start_count": null,
-      "remains": null,
+      "start_count": "1",
+      "remains": "0",
       "added_at": "2026-07-05T16:35:51.695296+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-05T16:52:53.405207+00:00"
     },
     "30232527": {
       "id": "30232527",
@@ -425,12 +425,12 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 40000,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-05T16:36:17.090952+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-05T16:52:53.405207+00:00"
     }
   },
   "refills": {
@@ -498,6 +498,11 @@
     "https://x.com/i/status/2069014496086217116",
     "https://x.com/i/status/2073706172318916924"
   ],
-  "agent_log": [],
+  "agent_log": [
+    {
+      "at": "2026-07-05T16:53:24.674593+00:00",
+      "msg": "Monitored 34 orders, attempted to trigger refills for orders 61501437, 61501438, and 61501439, but all were rejected due to being premature and having no valid reason for a refill. No new posts were a"
+    }
+  ],
   "pending_posts": []
 }

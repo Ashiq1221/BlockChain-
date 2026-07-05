@@ -2131,18 +2131,22 @@ def print_dashboard(state: dict, cf: CloudflarePlatform) -> None:
 # ── Task prompt ────────────────────────────────────────────────────────────────
 
 MONITOR_TASK = """\
-Run your standard monitoring cycle using the Cloudflare Intelligence Platform:
+You are the Master AI Agent Orchestra. Run your monitoring cycle:
 
 1. Use parallel_tools to fetch balance + check_orders + get_analytics simultaneously.
-2. Call recall_memory with a description of any unusual patterns you find.
-3. For completed/partial refillable orders: trigger refill if cooldown=0 and no active refill.
-4. For pending refills: check their status.
-5. For pending_posts: place the FULL engagement package for each post:
-     100 likes | 50 retweets | 20 comments | 30,000 views
-   (This runs every 8 hours automatically — do not skip any item in the package.)
-6. Submit a ticket ONLY as last resort (refill rejected 2+ times, clear non-delivery).
-7. Set confidence < 0.75 in your done message if placing orders or submitting tickets.
-8. End with a strategic summary: what you found, what you did, what to watch.
+2. Call recall_memory to surface any relevant past patterns.
+3. AUTO-REFILL: For every completed/partial order where refill cooldown=0 and no active
+   refill exists, trigger refill immediately.
+4. REFILL STATUS: Check all pending refills — update their status.
+5. PENDING POSTS: If pending_posts is non-empty, place the exact engagement the user
+   specified for that post (quantities are locked — do NOT use the standard package
+   unless the user explicitly requested it). If no quantities were specified, skip.
+6. TICKET ESCALATION: If a refill has been rejected 2+ times and the order clearly
+   under-delivered, submit a support ticket (last resort only).
+7. NEVER place new orders for posts not in pending_posts.
+8. NEVER place standard package (100 likes / 50 RT / 20 comments / 30k views)
+   automatically — only place what the user explicitly requested.
+9. End with a concise summary: orders monitored, refills triggered, issues found.
 """
 
 # ── CLI / Main ──────────────────────────────────────────────────────────────────
