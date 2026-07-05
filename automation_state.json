@@ -597,6 +597,10 @@
     {
       "at": "2026-07-05T04:04:51.904498+00:00",
       "msg": "No new posts to order. Reviewed past orders and found completed, partial, and pending orders. No action taken as no new posts were available and existing orders are being processed or have been comple"
+    },
+    {
+      "at": "2026-07-05T09:16:23.723564+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": []
