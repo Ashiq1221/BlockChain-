@@ -743,6 +743,10 @@
     {
       "at": "2026-07-06T05:11:19.114875+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-06T05:16:31.412841+00:00",
+      "msg": "[REFILL] [Rule-based \u2014 05:15 UTC] | In cooldown: ['61564364', '61564515'] | Refills done: ['61450840'] | Issues: #61450841: refill failed \u2014 Error; #61450843: refill failed \u2014 Error; #61450844: refill failed \u2014 E"
     }
   ],
   "pending_posts": [],
