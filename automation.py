@@ -69,7 +69,7 @@ PANELS = [
         "pass": os.environ.get("SMM_PASS", ""),
         "services": {
             "likes":    {"id": 16465, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
-            "retweets": {"id": 9018,  "min": 100, "max": 3000,        "rate_per_k": 2.10},
+            "retweets": {"id": 9260,  "min": 50,  "max": 25_000,      "rate_per_k": 2.30},
             "comments": {"id": 16680, "min": 5,   "max": 1000,        "rate_per_k": 48.60},
             "views":    {"id": 17682, "min": 100, "max": 100_000_000, "rate_per_k": 0.0015},
         },
@@ -145,7 +145,7 @@ CRITICAL_TOOLS = {"submit_ticket", "place_order"}
 # Service catalogue (primary panel defaults, overridden per-panel at order time)
 SERVICES = {
     "likes":    {"id": 16465, "name": "Twitter Likes+Impressions USA",    "refill": False, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
-    "retweets": {"id": 9018,  "name": "Twitter Retweets Organic Global",  "refill": False, "min": 100, "max": 3000,        "rate_per_k": 2.10},
+    "retweets": {"id": 9260,  "name": "Twitter Retweets Real SuperInstant 30d-refill", "refill": True, "min": 50, "max": 25_000, "rate_per_k": 2.30},
     "comments": {"id": 16680, "name": "Twitter Custom Comments (India)",   "refill": False, "min": 5,   "max": 1000,        "rate_per_k": 48.60},
     "views":    {"id": 17682, "name": "Twitter Views+Impressions Global",  "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 0.0015},
 }
@@ -2192,6 +2192,99 @@ You are the Master AI Agent Orchestra. Run your monitoring cycle:
 9. End with a concise summary: orders monitored, refills triggered, issues found.
 """
 
+# ── Non-delivery ticket submission ──────────────────────────────────────────────
+
+def _submit_nondelivery_tickets(state: dict) -> None:
+    """Submit support tickets for all Completed retweet/like orders that show 0 delivery."""
+    smmfollows_cfg = next((p for p in PANELS if p["name"] == "smmfollows"), None)
+    if not smmfollows_cfg:
+        log.error("[Tickets] smmfollows panel not found"); return
+
+    sess = _panel_session(smmfollows_cfg)
+    if not sess:
+        log.error("[Tickets] Panel login failed — check SMM_USER / SMM_PASS secrets"); return
+
+    # Find Completed orders with 0 or no delivery (remains == quantity or start_count suspiciously low)
+    sf = smmfollows_cfg
+    candidates = {
+        oid: o for oid, o in state["orders"].items()
+        if o.get("panel") == "smmfollows"
+        and o.get("status") in ("Completed", "Partial")
+        and o.get("kind") == "retweets"
+        and not state.get("tickets_submitted", {}).get(oid)
+    }
+    if not candidates:
+        log.info("[Tickets] No unticketd non-delivered retweet orders found."); return
+
+    # Live-check each to confirm 0 delivery
+    undelivered: dict = {}
+    for oid, o in candidates.items():
+        res = _api_panel(sf, {"action": "status", "order": oid})
+        start = int(res.get("start_count", 0) or 0)
+        remains = int(res.get("remains", 0) or 0)
+        qty = o.get("quantity", 0)
+        # Heuristic: if start_count near 0 and remains 0, panel marked done but didn't deliver
+        if start < 5 and remains == 0:
+            undelivered[oid] = {**o, "_start": start}
+            log.info("[Tickets] Confirmed non-delivery: #%s qty=%d start=%d remains=%d", oid, qty, start, remains)
+
+    if not undelivered:
+        log.info("[Tickets] All checked orders appear delivered — no tickets needed."); return
+
+    # Group by post link
+    groups: dict = {}
+    for oid, o in undelivered.items():
+        groups.setdefault(o["link"], []).append((oid, o))
+
+    PANEL_URL = smmfollows_cfg["web"]
+    submitted = 0
+    state.setdefault("tickets_submitted", {})
+
+    for link, items in groups.items():
+        order_ids = [i[0] for i in items]
+        lines = "\n".join(
+            f"  - #{oid}: {o['quantity']}x {o['kind']} svc#{o.get('service_id','?')} "
+            f"— Completed, start_count={o['_start']}, 0 delivered"
+            for oid, o in items
+        )
+        message = (
+            "Hello,\n\n"
+            "The following retweet orders show as Completed in the panel but ZERO retweets "
+            "were actually delivered (post retweet count unchanged, start_count near 0).\n"
+            "This is a recurring issue — multiple prior orders for the same account showed "
+            "the same pattern. Please re-deliver or issue full credit.\n\n"
+            f"Post: {link}\n\nOrders:\n{lines}\n\nThank you."
+        )
+        try:
+            r = sess.get(f"{PANEL_URL}/tickets", timeout=20)
+            m = re.search(r'<input[^>]+name="_csrf"[^>]+value="([^"]+)"', r.text)
+            if not m:
+                log.warning("[Tickets] CSRF not found for %s", link); continue
+            r2 = sess.post(f"{PANEL_URL}/ticket-create", data={
+                "_csrf": m.group(1),
+                "TicketForm[subject]": "Junior - Orders [ Retweets Not Delivered ]",
+                "TicketForm[message]": message,
+                "subject": "Orders", "request": "Not delivered",
+                "cancel-reason": "", "ordernumbers": ",".join(order_ids),
+            }, headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": f"{PANEL_URL}/tickets", "Origin": PANEL_URL,
+                "Accept": "application/json, */*", "X-Requested-With": "XMLHttpRequest",
+            }, timeout=20)
+            resp = r2.json() if r2.status_code == 200 else {}
+            if resp.get("status") == "success":
+                log.info("[Tickets] OK — %s orders: %s", link[-40:], order_ids)
+                for oid in order_ids:
+                    state["tickets_submitted"][oid] = datetime.now(timezone.utc).isoformat()
+                submitted += 1
+            else:
+                log.warning("[Tickets] WARN %s: %s", link[-40:], resp)
+        except Exception as exc:
+            log.error("[Tickets] ERROR %s: %s", link[-40:], exc)
+
+    log.info("[Tickets] Done. Submitted: %d/%d groups", submitted, len(groups))
+
+
 # ── CLI / Main ──────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -2202,6 +2295,7 @@ def main() -> None:
     parser.add_argument("--status",    action="store_true", help="Print dashboard and exit")
     parser.add_argument("--post",      metavar="URL",       help="Queue a post URL for ordering")
     parser.add_argument("--refill",    action="store_true", help="Refill-focused pass")
+    parser.add_argument("--tickets",   action="store_true", help="Submit non-delivery tickets for Completed orders with no delivery")
     parser.add_argument("--provision", action="store_true", help="(Re)provision Cloudflare resources")
     parser.add_argument("--analytics", action="store_true", help="Show D1 analytics report")
     parser.add_argument("--interval",  type=int, default=POLL_SECS,
@@ -2234,6 +2328,11 @@ def main() -> None:
 
     if args.analytics:
         print_analytics(cf)
+        return
+
+    if args.tickets:
+        _submit_nondelivery_tickets(state)
+        save_state(state)
         return
 
     if args.refill:

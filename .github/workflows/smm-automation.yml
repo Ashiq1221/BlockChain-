@@ -14,6 +14,7 @@ on:
           - monitor
           - refill
           - status
+          - tickets
 
 jobs:
   orchestrate:
@@ -67,6 +68,8 @@ jobs:
             python automation.py --refill
           elif [ "$MODE" = "status" ]; then
             python automation.py --status
+          elif [ "$MODE" = "tickets" ]; then
+            python automation.py --tickets
           else
             python automation.py --once
           fi
