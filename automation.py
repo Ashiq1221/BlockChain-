@@ -65,12 +65,12 @@ PANELS = [
         "url":  "https://smmfollows.com/api/v2",
         "web":  "https://smmfollows.com",
         "key":  os.environ.get("SMM_API_KEY", ""),
-        "user": os.environ.get("SMM_USER", "hhrh197"),
-        "pass": os.environ.get("SMM_PASS", "Yawer@123"),
+        "user": os.environ.get("SMM_USER", ""),
+        "pass": os.environ.get("SMM_PASS", ""),
         "services": {
-            "likes":    {"id": 16465, "min": 10,  "max": 2_000_000, "rate_per_k": 2.10},
-            "retweets": {"id": 9018,  "min": 100, "max": 3000,      "rate_per_k": 2.10},
-            "comments": {"id": 7338,  "min": 5,   "max": 150,       "rate_per_k": 28.13},
+            "likes":    {"id": 16465, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
+            "retweets": {"id": 9018,  "min": 100, "max": 3000,        "rate_per_k": 2.10},
+            "comments": {"id": 16680, "min": 5,   "max": 150,         "rate_per_k": 28.13},
             "views":    {"id": 17682, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
         },
     },
@@ -146,7 +146,7 @@ CRITICAL_TOOLS = {"submit_ticket", "place_order"}
 SERVICES = {
     "likes":    {"id": 16465, "name": "Twitter Likes+Impressions USA",    "refill": False, "min": 10,  "max": 2_000_000,   "rate_per_k": 2.10},
     "retweets": {"id": 9018,  "name": "Twitter Retweets Organic Global",  "refill": False, "min": 100, "max": 3000,        "rate_per_k": 2.10},
-    "comments": {"id": 7338,  "name": "Twitter Comments USA",             "refill": False, "min": 5,   "max": 150,         "rate_per_k": 28.13},
+    "comments": {"id": 16680, "name": "Twitter Custom Comments",          "refill": False, "min": 5,   "max": 150,         "rate_per_k": 28.13},
     "views":    {"id": 17682, "name": "Twitter Views HQ",                 "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 1.5},
 }
 
