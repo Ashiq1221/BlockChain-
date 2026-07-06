@@ -107,8 +107,12 @@ PANELS = [
 API_KEY = PANELS[0]["key"]
 API_URL = PANELS[0]["url"]
 PANEL   = "https://smmfollows.com"
-USER    = os.environ.get("SMM_USER", "hhrh197")
-PASSWD  = os.environ.get("SMM_PASS", "Yawer@123")
+USER    = os.environ.get("SMM_USER", "")
+PASSWD  = os.environ.get("SMM_PASS", "")
+
+# ── PANEL RESTRICTION — only smmfollows is authorised for all orders ──────────
+# Set to [] to allow all panels, or list specific names to whitelist.
+ALLOWED_PANELS: list[str] = ["smmfollows"]
 
 # Cloudflare identity
 CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
@@ -692,7 +696,8 @@ def _ai_order_agent(kind: str, quantity: int, link: str,
     }
     kind_kws = KIND_KW.get(kind, [kind])
 
-    active = [p for p in PANELS if p["key"]]
+    active = [p for p in PANELS if p["key"] and
+              (not ALLOWED_PANELS or p["name"] in ALLOWED_PANELS)]
     if not active:
         return {"success": False, "error": "No panels configured with API keys"}
 
@@ -1044,7 +1049,8 @@ def _management_council(action: str, context_data: dict,
 
 def _place_order_multi(kind: str, link: str, quantity: int, extra: dict | None = None) -> dict:
     """Fetch live rates from all panels in parallel, order from cheapest, fall back on failure."""
-    eligible = [p for p in PANELS if p["key"] and p["services"].get(kind, {}).get("id")]
+    eligible = [p for p in PANELS if p["key"] and p["services"].get(kind, {}).get("id")
+                and (not ALLOWED_PANELS or p["name"] in ALLOWED_PANELS)]
     if not eligible:
         return {"success": False, "error": "No panels available"}
 
