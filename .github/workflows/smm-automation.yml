@@ -1,15 +1,27 @@
-name: SMM Automation
+name: SMM AI Agent Orchestra
 
 on:
   schedule:
-    - cron: '0 */2 * * *'   # every 2 hours
-  workflow_dispatch:          # manual trigger from Actions tab
+    - cron: '*/30 * * * *'   # every 30 minutes — continuous orchestration
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: false
+        default: 'monitor'
+        type: choice
+        options:
+          - monitor
+          - refill
+          - status
+          - tickets
 
 jobs:
-  automate:
+  orchestrate:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
@@ -22,34 +34,47 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests
+        run: |
+          pip install requests anthropic
 
-      # AI engine: Cloudflare Workers AI (Llama 3.3 70B + DeepSeek R1)
-      # Fallback chain: CF ensemble → DeepSeek direct → rule-based
-      - name: Run SMM cycle
+      # Master AI Agent Orchestra — Cloudflare Workers AI (Llama 3.3 70B + DeepSeek R1)
+      # Responsibilities: order monitoring, auto-refill, ticket escalation, status tracking
+      - name: Run AI Agent Orchestra
         env:
           # ── SMM panels ────────────────────────────────────────────
-          SMM_API_KEY:      ${{ secrets.SMM_API_KEY }}
-          SMMWIZ_API_KEY:   ${{ secrets.SMMWIZ_API_KEY }}
-          ASTRA_API_KEY:    ${{ secrets.ASTRA_API_KEY }}
-          SMM_USER:         ${{ secrets.SMM_USER }}
-          SMM_PASS:         ${{ secrets.SMM_PASS }}
-          SMMWIZ_USER:      ${{ secrets.SMMWIZ_USER }}
-          SMMWIZ_PASS:      ${{ secrets.SMMWIZ_PASS }}
-          ASTRA_USER:       ${{ secrets.ASTRA_USER }}
-          ASTRA_PASS:       ${{ secrets.ASTRA_PASS }}
+          SMM_API_KEY:       ${{ secrets.SMM_API_KEY }}
+          SMMWIZ_API_KEY:    ${{ secrets.SMMWIZ_API_KEY }}
+          ASTRA_API_KEY:     ${{ secrets.ASTRA_API_KEY }}
+          SMM_USER:          ${{ secrets.SMM_USER }}
+          SMM_PASS:          ${{ secrets.SMM_PASS }}
+          SMMWIZ_USER:       ${{ secrets.SMMWIZ_USER }}
+          SMMWIZ_PASS:       ${{ secrets.SMMWIZ_PASS }}
+          ASTRA_USER:        ${{ secrets.ASTRA_USER }}
+          ASTRA_PASS:        ${{ secrets.ASTRA_PASS }}
           # ── Cloudflare AI (primary intelligence engine) ───────────
-          CF_ACCOUNT_ID:    ${{ secrets.CF_ACCOUNT_ID }}
+          CF_ACCOUNT_ID:     ${{ secrets.CF_ACCOUNT_ID }}
           CF_GLOBAL_API_KEY: ${{ secrets.CF_GLOBAL_API_KEY }}
-          CF_EMAIL:         ${{ secrets.CF_EMAIL }}
-          CF_AI_MODEL:      ${{ secrets.CF_AI_MODEL }}
-          # ── Order quantities ──────────────────────────────────────
-          SMM_LIKES_QTY:    '100'
-          SMM_RETWEETS_QTY: '100'
-          SMM_COMMENTS_QTY: '5'
-        run: python automation.py --once
+          CF_SCOPED_API_KEY: ${{ secrets.CF_SCOPED_API_KEY }}
+          CF_EMAIL:          ${{ secrets.CF_EMAIL }}
+          CF_AI_GATEWAY_ID:  ${{ secrets.CF_AI_GATEWAY_ID }}
+          CF_D1_DB_ID:       ${{ secrets.CF_D1_DB_ID }}
+          CF_KV_NS_ID:       ${{ secrets.CF_KV_NS_ID }}
+          CF_VECTORIZE_INDEX: ${{ secrets.CF_VECTORIZE_INDEX }}
+          # ── Anthropic (comment generation fallback) ────────────────
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'monitor' }}"
+          if [ "$MODE" = "refill" ]; then
+            python automation.py --refill
+          elif [ "$MODE" = "status" ]; then
+            python automation.py --status
+          elif [ "$MODE" = "tickets" ]; then
+            python automation.py --tickets
+          else
+            python automation.py --once
+          fi
 
-      - name: Commit state
+      - name: Commit updated state
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
@@ -57,4 +82,6 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "state: auto-update $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             git push origin claude/smmfollows-api-access-4q2rqv
+          else
+            echo "No state changes — skipping commit"
           fi
