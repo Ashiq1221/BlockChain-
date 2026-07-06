@@ -2168,7 +2168,10 @@ def print_dashboard(state: dict, cf: CloudflarePlatform) -> None:
     if state.get("agent_log"):
         print("\nRecent AI decisions:")
         for e in state["agent_log"][-5:]:
-            print(f"  [{e['at'][11:19]}] {e['msg'][:115]}")
+            if isinstance(e, dict):
+                print(f"  [{e['at'][11:19]}] {e['msg'][:115]}")
+            else:
+                print(f"  {str(e)[:115]}")
     print()
 
 # ── Task prompt ────────────────────────────────────────────────────────────────
