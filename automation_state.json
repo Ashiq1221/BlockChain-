@@ -571,6 +571,20 @@
       "remains": "0",
       "added_at": "2026-07-06T04:07:38.947394+00:00",
       "completed_at": "2026-07-06T04:11:10.819078+00:00"
+    },
+    "61564639": {
+      "id": "61564639",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2073706172318916924",
+      "quantity": 80,
+      "refillable": true,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "16680",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T04:30:53.828410+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -702,7 +716,8 @@
     {
       "at": "2026-07-06T04:11:43.095389+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
-    }
+    },
+    "[extra-comments] #61564639: 80x custom comments svc#16680 for https://x.com/i/status/2073706172318916924"
   ],
   "pending_posts": []
 }
