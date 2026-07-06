@@ -501,6 +501,20 @@
       "remains": null,
       "added_at": "2026-07-06T03:31:07.921689+00:00",
       "completed_at": null
+    },
+    "61564364": {
+      "id": "61564364",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2073706172318916924",
+      "quantity": 40,
+      "refillable": true,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "13139",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T03:34:19.439974+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -608,6 +622,10 @@
     {
       "at": "2026-07-06T03:31:07.921710+00:00",
       "msg": "[smmwiz-replacement] #61564340: 20x comments smmfollows for https://x.com/i/status/2073706172318916924"
+    },
+    {
+      "at": "2026-07-06T03:34:19.440005+00:00",
+      "msg": "[RT-Replacement-NonDrop] #61564364: 40x retweets svc#13139 30d-refill for https://x.com/i/status/2073706172318916924"
     }
   ],
   "pending_posts": []
