@@ -745,5 +745,14 @@
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
-  "pending_posts": []
+  "pending_posts": [],
+  "tickets_submitted": {
+    "61500416": "2026-07-06T05:14:40.260810+00:00",
+    "61505279": "2026-07-06T05:14:40.893874+00:00",
+    "61505926": "2026-07-06T05:14:41.574093+00:00",
+    "61506092": "2026-07-06T05:14:41.574105+00:00",
+    "61559100": "2026-07-06T05:14:42.205403+00:00",
+    "61564364": "2026-07-06T05:14:42.205417+00:00",
+    "61564515": "2026-07-06T05:14:42.205420+00:00"
+  }
 }
