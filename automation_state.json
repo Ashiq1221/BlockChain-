@@ -257,7 +257,7 @@
       "quantity": 20,
       "panel": "smmwiz",
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "start_count": null,
       "remains": null,
       "added_at": "2026-07-01T17:14:12.225720+00:00",
@@ -347,7 +347,7 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 21,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmwiz",
       "start_count": null,
       "remains": null,
@@ -373,7 +373,7 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 5,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmwiz",
       "start_count": null,
       "remains": null,
@@ -386,7 +386,7 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 100,
       "refillable": false,
-      "status": "Pending",
+      "status": "Canceled",
       "panel": "smmwiz",
       "start_count": null,
       "remains": null,
@@ -431,6 +431,76 @@
       "remains": "0",
       "added_at": "2026-07-05T16:36:17.090952+00:00",
       "completed_at": "2026-07-05T16:52:53.405207+00:00"
+    },
+    "61564332": {
+      "id": "61564332",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2070034213085274431",
+      "quantity": 20,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "12451",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T03:30:43.323873+00:00",
+      "completed_at": null
+    },
+    "61564333": {
+      "id": "61564333",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 21,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "12451",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T03:30:50.037180+00:00",
+      "completed_at": null
+    },
+    "61564336": {
+      "id": "61564336",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2069014496086217116",
+      "quantity": 5,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "7338",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T03:30:56.131547+00:00",
+      "completed_at": null
+    },
+    "61564337": {
+      "id": "61564337",
+      "kind": "likes",
+      "link": "https://x.com/i/status/2073706172318916924",
+      "quantity": 100,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "12451",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T03:31:01.964741+00:00",
+      "completed_at": null
+    },
+    "61564340": {
+      "id": "61564340",
+      "kind": "comments",
+      "link": "https://x.com/i/status/2073706172318916924",
+      "quantity": 20,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "7338",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-06T03:31:07.921689+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -518,6 +588,26 @@
     {
       "at": "2026-07-05T23:08:24.837318+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-06T03:30:43.323908+00:00",
+      "msg": "[smmwiz-replacement] #61564332: 20x likes smmfollows for https://x.com/i/status/2070034213085274431"
+    },
+    {
+      "at": "2026-07-06T03:30:50.037202+00:00",
+      "msg": "[smmwiz-replacement] #61564333: 21x likes smmfollows for https://x.com/i/status/2069014496086217116"
+    },
+    {
+      "at": "2026-07-06T03:30:56.131568+00:00",
+      "msg": "[smmwiz-replacement] #61564336: 5x comments smmfollows for https://x.com/i/status/2069014496086217116"
+    },
+    {
+      "at": "2026-07-06T03:31:01.964765+00:00",
+      "msg": "[smmwiz-replacement] #61564337: 100x likes smmfollows for https://x.com/i/status/2073706172318916924"
+    },
+    {
+      "at": "2026-07-06T03:31:07.921710+00:00",
+      "msg": "[smmwiz-replacement] #61564340: 20x comments smmfollows for https://x.com/i/status/2073706172318916924"
     }
   ],
   "pending_posts": []
