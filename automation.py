@@ -1410,59 +1410,96 @@ def tool_submit_ticket(state: dict, order_ids: list, subject_type: str, message:
         return json.dumps({"error": str(exc)})
 
 def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform | None" = None) -> str:
-    """Use Workers AI (or Anthropic fallback) to generate custom comments for a post."""
-    prompt = (
-        f"Generate {count} unique, authentic Twitter comments for this post.\n"
-        "Rules:\n"
-        "- Each comment must be directly relevant to the post topic\n"
-        "- Vary the style: some enthusiastic, some thoughtful, some short, some with emojis\n"
-        "- Sound like real users — no bots, no generic praise\n"
-        "- No hashtags, no @mentions\n"
-        "- Return ONLY a JSON array of strings, nothing else\n\n"
-        f'Post: "{post_text[:400]}"'
-    )
-    # Try Workers AI
-    if cf and CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
-        try:
-            result = cf.ai_run(CF_FAST_MODEL, {"messages": [{"role": "user", "content": prompt}], "max_tokens": 1200})
-            raw = result.get("response", "")
-            text = re.sub(r"<think>.*?</think>", "", raw if isinstance(raw, str) else json.dumps(raw), flags=re.DOTALL).strip()
-            m = re.search(r"\[[\s\S]*\]", text)
-            if m:
-                arr = json.loads(m.group())
-                if isinstance(arr, list) and arr:
-                    log.info("[Comments] Generated %d custom comments via Workers AI", len(arr))
-                    return "\n".join(str(c) for c in arr[:count])
-        except Exception as exc:
-            log.debug("[Comments] Workers AI failed: %s", exc)
-    # Try Anthropic
-    if ANTHROPIC_AVAILABLE and ANTHROPIC_KEY:
-        try:
-            ai = _anthropic_mod.Anthropic(api_key=ANTHROPIC_KEY)
-            resp = ai.messages.create(
-                model="claude-haiku-4-5-20251001", max_tokens=1200,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text = resp.content[0].text if resp.content else ""
-            m = re.search(r"\[[\s\S]*\]", text)
-            if m:
-                arr = json.loads(m.group())
-                if isinstance(arr, list) and arr:
-                    log.info("[Comments] Generated %d custom comments via Claude", len(arr))
-                    return "\n".join(str(c) for c in arr[:count])
-        except Exception as exc:
-            log.debug("[Comments] Anthropic failed: %s", exc)
-    # Fallback
+    """Use Workers AI (or Anthropic fallback) to generate custom comments for a post.
+    Batches in groups of 20 so token limits are never exceeded."""
+    BATCH = 20
+
+    def _one_batch(n: int, existing: list) -> list:
+        avoid = f" Do NOT repeat these: {existing[-10:]}" if existing else ""
+        prompt = (
+            f"Generate exactly {n} unique, authentic Twitter comments for this post.\n"
+            "Rules:\n"
+            "- Each comment must be directly relevant to the post topic\n"
+            "- Vary style: enthusiastic, thoughtful, short, with emojis\n"
+            "- Sound like real users — no bots, no generic praise\n"
+            "- No hashtags, no @mentions\n"
+            f"- Return ONLY a JSON array of {n} strings, nothing else\n"
+            f"{avoid}\n\n"
+            f'Post: "{post_text[:400]}"'
+        )
+        # Try Workers AI
+        if cf and CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
+            try:
+                result = cf.ai_run(CF_FAST_MODEL, {"messages": [{"role": "user", "content": prompt}], "max_tokens": 2048})
+                raw = result.get("response", "")
+                text = re.sub(r"<think>.*?</think>", "", raw if isinstance(raw, str) else json.dumps(raw), flags=re.DOTALL).strip()
+                m = re.search(r"\[[\s\S]*\]", text)
+                if m:
+                    arr = json.loads(m.group())
+                    if isinstance(arr, list) and arr:
+                        return [str(c) for c in arr[:n]]
+            except Exception as exc:
+                log.debug("[Comments] Workers AI batch failed: %s", exc)
+        # Try Anthropic
+        if ANTHROPIC_AVAILABLE and ANTHROPIC_KEY:
+            try:
+                ai = _anthropic_mod.Anthropic(api_key=ANTHROPIC_KEY)
+                resp = ai.messages.create(
+                    model="claude-haiku-4-5-20251001", max_tokens=2048,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                text = resp.content[0].text if resp.content else ""
+                m = re.search(r"\[[\s\S]*\]", text)
+                if m:
+                    arr = json.loads(m.group())
+                    if isinstance(arr, list) and arr:
+                        return [str(c) for c in arr[:n]]
+            except Exception as exc:
+                log.debug("[Comments] Anthropic batch failed: %s", exc)
+        return []
+
+    collected: list = []
+    remaining = count
+    while remaining > 0:
+        batch_size = min(BATCH, remaining)
+        batch = _one_batch(batch_size, collected)
+        if batch:
+            collected.extend(batch)
+            remaining -= len(batch)
+            log.info("[Comments] Batch done: %d collected, %d remaining", len(collected), remaining)
+        else:
+            break  # AI unavailable — fill rest from fallback below
+
+    if len(collected) >= count:
+        log.info("[Comments] Generated %d custom comments via AI", len(collected))
+        return "\n".join(collected[:count])
+
+    # Fallback pool — used only when AI is unavailable
     fallback = [
         "This is amazing! 🔥", "Love this content!", "Great post!", "So true 💯",
-        "This resonates with me", "Absolutely spot on", "Keep it up! 👏",
-        "Brilliant take", "Couldn't agree more", "This needs more attention",
+        "This resonates with me deeply", "Absolutely spot on", "Keep it up! 👏",
+        "Brilliant take on this topic", "Couldn't agree more", "This needs more attention",
         "Well said!", "Pure gold 🙌", "This is the content I needed today",
         "Facts 💪", "Sharing this immediately", "You always deliver 🎯",
         "This is exactly right", "Underrated post", "More people need to see this",
-        "Excellent point!",
+        "Excellent point!", "Mind-blowing stuff 🤯", "This changes everything",
+        "The future is here", "Incredible work", "This is why I follow you",
+        "Can't stop thinking about this", "Wow just wow", "Needed to hear this",
+        "This hits different 🙏", "Absolutely legendary", "No way this isn't viral",
+        "I showed this to my team", "Bookmarked forever", "This is the real deal",
+        "Dropping this in our group chat", "The dedication shows 🔑",
+        "Love the vision here", "This is it, right here", "On point as always",
+        "Next level thinking 💡", "This deserves a retweet", "Said it perfectly",
+        "Nothing but respect", "The clarity here is unmatched", "Big brain energy ✨",
+        "This should be on the front page", "Quality content 🏆", "Genuinely impressed",
+        "You nailed it", "This is the way", "Outstanding perspective",
     ]
-    return "\n".join(fallback[:count])
+    # Cycle fallback to fill remaining slots
+    needed = count - len(collected)
+    cycled = (fallback * ((needed // len(fallback)) + 1))[:needed]
+    collected.extend(cycled)
+    log.info("[Comments] Filled %d slots from fallback (AI unavailable)", needed)
+    return "\n".join(collected[:count])
 
 def tool_place_order(state: dict, link: str, kind: str, quantity: int,
                      post_text: str = "", cf: "CloudflarePlatform | None" = None) -> str:
