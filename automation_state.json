@@ -466,13 +466,13 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 5,
       "refillable": false,
-      "status": "In progress",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "7338",
       "start_count": "0",
-      "remains": "5",
+      "remains": "0",
       "added_at": "2026-07-06T03:30:56.131547+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T09:15:16.426561+00:00"
     },
     "61564337": {
       "id": "61564337",
@@ -494,13 +494,13 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 20,
       "refillable": false,
-      "status": "In progress",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "7338",
       "start_count": "23",
-      "remains": "20",
+      "remains": "0",
       "added_at": "2026-07-06T03:31:07.921689+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T09:15:16.426561+00:00"
     },
     "61564364": {
       "id": "61564364",
@@ -526,7 +526,7 @@
       "panel": "smmfollows",
       "service_id": "16465",
       "start_count": "25",
-      "remains": "500",
+      "remains": "212",
       "added_at": "2026-07-06T04:07:35.108515+00:00",
       "completed_at": null
     },
@@ -747,6 +747,10 @@
     {
       "at": "2026-07-06T05:16:31.412841+00:00",
       "msg": "[REFILL] [Rule-based \u2014 05:15 UTC] | In cooldown: ['61564364', '61564515'] | Refills done: ['61450840'] | Issues: #61450841: refill failed \u2014 Error; #61450843: refill failed \u2014 Error; #61450844: refill failed \u2014 E"
+    },
+    {
+      "at": "2026-07-06T09:15:52.803232+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": [],
