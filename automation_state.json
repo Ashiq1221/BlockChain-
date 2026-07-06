@@ -578,11 +578,11 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 80,
       "refillable": true,
-      "status": "Pending",
+      "status": "In progress",
       "panel": "smmfollows",
       "service_id": "16680",
-      "start_count": null,
-      "remains": null,
+      "start_count": "23",
+      "remains": "20",
       "added_at": "2026-07-06T04:30:53.828410+00:00",
       "completed_at": null
     },
@@ -592,11 +592,11 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 40,
       "refillable": true,
-      "status": "Pending",
+      "status": "In progress",
       "panel": "smmfollows",
       "service_id": "16680",
-      "start_count": null,
-      "remains": null,
+      "start_count": "23",
+      "remains": "40",
       "added_at": "2026-07-06T04:40:14.054856+00:00",
       "completed_at": null
     }
@@ -735,6 +735,10 @@
     {
       "at": "2026-07-06T04:40:14.054898+00:00",
       "msg": "[40-comments] #61564692: 40x custom comments svc#16680 (40 lines) for https://x.com/i/status/2073706172318916924"
+    },
+    {
+      "at": "2026-07-06T05:10:04.736645+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": []
