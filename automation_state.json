@@ -261,7 +261,7 @@
       "start_count": null,
       "remains": null,
       "added_at": "2026-07-01T17:14:12.225720+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61505279": {
       "id": "61505279",
@@ -352,7 +352,7 @@
       "start_count": null,
       "remains": null,
       "added_at": "2026-07-01T18:29:15.725447+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61506092": {
       "id": "61506092",
@@ -378,7 +378,7 @@
       "start_count": null,
       "remains": null,
       "added_at": "2026-07-01T18:30:05.995968+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "30232523": {
       "id": "30232523",
@@ -438,13 +438,13 @@
       "link": "https://x.com/i/status/2070034213085274431",
       "quantity": 20,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "12451",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-06T03:30:43.323873+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61564333": {
       "id": "61564333",
@@ -452,13 +452,13 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 21,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "12451",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-06T03:30:50.037180+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61564336": {
       "id": "61564336",
@@ -466,11 +466,11 @@
       "link": "https://x.com/i/status/2069014496086217116",
       "quantity": 5,
       "refillable": false,
-      "status": "Pending",
+      "status": "In progress",
       "panel": "smmfollows",
       "service_id": "7338",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "5",
       "added_at": "2026-07-06T03:30:56.131547+00:00",
       "completed_at": null
     },
@@ -480,13 +480,13 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 100,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "12451",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-06T03:31:01.964741+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61564340": {
       "id": "61564340",
@@ -494,11 +494,11 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 20,
       "refillable": false,
-      "status": "Pending",
+      "status": "In progress",
       "panel": "smmfollows",
       "service_id": "7338",
-      "start_count": null,
-      "remains": null,
+      "start_count": "23",
+      "remains": "20",
       "added_at": "2026-07-06T03:31:07.921689+00:00",
       "completed_at": null
     },
@@ -508,13 +508,13 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 40,
       "refillable": true,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "13139",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-06T03:34:19.439974+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61564513": {
       "id": "61564513",
@@ -522,11 +522,11 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 1000,
       "refillable": false,
-      "status": "Pending",
+      "status": "In progress",
       "panel": "smmfollows",
       "service_id": "16465",
-      "start_count": null,
-      "remains": null,
+      "start_count": "25",
+      "remains": "500",
       "added_at": "2026-07-06T04:07:35.108515+00:00",
       "completed_at": null
     },
@@ -536,11 +536,11 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 100,
       "refillable": true,
-      "status": "Pending",
+      "status": "In progress",
       "panel": "smmfollows",
       "service_id": "16680",
-      "start_count": null,
-      "remains": null,
+      "start_count": "23",
+      "remains": "20",
       "added_at": "2026-07-06T04:07:37.233037+00:00",
       "completed_at": null
     },
@@ -550,13 +550,13 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 500,
       "refillable": true,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "13139",
-      "start_count": null,
-      "remains": null,
+      "start_count": "1",
+      "remains": "0",
       "added_at": "2026-07-06T04:07:38.109194+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     },
     "61564516": {
       "id": "61564516",
@@ -564,13 +564,13 @@
       "link": "https://x.com/i/status/2073706172318916924",
       "quantity": 100000,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "17682",
-      "start_count": null,
-      "remains": null,
+      "start_count": "42444",
+      "remains": "0",
       "added_at": "2026-07-06T04:07:38.947394+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-06T04:11:10.819078+00:00"
     }
   },
   "refills": {
@@ -698,6 +698,10 @@
     {
       "at": "2026-07-06T04:07:38.947423+00:00",
       "msg": "[full-order] #61564516: 100000x views svc#17682 for https://x.com/i/status/2073706172318916924"
+    },
+    {
+      "at": "2026-07-06T04:11:43.095389+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": []
