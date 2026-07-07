@@ -623,9 +623,9 @@
       "ticket_sent": true
     },
     "61450841": {
-      "refill_id": 10820912,
-      "requested_at": "2026-07-06T18:52:40.528951+00:00",
-      "status": "Rejected"
+      "refill_id": 10821862,
+      "requested_at": "2026-07-07T22:37:04.919050+00:00",
+      "status": "Pending"
     },
     "61450843": {
       "refill_id": 10819424,
@@ -633,9 +633,9 @@
       "status": "Rejected"
     },
     "61450844": {
-      "refill_id": 10820913,
-      "requested_at": "2026-07-06T18:52:51.132611+00:00",
-      "status": "Rejected"
+      "refill_id": 10821863,
+      "requested_at": "2026-07-07T22:37:08.774287+00:00",
+      "status": "Pending"
     },
     "61450846": {
       "refill_id": 10819426,
@@ -643,9 +643,9 @@
       "status": "Rejected"
     },
     "61450847": {
-      "refill_id": 10820914,
-      "requested_at": "2026-07-06T18:52:57.675700+00:00",
-      "status": "Rejected"
+      "refill_id": 10821864,
+      "requested_at": "2026-07-07T22:37:12.482387+00:00",
+      "status": "Pending"
     },
     "61481315": {
       "refill_id": 10815884,
@@ -822,6 +822,10 @@
     {
       "at": "2026-07-07T21:17:23.100066+00:00",
       "msg": "Monitored 47 orders, 39 completed, 4 partial, 3 canceled, triggered 5 refills, 1 refill completed, 9 refills rejected, balance: $1.3750538, no issues found"
+    },
+    {
+      "at": "2026-07-07T22:37:45.650359+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": [],
