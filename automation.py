@@ -31,7 +31,7 @@ import logging
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 try:
@@ -2197,8 +2197,8 @@ You are the Master AI Agent Orchestra. Run your monitoring cycle:
 
 # ── Non-delivery ticket submission ──────────────────────────────────────────────
 
-def _submit_nondelivery_tickets(state: dict) -> None:
-    """Submit support tickets for all Completed retweet/like orders that show 0 delivery."""
+def _submit_nondelivery_tickets(state: dict, days: int = 25) -> None:
+    """Submit tickets for all undelivered orders + request refills for past N days of orders."""
     smmfollows_cfg = next((p for p in PANELS if p["name"] == "smmfollows"), None)
     if not smmfollows_cfg:
         log.error("[Tickets] smmfollows panel not found"); return
@@ -2207,65 +2207,73 @@ def _submit_nondelivery_tickets(state: dict) -> None:
     if not sess:
         log.error("[Tickets] Panel login failed — check SMM_USER / SMM_PASS secrets"); return
 
-    # Find Completed orders with 0 or no delivery (remains == quantity or start_count suspiciously low)
     sf = smmfollows_cfg
-    candidates = {
-        oid: o for oid, o in state["orders"].items()
-        if o.get("panel") == "smmfollows"
-        and o.get("status") in ("Completed", "Partial")
-        and o.get("kind") == "retweets"
-        and not state.get("tickets_submitted", {}).get(oid)
-    }
-    if not candidates:
-        log.info("[Tickets] No unticketd non-delivered retweet orders found."); return
-
-    # Live-check each to confirm 0 delivery
-    undelivered: dict = {}
-    for oid, o in candidates.items():
-        res = _api_panel(sf, {"action": "status", "order": oid})
-        start = int(res.get("start_count", 0) or 0)
-        remains = int(res.get("remains", 0) or 0)
-        qty = o.get("quantity", 0)
-        # Heuristic: if start_count near 0 and remains 0, panel marked done but didn't deliver
-        if start < 5 and remains == 0:
-            undelivered[oid] = {**o, "_start": start}
-            log.info("[Tickets] Confirmed non-delivery: #%s qty=%d start=%d remains=%d", oid, qty, start, remains)
-
-    if not undelivered:
-        log.info("[Tickets] All checked orders appear delivered — no tickets needed."); return
-
-    # Group by post link
-    groups: dict = {}
-    for oid, o in undelivered.items():
-        groups.setdefault(o["link"], []).append((oid, o))
-
     PANEL_URL = smmfollows_cfg["web"]
-    submitted = 0
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     state.setdefault("tickets_submitted", {})
 
-    for link, items in groups.items():
-        order_ids = [i[0] for i in items]
-        lines = "\n".join(
-            f"  - #{oid}: {o['quantity']}x {o['kind']} svc#{o.get('service_id','?')} "
-            f"— Completed, start_count={o['_start']}, 0 delivered"
-            for oid, o in items
-        )
-        message = (
-            "Hello,\n\n"
-            "The following retweet orders show as Completed in the panel but ZERO retweets "
-            "were actually delivered (post retweet count unchanged, start_count near 0).\n"
-            "This is a recurring issue — multiple prior orders for the same account showed "
-            "the same pattern. Please re-deliver or issue full credit.\n\n"
-            f"Post: {link}\n\nOrders:\n{lines}\n\nThank you."
-        )
+    # ── 1. Find all smmfollows orders from last N days ────────────────────────
+    recent: dict = {}
+    for oid, o in state["orders"].items():
+        if o.get("panel") != "smmfollows":
+            continue
+        added = o.get("added_at", "")
+        try:
+            added_dt = datetime.fromisoformat(added.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if added_dt >= cutoff:
+            recent[oid] = o
+
+    log.info("[Tickets] %d orders in last %d days to evaluate", len(recent), days)
+
+    # ── 2. Live-check status for all of them ─────────────────────────────────
+    live: dict = {}
+    ids = list(recent.keys())
+    for i in range(0, len(ids), 20):
+        batch = ids[i:i+20]
+        res = _api_panel(sf, {"action": "status", "orders": ",".join(batch)})
+        for r in (res if isinstance(res, list) else []):
+            live[str(r["order"])] = r
+    # Fallback: individual checks for any missing
+    for oid in ids:
+        if oid not in live:
+            r = _api_panel(sf, {"action": "status", "order": oid})
+            if r.get("status"):
+                live[oid] = r
+
+    # ── 3. Classify each order ───────────────────────────────────────────────
+    undelivered: dict = {}   # completed but 0 delivered
+    delivered:   dict = {}   # actually delivered, want refill
+
+    for oid, o in recent.items():
+        lv = live.get(oid, {})
+        status  = lv.get("status", o.get("status", ""))
+        start   = int(lv.get("start_count", 0) or 0)
+        remains = int(lv.get("remains", 0) or 0)
+        qty     = o.get("quantity", 0)
+
+        if status in ("Completed", "Partial") and start < 5 and remains == 0:
+            # Panel says done but nothing was there at start — non-delivery
+            undelivered[oid] = {**o, "_start": start, "_status": status}
+            log.info("[Tickets] Non-delivered: #%s %dx %s start=%d", oid, qty, o["kind"], start)
+        elif status == "Completed" and start >= 5:
+            # Delivered — include in refill request
+            delivered[oid] = {**o, "_start": start}
+            log.info("[Tickets] Delivered (refill): #%s %dx %s", oid, qty, o["kind"])
+
+    # ── 4. One comprehensive ticket covering all issues ───────────────────────
+    all_order_ids = list(recent.keys())
+
+    def _post_ticket(subject: str, message: str, order_ids: list) -> bool:
         try:
             r = sess.get(f"{PANEL_URL}/tickets", timeout=20)
             m = re.search(r'<input[^>]+name="_csrf"[^>]+value="([^"]+)"', r.text)
             if not m:
-                log.warning("[Tickets] CSRF not found for %s", link); continue
+                log.warning("[Tickets] CSRF not found"); return False
             r2 = sess.post(f"{PANEL_URL}/ticket-create", data={
                 "_csrf": m.group(1),
-                "TicketForm[subject]": "Junior - Orders [ Retweets Not Delivered ]",
+                "TicketForm[subject]": subject,
                 "TicketForm[message]": message,
                 "subject": "Orders", "request": "Not delivered",
                 "cancel-reason": "", "ordernumbers": ",".join(order_ids),
@@ -2276,16 +2284,75 @@ def _submit_nondelivery_tickets(state: dict) -> None:
             }, timeout=20)
             resp = r2.json() if r2.status_code == 200 else {}
             if resp.get("status") == "success":
-                log.info("[Tickets] OK — %s orders: %s", link[-40:], order_ids)
-                for oid in order_ids:
-                    state["tickets_submitted"][oid] = datetime.now(timezone.utc).isoformat()
+                return True
+            log.warning("[Tickets] Ticket response: %s", resp)
+        except Exception as exc:
+            log.error("[Tickets] Post error: %s", exc)
+        return False
+
+    submitted = 0
+
+    # Group undelivered by post
+    undelivered_groups: dict = {}
+    for oid, o in undelivered.items():
+        undelivered_groups.setdefault(o["link"], []).append((oid, o))
+
+    for link, items in undelivered_groups.items():
+        if all(state["tickets_submitted"].get(oid) for oid, _ in items):
+            log.info("[Tickets] Already ticketed: %s", link[-40:]); continue
+        order_ids = [i[0] for i in items]
+        lines = "\n".join(
+            f"  - #{oid}: {o['quantity']}x {o['kind']} svc#{o.get('service_id','?')} "
+            f"— status={o['_status']}, start_count={o['_start']}, 0 delivered"
+            for oid, o in items
+        )
+        message = (
+            "Hello,\n\n"
+            f"The following orders placed in the last {days} days show as Completed/Partial "
+            "but ZERO engagement was actually delivered (start_count near 0, count on post unchanged). "
+            "This is a recurring issue — multiple order types affected.\n"
+            "Please RE-DELIVER or issue full credit for all listed orders.\n\n"
+            f"Post: {link}\n\nUndelivered orders:\n{lines}\n\n"
+            "Thank you."
+        )
+        subject = f"Junior - Orders [ Not Delivered — {items[0][1]['kind']} ]"
+        if _post_ticket(subject, message, order_ids):
+            log.info("[Tickets] Submitted non-delivery ticket for %s", link[-40:])
+            for oid, _ in items:
+                state["tickets_submitted"][oid] = datetime.now(timezone.utc).isoformat()
+            submitted += 1
+        else:
+            log.warning("[Tickets] Failed to submit for %s", link[-40:])
+
+    # One refill request ticket covering all delivered orders from last N days
+    if delivered:
+        refill_ids = list(delivered.keys())
+        lines = "\n".join(
+            f"  - #{oid}: {o['quantity']}x {o['kind']} svc#{o.get('service_id','?')} (start={o['_start']})"
+            for oid, o in delivered.items()
+        )
+        message = (
+            "Hello,\n\n"
+            f"We would like to request a REFILL for all the following orders placed "
+            f"in the last {days} days. These orders completed delivery but engagement "
+            "has since dropped and we need them refilled as per the service guarantee.\n\n"
+            f"Orders (last {days} days):\n{lines}\n\n"
+            "Please process refills for all applicable orders. Thank you."
+        )
+        already = [oid for oid in refill_ids if state["tickets_submitted"].get(f"refill_{oid}")]
+        if len(already) < len(refill_ids):
+            if _post_ticket(f"Junior - Refill Request [ Last {days} Days ]", message, refill_ids):
+                log.info("[Tickets] Submitted refill request for %d orders", len(refill_ids))
+                for oid in refill_ids:
+                    state["tickets_submitted"][f"refill_{oid}"] = datetime.now(timezone.utc).isoformat()
                 submitted += 1
             else:
-                log.warning("[Tickets] WARN %s: %s", link[-40:], resp)
-        except Exception as exc:
-            log.error("[Tickets] ERROR %s: %s", link[-40:], exc)
+                log.warning("[Tickets] Failed to submit refill ticket")
+        else:
+            log.info("[Tickets] Refill ticket already submitted for all delivered orders")
 
-    log.info("[Tickets] Done. Submitted: %d/%d groups", submitted, len(groups))
+    log.info("[Tickets] Done. Tickets submitted: %d  (non-delivery: %d groups, refill: %d orders)",
+             submitted, len(undelivered_groups), len(delivered))
 
 
 # ── CLI / Main ──────────────────────────────────────────────────────────────────
