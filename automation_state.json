@@ -826,6 +826,10 @@
     {
       "at": "2026-07-07T22:37:45.650359+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-07T23:52:57.451788+00:00",
+      "msg": "Monitored 47 orders, attempted to trigger 5 refills but all were rejected due to various reasons including completed order status, lack of remains, and high rejection rate of similar refills. No new o"
     }
   ],
   "pending_posts": [],
