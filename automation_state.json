@@ -606,13 +606,13 @@
       "link": "https://x.com/i/status/2074179883543171570",
       "quantity": 100000,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "17682",
-      "start_count": null,
-      "remains": null,
+      "start_count": "490",
+      "remains": "0",
       "added_at": "2026-07-07T02:54:48.762694+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-07T06:28:30.129265+00:00"
     }
   },
   "refills": {
@@ -794,7 +794,11 @@
       "at": "2026-07-07T02:24:16.384383+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     },
-    "[views] #61579015: 100k views svc#17682 for https://x.com/i/status/2074179883543171570"
+    "[views] #61579015: 100k views svc#17682 for https://x.com/i/status/2074179883543171570",
+    {
+      "at": "2026-07-07T06:29:11.740177+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    }
   ],
   "pending_posts": [],
   "tickets_submitted": {
