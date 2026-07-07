@@ -802,6 +802,10 @@
     {
       "at": "2026-07-07T10:07:16.188113+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-07T12:43:05.990011+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": [],
