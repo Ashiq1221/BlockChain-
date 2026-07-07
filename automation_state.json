@@ -660,14 +660,14 @@
       "ticket_sent": true
     },
     "61498649": {
-      "refill_id": 10820670,
-      "requested_at": "2026-07-06T13:03:36.591077+00:00",
-      "status": "Rejected"
+      "refill_id": 10821631,
+      "requested_at": "2026-07-07T15:41:19.441016+00:00",
+      "status": "Pending"
     },
     "61498651": {
-      "refill_id": 10820671,
-      "requested_at": "2026-07-06T13:03:37.211783+00:00",
-      "status": "Rejected"
+      "refill_id": 10821632,
+      "requested_at": "2026-07-07T15:41:19.942695+00:00",
+      "status": "Pending"
     }
   },
   "tickets_sent": {},
@@ -805,6 +805,10 @@
     },
     {
       "at": "2026-07-07T12:43:05.990011+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-07T15:41:46.915064+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
