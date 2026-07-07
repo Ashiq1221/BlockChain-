@@ -818,6 +818,10 @@
     {
       "at": "2026-07-07T19:45:05.058615+00:00",
       "msg": "Monitored 47 orders, triggered 5 refills, checked refill status for 5 orders, no new orders placed, balance: $1.3750538, no pending posts"
+    },
+    {
+      "at": "2026-07-07T21:17:23.100066+00:00",
+      "msg": "Monitored 47 orders, 39 completed, 4 partial, 3 canceled, triggered 5 refills, 1 refill completed, 9 refills rejected, balance: $1.3750538, no issues found"
     }
   ],
   "pending_posts": [],
