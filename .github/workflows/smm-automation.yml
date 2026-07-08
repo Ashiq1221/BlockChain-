@@ -15,6 +15,7 @@ on:
           - refill
           - status
           - tickets
+          - strategy
 
 jobs:
   orchestrate:
@@ -37,8 +38,9 @@ jobs:
         run: |
           pip install requests anthropic
 
-      # Master AI Agent Orchestra — Cloudflare Workers AI (Llama 3.3 70B + DeepSeek R1)
-      # Responsibilities: order monitoring, auto-refill, ticket escalation, status tracking
+      # Master of Lateral Thinking + AI Agent Orchestra
+      # Cloudflare Workers AI (Llama 3.3 70B + DeepSeek R1) + 30-agent council
+      # Master pre-processes every task with SEO/viral/lateral intelligence before ensemble
       - name: Run AI Agent Orchestra
         env:
           # ── SMM panels ────────────────────────────────────────────
@@ -70,6 +72,8 @@ jobs:
             python automation.py --status
           elif [ "$MODE" = "tickets" ]; then
             python automation.py --tickets
+          elif [ "$MODE" = "strategy" ]; then
+            python automation.py --strategy
           else
             python automation.py --once
           fi

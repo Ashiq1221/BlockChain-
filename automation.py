@@ -247,6 +247,110 @@ MANAGEMENT_AGENTS = [
      "role": "Issue the final quality verdict. Your word is law on whether this panel earns future business."},
 ]
 
+# ── Master of Lateral Thinking — Supreme Strategic Controller ─────────────────
+# Sits above ALL other agents. Runs FIRST before the ensemble.
+# Generates unconventional strategic intelligence that every downstream agent sees.
+MASTER_LATERAL_THINKER = {
+    "name": "Master of Lateral Thinking",
+    "persona": (
+        "You are the SUPREME MASTER CONTROLLER — a world-class expert in lateral thinking, "
+        "viral growth hacking, and algorithmic social media intelligence. "
+        "You synthesize SEO principles, behavioral psychology, platform algorithms, and "
+        "counter-intuitive strategy to generate insights no conventional agent would reach.\n\n"
+
+        "LATERAL THINKING ARSENAL:\n"
+        "• De Bono's Six Hats — rotate through logical, creative, critical, emotional, optimistic, "
+        "  and process perspectives before settling on a recommendation\n"
+        "• Random Entry — introduce an unrelated concept to spark non-obvious angles\n"
+        "• Provocation Technique — challenge the obvious assumption to find better paths\n"
+        "• Reversal — ask 'how would we DESTROY this account?' then do the opposite\n"
+        "• Analogical Thinking — 'How does a restaurant get repeat customers? Apply that here.'\n\n"
+
+        "SEO & CONTENT EXPERTISE:\n"
+        "• Twitter SEO: keyword density in tweets, hashtag velocity, @mention leverage, "
+        "  entity recognition for Twitter's graph search\n"
+        "• Engagement velocity: first 30 minutes are critical — front-load views+likes for algo lift\n"
+        "• Social proof cascade: views → likes → retweets → comments in that psychological order\n"
+        "• Content amplification: ratio of 10:3:1 (views:likes:shares) signals organic to Twitter\n"
+        "• Trending adjacency: piggyback on trending keywords in niche without direct competition\n"
+        "• Cross-platform SEO: Twitter indexed by Google — craft tweets for dual-platform discovery\n\n"
+
+        "VIRAL GROWTH FRAMEWORKS:\n"
+        "• AIDA funnel: Attention (views) → Interest (likes) → Desire (shares) → Action (follows)\n"
+        "• Network effect triggers: identify the minimal viral coefficient needed for organic spread\n"
+        "• Credibility stacking: build engagement in layers — never spike one metric in isolation\n"
+        "• Retargeting signals: engagement tells Twitter who to push the content to next\n"
+        "• Comment magnetism: thoughtful comments drive reply chains that extend reach 3-5× more\n\n"
+
+        "DECISION AUTHORITY:\n"
+        "Your strategic brief is injected into EVERY agent's context. "
+        "You have VETO POWER over any decision that contradicts sound growth strategy. "
+        "You think in 3 time horizons: immediate (now), short-term (7 days), long-term (30 days). "
+        "You always ask: 'What is the LEAST expected move that yields the MOST leverage?'"
+    ),
+    "seo_frameworks": [
+        "E-E-A-T for social: Experience (authentic voice), Expertise (niche depth), "
+        "Authority (engagement signals), Trust (consistency + credibility metrics)",
+        "Keyword clustering: group semantically related terms; post text should hit 2-3 cluster terms",
+        "Dwell time proxy: longer replies and quote-tweets are Twitter's dwell-time equivalent",
+        "Backlink analogy: retweets from high-follower accounts = domain authority in SEO",
+        "Click-through signals: high bookmark rate = Twitter's equivalent of high CTR",
+    ],
+    "lateral_moves": [
+        "Instead of mass likes, target micro-influencer engagement (5k-50k) first for credibility",
+        "Views before likes: algorithmically, views prime the recommendation engine first",
+        "Stagger retweets 2-4 hours apart — burst delivery flags as inauthentic",
+        "Comments mentioning niche keywords extend semantic reach without extra cost",
+        "Reply to your own tweet within 1 hour to extend its timeline visibility",
+    ],
+}
+
+# Additional 5-agent Lateral Intelligence Team added to management council
+LATERAL_INTELLIGENCE_TEAM = [
+    {"name": "SEO Architect",           "team": "lateral",
+     "role": (
+         "You are the SEO Architect. Apply search-engine-optimization logic to social media: "
+         "keyword density, semantic clustering, entity prominence, and content freshness signals. "
+         "Every order decision is filtered through: 'does this improve discoverability?' "
+         "Recommend content angles, hashtag stacks, and engagement sequences for maximum indexing."
+     )},
+    {"name": "Viral Coefficient Analyst", "team": "lateral",
+     "role": (
+         "You calculate the viral coefficient (K-factor) for every content piece. "
+         "K = (invites sent per user) × (conversion rate). For SMM: K = (shares per post) × "
+         "(follower-to-engagement ratio). If K < 1, growth stalls — you prescribe the exact "
+         "engagement mix to push K above 1 and trigger organic amplification."
+     )},
+    {"name": "Behavioral Psychologist",  "team": "lateral",
+     "role": (
+         "You exploit cognitive biases and behavioral psychology to maximize engagement: "
+         "social proof (high likes signal quality), authority bias (verified-looking accounts), "
+         "scarcity (trending windows close fast), reciprocity (engagement begets engagement), "
+         "FOMO (early engagement spikes curiosity). You prescribe the psychological order of "
+         "metric delivery for maximum persuasion effect."
+     )},
+    {"name": "Algorithm Whisperer",      "team": "lateral",
+     "role": (
+         "You are the Twitter/X algorithm expert. You know: engagement in the first 30 min "
+         "determines if a tweet enters 'For You' recommendations; retweet velocity matters more "
+         "than total retweets; saves/bookmarks are the most powerful hidden signal; "
+         "reply depth (reply chains) extend algorithmic lifespan. "
+         "You prescribe the optimal timing and sequencing of SMM orders."
+     )},
+    {"name": "Contrarian Strategist",   "team": "lateral",
+     "role": (
+         "You are the Devil's Advocate elevated. You FIND THE NON-OBVIOUS MOVE. "
+         "When everyone zigs, you ask: should we zag? Examples: "
+         "'Don't add more likes — the like:retweet ratio is already suspicious, fix the ratio instead.' "
+         "'Don't order more views — the post already has 100k views but 3 likes; it looks dead.' "
+         "'A single high-quality comment from a niche authority beats 50 generic ones.' "
+         "You prevent groupthink and surface the counter-intuitive truth."
+     )},
+]
+
+# Merge lateral team into MANAGEMENT_AGENTS
+MANAGEMENT_AGENTS.extend(LATERAL_INTELLIGENCE_TEAM)
+
 # ── Task Quantity Lock ────────────────────────────────────────────────────────
 # Parsed from the user's task text before any agent runs.
 # Format: {"likes": 21, "retweets": 10, "comments": 5}
@@ -1636,32 +1740,77 @@ TOOL_DEFS = [
 # ── Prompts ─────────────────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
-You are a senior social media marketing strategist powering a Cloudflare-based AI automation system. You have deep expertise in:
+You are the Master of Lateral Thinking — supreme AI controller of a Cloudflare-powered SMM automation \
+system. You are a world-class expert in SEO, viral growth hacking, behavioral psychology, and \
+platform algorithm exploitation. You synthesize unconventional strategy with operational precision.
 
-PLATFORM KNOWLEDGE
-- Twitter/X algorithm: engagement velocity, recency signals, credibility thresholds
-- Natural growth: realistic ratios (likes:retweets ~3:1), staggered delivery to avoid spam detection
-- Drop rates: SMM likes/RTs from low-quality sources get removed within 24-72h — this is normal
-- Refill mechanics: 24h cooldown after completion is standard; rejection means engagement hasn't dropped enough yet
+══════════════════════════════════════════════════════════════════════
+LATERAL THINKING FRAMEWORK (De Bono + Growth Hacking)
+══════════════════════════════════════════════════════════════════════
+• Before any decision, ask: "What is the LEAST expected move with the MOST leverage?"
+• Reversal test: "How would I DESTROY this account's credibility?" — then do the opposite.
+• Ratio thinking: engagement imbalance (100k views + 3 likes) looks WORSE than no engagement.
+• Cascade logic: views → likes → retweets → comments = the natural psychological trust ladder.
+• Minimal effective dose: what is the SMALLEST intervention for the LARGEST algorithmic impact?
 
-SMM STRATEGY
-- New post package: 100-200 likes + 25-50 retweets + 5k-10k views = natural baseline
-- Never >1000 likes/day on one post — looks synthetic
-- Comments are expensive and risky — use only when explicitly requested
-- Wait 10-15 min after posting before ordering (let Twitter index the post)
+══════════════════════════════════════════════════════════════════════
+SEO EXPERTISE (Applied to Social Media)
+══════════════════════════════════════════════════════════════════════
+• Twitter SEO: tweets are indexed by Google — craft content with 2-3 semantic cluster keywords
+• E-E-A-T signals: Experience (authentic voice), Expertise (niche depth), Authority (engagement
+  ratios), Trust (consistency + no sudden spikes)
+• Keyword velocity: trending hashtags have 15-60 min windows; piggyback early, not late
+• Entity graph: mentioning @accounts and $tickers builds semantic entity associations
+• Dwell-time proxy: reply depth and quote-tweet chains extend algorithmic lifespan 3-5×
+• Backlink analogy: a retweet from a 100k-follower account = 50 DR backlink in SEO terms
+• Click-through signal: bookmark rate is Twitter's highest-weight hidden engagement signal
 
-DECISION FRAMEWORK
-1. Start each cycle: recall_memory to check for relevant past patterns
-2. Always check_orders first for the full picture
-3. trigger_refill only when: completed + cooldown=0 + no active refill
-4. submit_ticket only as last resort (refill rejected 2+ times after cooldown)
-5. place_order only when link appears in pending_posts
-6. Use get_analytics to spot trends (high rejection rate → service issue)
-7. Use parallel_tools to batch data collection (saves time)
+══════════════════════════════════════════════════════════════════════
+VIRAL GROWTH ARCHITECTURE
+══════════════════════════════════════════════════════════════════════
+• K-factor (viral coefficient): K = shares_per_post × follower_conversion_rate; need K > 1
+• AIDA funnel: Attention (views) → Interest (likes) → Desire (shares) → Action (follows/clicks)
+• Social proof cascade: never spike one metric — build credibility through proportional ratios
+• First-30-minute window: Twitter's algorithm makes 70% of its recommendation decision in first 30 min
+• Credibility stack: 10:3:1 ratio (views:likes:retweets) signals organic; 100:1:0 signals dead
+• Comment magnetism: 3-5 thoughtful niche comments drive reply chains that extend reach 3×
+
+══════════════════════════════════════════════════════════════════════
+PLATFORM KNOWLEDGE (Twitter/X Algorithm)
+══════════════════════════════════════════════════════════════════════
+- Engagement velocity in first 30 min determines 'For You' placement — front-load views+likes
+- Retweet velocity matters more than total retweets (same 50 RTs in 5 min beats 50 in 5 hours)
+- Saves/bookmarks are the MOST powerful hidden signal (weight 3× over likes internally)
+- Reply chains extend lifespan: a tweet with 10 replies ranks longer than one with 50 likes
+- Drop rates: SMM likes/RTs from low-quality sources drop within 24-72h — budget for refills
+- Refill mechanics: 24h cooldown after completion; rejection = engagement hasn't dropped enough yet
+- Natural ratios: likes:retweets ≈ 3:1, views:likes ≈ 50:1; violating these looks synthetic
+
+══════════════════════════════════════════════════════════════════════
+SMM STRATEGY PLAYBOOK
+══════════════════════════════════════════════════════════════════════
+- New post baseline: 1k-5k views FIRST → then 100-200 likes → then 25-50 retweets
+- Never >1000 likes/day on one post without proportional views — looks synthetic
+- Comments: expensive + high-risk; only order with real contextual text (svc#16680)
+- Wait 10-15 min post-publish before ordering (Twitter must index the post first)
+- Stagger retweet delivery over 2-4 hours — burst delivery is a spam signal
+- Use svc#9260 (Real SuperInstant, 30-day refill) for retweets — avoid cheap instant services
+
+══════════════════════════════════════════════════════════════════════
+OPERATIONAL DECISION FRAMEWORK
+══════════════════════════════════════════════════════════════════════
+1. Start each cycle: recall_memory → check for relevant past patterns and failures
+2. Always check_orders first → understand current engagement state before any action
+3. trigger_refill only when: completed + cooldown=0 + no active refill pending
+4. submit_ticket: last resort only (refill rejected 2+ times after cooldown elapsed)
+5. place_order: only when link appears in pending_posts — never invent posts
+6. get_analytics: spot trends (high rejection rate → service issue → switch provider)
+7. parallel_tools: batch all data collection in one step to minimize latency
 
 CONFIDENCE GUIDANCE
 Set confidence < 0.75 and/or escalate=true when:
-- Decision involves placing orders or submitting tickets
+- Decision involves placing orders or submitting tickets (irreversible)
+- Engagement ratios are already imbalanced (risk of making it worse)
 - Signals are contradictory or patterns are unusual
 - Refill behaviour doesn't match past experience"""
 
@@ -1901,13 +2050,155 @@ def _run_cloudflare_ensemble(state: dict, task: str, cf: CloudflarePlatform,
     store_memory(final, state, cf)
     return final
 
+# ── Master of Lateral Thinking — Pre-Cycle Strategic Layer ────────────────────────
+
+def _master_lateral_analysis(task: str, state: dict, cf: CloudflarePlatform) -> str:
+    """
+    Supreme strategic pre-processor. Runs BEFORE the main AI ensemble.
+    Generates unconventional, SEO-aware, algorithmically-informed strategic intelligence
+    that is injected into every downstream agent's context.
+    Returns a strategic brief string (empty string on failure — non-blocking).
+    """
+    m = MASTER_LATERAL_THINKER
+    orders = state.get("orders", {})
+    pending = state.get("pending_posts", [])
+
+    # ── Build situational snapshot ─────────────────────────────────────────────
+    recent_orders = sorted(
+        [(oid, o) for oid, o in orders.items() if o.get("panel") == "smmfollows"],
+        key=lambda x: x[1].get("added_at", ""), reverse=True,
+    )[:10]
+
+    order_summary = "\n".join(
+        f"  #{oid}: {o['quantity']}x {o['kind']} svc#{o.get('service_id','?')} "
+        f"status={o.get('status','?')} start={o.get('start_count','?')} remains={o.get('remains','?')}"
+        for oid, o in recent_orders
+    ) or "  (none)"
+
+    pending_summary = "\n".join(f"  - {p}" for p in pending) or "  (none)"
+
+    lateral_prompt = (
+        f"{m['persona']}\n\n"
+        "══════════════════════════════════════════════\n"
+        "CURRENT SITUATION — ANALYZE WITH LATERAL THINKING\n"
+        "══════════════════════════════════════════════\n"
+        f"Task: {task}\n\n"
+        f"Pending posts awaiting engagement:\n{pending_summary}\n\n"
+        f"Last 10 orders:\n{order_summary}\n\n"
+        "SEO Frameworks to apply:\n" +
+        "\n".join(f"  • {f}" for f in m["seo_frameworks"]) + "\n\n"
+        "Proven lateral moves:\n" +
+        "\n".join(f"  • {mv}" for mv in m["lateral_moves"]) + "\n\n"
+        "══════════════════════════════════════════════\n"
+        "OUTPUT REQUIRED (JSON):\n"
+        "{\n"
+        '  "lateral_insight": "The non-obvious strategic angle in 1-2 sentences",\n'
+        '  "seo_recommendation": "Specific SEO/algorithmic action to take",\n'
+        '  "engagement_sequence": ["step1", "step2", "step3"],\n'
+        '  "risk_flags": ["any imbalance or risk worth flagging"],\n'
+        '  "master_directive": "Single most important directive for all agents this cycle"\n'
+        "}"
+    )
+
+    # Try CF fast model first, then Anthropic
+    brief = ""
+    try:
+        if CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
+            result = cf.ai_run(CF_FAST_MODEL, {
+                "messages": [{"role": "user", "content": lateral_prompt}],
+                "max_tokens": 1024,
+            })
+            raw = result.get("response", "")
+            if isinstance(raw, dict):
+                raw = raw.get("content", "") or json.dumps(raw)
+            brief = _strip_think(str(raw))
+            log.info("[MASTER_LATERAL] CF brief generated (%d chars)", len(brief))
+    except Exception as exc:
+        log.debug("[MASTER_LATERAL] CF failed: %s", exc)
+
+    if not brief and ANTHROPIC_KEY and ANTHROPIC_AVAILABLE:
+        try:
+            ai = _anthropic_mod.Anthropic(api_key=ANTHROPIC_KEY)
+            resp = ai.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=512,
+                messages=[{"role": "user", "content": lateral_prompt}],
+            )
+            brief = resp.content[0].text if resp.content else ""
+            log.info("[MASTER_LATERAL] Anthropic brief generated (%d chars)", len(brief))
+        except Exception as exc:
+            log.debug("[MASTER_LATERAL] Anthropic failed: %s", exc)
+
+    if not brief:
+        # Deterministic fallback: apply the Master's known heuristics
+        ratio_flags = []
+        for oid, o in recent_orders:
+            sc = o.get("start_count") or 0
+            rem = o.get("remains") or 0
+            qty = o.get("quantity", 0)
+            if o.get("status") == "Completed" and int(sc) < 5 and int(rem) == 0 and qty > 20:
+                ratio_flags.append(f"#{oid} {qty}x {o['kind']} — shows Completed but 0 delivered (svc#{o.get('service_id','?')})")
+
+        brief = json.dumps({
+            "lateral_insight": (
+                "Non-delivery pattern detected — cheap instant services (svc#13138/13139) "
+                "complete with 0 delivery. Switch to premium services (svc#9260 for RT) "
+                "for actual delivery. Engagement ratios matter: build views→likes→RT ladder."
+                if ratio_flags else
+                "Apply the engagement cascade: views first, then likes, then retweets. "
+                "Stagger delivery to mimic organic growth patterns."
+            ),
+            "seo_recommendation": (
+                "Submit refund tickets for non-delivered orders, then rebuild with svc#9260 "
+                "retweets. Views+likes before retweets is the algorithmic order."
+                if ratio_flags else
+                "Ensure views:likes ratio ≥ 50:1 before ordering more retweets. "
+                "Front-load views to prime Twitter's recommendation engine."
+            ),
+            "engagement_sequence": ["views (prime algorithm)", "likes (social proof)", "retweets (amplify)", "comments (extend lifespan)"],
+            "risk_flags": ratio_flags or ["No critical risk flags"],
+            "master_directive": (
+                f"PRIORITY: {len(ratio_flags)} non-delivery orders detected. Resolve before new orders."
+                if ratio_flags else
+                "Maintain natural engagement ratios. Front-load views before other metrics."
+            ),
+        }, indent=2)
+
+    return brief
+
+
+def _format_lateral_brief_for_context(brief: str) -> str:
+    """Format the Master's strategic brief for injection into agent context."""
+    parsed = None
+    try:
+        parsed = json.loads(brief) if brief.strip().startswith("{") else None
+    except Exception:
+        pass
+
+    if parsed:
+        lines = [
+            "╔══════════════════════════════════════════════════════════╗",
+            "║   MASTER OF LATERAL THINKING — STRATEGIC DIRECTIVE       ║",
+            "╚══════════════════════════════════════════════════════════╝",
+            f"🧠 LATERAL INSIGHT: {parsed.get('lateral_insight', '')}",
+            f"🔍 SEO RECOMMENDATION: {parsed.get('seo_recommendation', '')}",
+            "📈 ENGAGEMENT SEQUENCE: " + " → ".join(parsed.get("engagement_sequence", [])),
+        ]
+        if parsed.get("risk_flags"):
+            lines.append("⚠️  RISK FLAGS: " + " | ".join(parsed["risk_flags"]))
+        lines.append(f"⚡ MASTER DIRECTIVE: {parsed.get('master_directive', '')}")
+        lines.append("═" * 62)
+        return "\n".join(lines)
+    return f"[MASTER LATERAL BRIEF]\n{brief}"
+
+
 # ── AI Priority Chain ──────────────────────────────────────────────────────────────
 
 def run_agent_cycle(state: dict, task: str, cf: CloudflarePlatform,
                     max_iters: int = 25) -> str:
     """
     Master AI controller entry point.
-    Priority: CF Ensemble → DeepSeek direct → Claude → rule-based (refills only for custom tasks).
+    Runs Master of Lateral Thinking FIRST to generate strategic intelligence,
+    then injects that brief into: CF Ensemble → DeepSeek direct → Claude → rule-based.
     Locks task quantities before any sub-agent runs — Master Controller enforces them.
     """
     global _TASK_QUANTITY_LOCK
@@ -1919,30 +2210,44 @@ def run_agent_cycle(state: dict, task: str, cf: CloudflarePlatform,
     else:
         _TASK_QUANTITY_LOCK = {}
 
+    # ── MASTER OF LATERAL THINKING: generate strategic brief FIRST ────────────
+    log.info("[MASTER_LATERAL] Generating pre-cycle strategic intelligence...")
+    lateral_brief = _master_lateral_analysis(task, state, cf)
+    formatted_brief = _format_lateral_brief_for_context(lateral_brief)
+    log.info("[MASTER_LATERAL] %s", formatted_brief.splitlines()[3] if len(formatted_brief.splitlines()) > 3 else "Brief ready")
+
+    # Inject Master's brief into the task context seen by all downstream agents
+    augmented_task = (
+        f"{formatted_brief}\n\n"
+        f"═══════════ OPERATIONAL TASK ═══════════\n"
+        f"{task}"
+    )
+    log_agent(state, f"[MASTER_LATERAL] Brief injected for task: {task[:80]}")
+
     try:
         if CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
             try:
                 log.info("[AI] Cloudflare ensemble (Llama 3.3 70B + DeepSeek R1)")
-                return _run_cloudflare_ensemble(state, task, cf, max_iters)
+                return _run_cloudflare_ensemble(state, augmented_task, cf, max_iters)
             except Exception as exc:
                 log.warning("[AI] CF ensemble failed (%s) — trying DeepSeek direct", exc)
 
         if DEEPSEEK_DIRECT and not DEEPSEEK_DIRECT.startswith("cfut_"):
             try:
                 log.info("[AI] DeepSeek direct API")
-                return _run_deepseek_direct(state, task, max_iters)
+                return _run_deepseek_direct(state, augmented_task, max_iters)
             except Exception as exc:
                 log.warning("[AI] DeepSeek failed (%s) — trying Claude", exc)
 
         if ANTHROPIC_KEY:
             try:
                 log.info("[AI] Claude fallback")
-                return _run_claude_cycle(state, task, cf, max_iters)
+                return _run_claude_cycle(state, augmented_task, cf, max_iters)
             except Exception as exc:
                 log.warning("[AI] Claude failed (%s) — rule-based", exc)
 
         log.info("[AI] Rule-based fallback")
-        return _rule_based_cycle(state, task)
+        return _rule_based_cycle(state, augmented_task)
     finally:
         # Always clear the lock after the cycle — prevents bleed-over between runs
         _TASK_QUANTITY_LOCK = {}
@@ -2366,6 +2671,7 @@ def main() -> None:
     parser.add_argument("--post",      metavar="URL",       help="Queue a post URL for ordering")
     parser.add_argument("--refill",    action="store_true", help="Refill-focused pass")
     parser.add_argument("--tickets",   action="store_true", help="Submit non-delivery tickets for Completed orders with no delivery")
+    parser.add_argument("--strategy",  action="store_true", help="Run Master of Lateral Thinking standalone — print strategic brief and exit")
     parser.add_argument("--provision", action="store_true", help="(Re)provision Cloudflare resources")
     parser.add_argument("--analytics", action="store_true", help="Show D1 analytics report")
     parser.add_argument("--interval",  type=int, default=POLL_SECS,
@@ -2402,6 +2708,18 @@ def main() -> None:
 
     if args.tickets:
         _submit_nondelivery_tickets(state)
+        save_state(state)
+        return
+
+    if args.strategy:
+        print("\n" + "═" * 64)
+        print("  MASTER OF LATERAL THINKING — STRATEGIC ANALYSIS")
+        print("═" * 64)
+        brief = _master_lateral_analysis(MONITOR_TASK, state, cf)
+        formatted = _format_lateral_brief_for_context(brief)
+        print(formatted)
+        print()
+        log_agent(state, "[MASTER_LATERAL] Standalone strategy brief generated")
         save_state(state)
         return
 
