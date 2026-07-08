@@ -1518,16 +1518,36 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
     Batches in groups of 20 so token limits are never exceeded."""
     BATCH = 20
 
+    def _enforce_7_words(comment: str) -> str:
+        """Trim comment to exactly 7 real words. Emojis are preserved but not counted."""
+        # Split tokens; separate real words from emoji/punctuation-only tokens
+        tokens = comment.split()
+        word_tokens = [t for t in tokens if re.search(r"[a-zA-Z0-9']", t)]
+        emoji_tokens = [t for t in tokens if not re.search(r"[a-zA-Z0-9']", t)]
+        # Trim word tokens to exactly 7
+        word_tokens = word_tokens[:7]
+        # Pad if AI returned fewer than 7 real words (rare)
+        filler = ["really", "truly", "genuinely", "absolutely", "definitely", "always", "now"]
+        while len(word_tokens) < 7:
+            word_tokens.append(filler[len(word_tokens) % len(filler)])
+        # Reconstruct: words first, then trailing emojis (keep at most 1)
+        trailing = emoji_tokens[:1]
+        return " ".join(word_tokens + trailing)
+
     def _one_batch(n: int, existing: list) -> list:
         avoid = f" Do NOT repeat these: {existing[-10:]}" if existing else ""
         prompt = (
             f"Generate exactly {n} unique, authentic Twitter comments for this post.\n"
-            "Rules:\n"
+            "CRITICAL RULE — EACH COMMENT MUST BE EXACTLY 7 WORDS. NOT 6, NOT 8. EXACTLY 7.\n"
+            "Count every word carefully before including a comment.\n"
+            "Other rules:\n"
             "- Each comment must be directly relevant to the post topic\n"
-            "- Vary style: enthusiastic, thoughtful, short, with emojis\n"
-            "- Sound like real users — no bots, no generic praise\n"
+            "- Vary style: enthusiastic, thoughtful, opinionated, with emojis\n"
+            "- Sound like real users — no bots, no generic empty praise\n"
             "- No hashtags, no @mentions\n"
+            "- Emojis do NOT count as words\n"
             f"- Return ONLY a JSON array of {n} strings, nothing else\n"
+            f"- Example of valid 7-word comment: \"This vision for the future is incredible 🔥\"\n"
             f"{avoid}\n\n"
             f'Post: "{post_text[:400]}"'
         )
@@ -1541,7 +1561,7 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
                 if m:
                     arr = json.loads(m.group())
                     if isinstance(arr, list) and arr:
-                        return [str(c) for c in arr[:n]]
+                        return [_enforce_7_words(str(c)) for c in arr[:n]]
             except Exception as exc:
                 log.debug("[Comments] Workers AI batch failed: %s", exc)
         # Try Anthropic
@@ -1557,7 +1577,7 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
                 if m:
                     arr = json.loads(m.group())
                     if isinstance(arr, list) and arr:
-                        return [str(c) for c in arr[:n]]
+                        return [_enforce_7_words(str(c)) for c in arr[:n]]
             except Exception as exc:
                 log.debug("[Comments] Anthropic batch failed: %s", exc)
         return []
@@ -1578,25 +1598,58 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
         log.info("[Comments] Generated %d custom comments via AI", len(collected))
         return "\n".join(collected[:count])
 
-    # Fallback pool — used only when AI is unavailable
+    # Fallback pool — used only when AI is unavailable (all exactly 7 words)
     fallback = [
-        "This is amazing! 🔥", "Love this content!", "Great post!", "So true 💯",
-        "This resonates with me deeply", "Absolutely spot on", "Keep it up! 👏",
-        "Brilliant take on this topic", "Couldn't agree more", "This needs more attention",
-        "Well said!", "Pure gold 🙌", "This is the content I needed today",
-        "Facts 💪", "Sharing this immediately", "You always deliver 🎯",
-        "This is exactly right", "Underrated post", "More people need to see this",
-        "Excellent point!", "Mind-blowing stuff 🤯", "This changes everything",
-        "The future is here", "Incredible work", "This is why I follow you",
-        "Can't stop thinking about this", "Wow just wow", "Needed to hear this",
-        "This hits different 🙏", "Absolutely legendary", "No way this isn't viral",
-        "I showed this to my team", "Bookmarked forever", "This is the real deal",
-        "Dropping this in our group chat", "The dedication shows 🔑",
-        "Love the vision here", "This is it, right here", "On point as always",
-        "Next level thinking 💡", "This deserves a retweet", "Said it perfectly",
-        "Nothing but respect", "The clarity here is unmatched", "Big brain energy ✨",
-        "This should be on the front page", "Quality content 🏆", "Genuinely impressed",
-        "You nailed it", "This is the way", "Outstanding perspective",
+        "This is absolutely the best content ever 🔥",
+        "Love how you explained this so well",
+        "The future is really looking bright now 💡",
+        "This resonates with me on every level",
+        "Brilliant perspective that everyone should hear today",
+        "You always deliver the most valuable insights",
+        "This is exactly what the world needs 🙌",
+        "Couldn't agree more with everything you said",
+        "More people really need to see this",
+        "The vision here is truly next level 🚀",
+        "This changes how I think about everything",
+        "Incredible work that speaks for itself today",
+        "Can't stop sharing this with my team",
+        "This hits different for me every time 🙏",
+        "Nothing but respect for this bold move",
+        "The clarity and depth here is unmatched ✨",
+        "Genuinely impressed by everything you stand for",
+        "This is the content I live for",
+        "Big ideas like this deserve more attention",
+        "Dropping this straight into our group chat 📲",
+        "Said it better than anyone else could",
+        "The dedication and vision here really shows 🔑",
+        "Quality content that actually makes you think",
+        "On point as always without fail today 🎯",
+        "This deserves every single retweet it gets",
+        "Needed to hear this more than ever",
+        "Outstanding perspective that sets a new standard",
+        "You nailed it better than I expected 💯",
+        "Next level thinking from start to finish",
+        "Pure insight is always a welcome sight",
+        "This is what real leadership looks like",
+        "Mind expanding content that shifts the paradigm 🤯",
+        "Bookmarking this for every conversation going forward",
+        "Facts delivered with precision and genuine purpose 💪",
+        "The real deal wrapped in powerful words",
+        "Sharing this because it truly deserves attention",
+        "This vision for tomorrow starts right here",
+        "Absolutely legendary take on a complex issue",
+        "World needs more voices like yours today",
+        "This is why I follow you always 👏",
+        "Wow this just opened up a perspective",
+        "The energy and passion here is contagious",
+        "Everything about this is simply on fire 🔥",
+        "Proud to see ideas like these shared",
+        "This should be required reading for everyone",
+        "Your insight cuts through the noise perfectly",
+        "History will look back on this moment",
+        "Breaking barriers with every brilliant post today",
+        "The kind of content that inspires action",
+        "Exactly the perspective the conversation needed today",
     ]
     # Cycle fallback to fill remaining slots
     needed = count - len(collected)
