@@ -1514,54 +1514,108 @@ def tool_submit_ticket(state: dict, order_ids: list, subject_type: str, message:
         return json.dumps({"error": str(exc)})
 
 def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform | None" = None) -> str:
-    """Use Workers AI (or Anthropic fallback) to generate custom comments for a post.
+    """Generate custom Twitter comments: exactly 7 tokens per comment
+    = 5 real words + 2 trending AI/Web3 hashtags. Optional emoji appended.
     Batches in groups of 20 so token limits are never exceeded."""
     BATCH = 20
 
-    def _enforce_7_words(comment: str) -> str:
-        """Trim comment to exactly 7 real words. Emojis are preserved but not counted."""
-        # Split tokens; separate real words from emoji/punctuation-only tokens
+    # ── Trending AI + Web3 hashtag pool (rotated to vary comments) ──────────────
+    TRENDING_HASHTAGS = [
+        # AI-focused
+        "#AI", "#GenerativeAI", "#ArtificialIntelligence", "#MachineLearning",
+        "#DeepLearning", "#LLM", "#ChatGPT", "#AIAgents", "#AIInnovation",
+        "#FutureOfAI", "#AIRevolution", "#NeuralNetworks", "#AGI", "#AITech",
+        "#AIForGood", "#SmartAI", "#AIAutomation", "#AIModels",
+        # Web3-focused
+        "#Web3", "#Blockchain", "#DeFi", "#NFT", "#Crypto", "#DAOs",
+        "#Metaverse", "#TokenEconomy", "#SmartContracts", "#Decentralized",
+        "#Web3Future", "#CryptoInnovation", "#BlockchainTech", "#DeFiRevolution",
+        "#NFTs", "#Web3Community", "#DigitalAssets", "#CryptoTwitter",
+        "#DecentralizedAI", "#Web3AI",
+    ]
+    import random as _random
+
+    def _pick_hashtags(idx: int) -> tuple[str, str]:
+        """Pick 1 AI hashtag + 1 Web3 hashtag, rotated by comment index."""
+        ai_tags  = [t for t in TRENDING_HASHTAGS if t in (
+            "#AI","#GenerativeAI","#ArtificialIntelligence","#MachineLearning",
+            "#DeepLearning","#LLM","#ChatGPT","#AIAgents","#AIInnovation",
+            "#FutureOfAI","#AIRevolution","#NeuralNetworks","#AGI","#AITech",
+            "#AIForGood","#SmartAI","#AIAutomation","#AIModels","#DecentralizedAI",
+        )]
+        web3_tags = [t for t in TRENDING_HASHTAGS if t not in ai_tags]
+        ai_tag   = ai_tags[idx % len(ai_tags)]
+        web3_tag = web3_tags[idx % len(web3_tags)]
+        return ai_tag, web3_tag
+
+    def _enforce_structure(comment: str, idx: int) -> str:
+        """
+        Enforce 5 real words + 2 trending hashtags = 7 tokens total.
+        Emojis are appended as decoration (not counted).
+        """
         tokens = comment.split()
-        word_tokens = [t for t in tokens if re.search(r"[a-zA-Z0-9']", t)]
-        emoji_tokens = [t for t in tokens if not re.search(r"[a-zA-Z0-9']", t)]
-        # Trim word tokens to exactly 7
-        word_tokens = word_tokens[:7]
-        # Pad if AI returned fewer than 7 real words (rare)
-        filler = ["really", "truly", "genuinely", "absolutely", "definitely", "always", "now"]
-        while len(word_tokens) < 7:
-            word_tokens.append(filler[len(word_tokens) % len(filler)])
-        # Reconstruct: words first, then trailing emojis (keep at most 1)
-        trailing = emoji_tokens[:1]
-        return " ".join(word_tokens + trailing)
+        # Separate existing hashtags, emojis, and real words
+        existing_hashtags = [t for t in tokens if t.startswith("#") and re.search(r"[a-zA-Z]", t)]
+        emoji_tokens      = [t for t in tokens if not re.search(r"[a-zA-Z0-9']", t)]
+        real_words        = [t for t in tokens
+                             if re.search(r"[a-zA-Z0-9']", t) and not t.startswith("#")]
+
+        # Always use our chosen trending hashtags (ignore whatever AI put)
+        ai_tag, web3_tag = _pick_hashtags(idx)
+
+        # Trim / pad real words to exactly 5
+        filler = ["truly", "really", "genuinely", "absolutely", "now"]
+        real_words = real_words[:5]
+        while len(real_words) < 5:
+            real_words.append(filler[len(real_words) % len(filler)])
+
+        # Build final: [5 words] [#AI-tag] [#Web3-tag] [optional emoji]
+        parts = real_words + [ai_tag, web3_tag]
+        if emoji_tokens:
+            parts.append(emoji_tokens[0])
+        return " ".join(parts)
 
     def _one_batch(n: int, existing: list) -> list:
-        avoid = f" Do NOT repeat these: {existing[-10:]}" if existing else ""
+        avoid = f" Do NOT repeat: {existing[-10:]}" if existing else ""
+        hashtag_examples = "#AI #Web3"
         prompt = (
-            f"Generate exactly {n} unique, authentic Twitter comments for this post.\n"
-            "CRITICAL RULE — EACH COMMENT MUST BE EXACTLY 7 WORDS. NOT 6, NOT 8. EXACTLY 7.\n"
-            "Count every word carefully before including a comment.\n"
-            "Other rules:\n"
-            "- Each comment must be directly relevant to the post topic\n"
-            "- Vary style: enthusiastic, thoughtful, opinionated, with emojis\n"
-            "- Sound like real users — no bots, no generic empty praise\n"
-            "- No hashtags, no @mentions\n"
-            "- Emojis do NOT count as words\n"
+            f"Generate exactly {n} unique, authentic Twitter comments for this post.\n\n"
+            "STRUCTURE — MANDATORY FOR EVERY COMMENT:\n"
+            "  [5 real words] [1 trending AI hashtag] [1 trending Web3 hashtag]\n"
+            "  = exactly 7 tokens total (emojis are optional and come after, not counted)\n\n"
+            "RULES:\n"
+            "- The 5 real words must be relevant to the post topic\n"
+            "- Use exactly 1 AI hashtag + 1 Web3 hashtag per comment\n"
+            f"- Choose hashtags from: #AI #GenerativeAI #MachineLearning #LLM #ChatGPT "
+            f"#AIAgents #AIRevolution #AGI #DeepLearning | "
+            f"#Web3 #Blockchain #DeFi #Crypto #DAOs #NFT #Metaverse #SmartContracts #DecentralizedAI\n"
+            "- Vary which hashtags you pick across comments (don't repeat same pair)\n"
+            "- Sound like real engaged users, not bots\n"
+            "- No @mentions\n"
+            "- Optional: add 1 emoji after the hashtags\n"
             f"- Return ONLY a JSON array of {n} strings, nothing else\n"
-            f"- Example of valid 7-word comment: \"This vision for the future is incredible 🔥\"\n"
+            "- VALID EXAMPLES:\n"
+            '  "This is the future of innovation #AI #Web3 🔥"\n'
+            '  "Decentralized intelligence reshaping everything now #GenerativeAI #Blockchain"\n'
+            '  "Bold vision for the coming decade #LLM #DeFi 🚀"\n'
             f"{avoid}\n\n"
             f'Post: "{post_text[:400]}"'
         )
         # Try Workers AI
         if cf and CF_ACCOUNT_ID and (CF_SCOPED_KEY or CF_GLOBAL_KEY):
             try:
-                result = cf.ai_run(CF_FAST_MODEL, {"messages": [{"role": "user", "content": prompt}], "max_tokens": 2048})
+                result = cf.ai_run(CF_FAST_MODEL, {
+                    "messages": [{"role": "user", "content": prompt}], "max_tokens": 2048,
+                })
                 raw = result.get("response", "")
-                text = re.sub(r"<think>.*?</think>", "", raw if isinstance(raw, str) else json.dumps(raw), flags=re.DOTALL).strip()
+                text = re.sub(r"<think>.*?</think>",
+                              "", raw if isinstance(raw, str) else json.dumps(raw),
+                              flags=re.DOTALL).strip()
                 m = re.search(r"\[[\s\S]*\]", text)
                 if m:
                     arr = json.loads(m.group())
                     if isinstance(arr, list) and arr:
-                        return [_enforce_7_words(str(c)) for c in arr[:n]]
+                        return [_enforce_structure(str(c), i) for i, c in enumerate(arr[:n])]
             except Exception as exc:
                 log.debug("[Comments] Workers AI batch failed: %s", exc)
         # Try Anthropic
@@ -1577,7 +1631,7 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
                 if m:
                     arr = json.loads(m.group())
                     if isinstance(arr, list) and arr:
-                        return [_enforce_7_words(str(c)) for c in arr[:n]]
+                        return [_enforce_structure(str(c), i) for i, c in enumerate(arr[:n])]
             except Exception as exc:
                 log.debug("[Comments] Anthropic batch failed: %s", exc)
         return []
@@ -1598,60 +1652,72 @@ def _generate_comments(post_text: str, count: int = 20, cf: "CloudflarePlatform 
         log.info("[Comments] Generated %d custom comments via AI", len(collected))
         return "\n".join(collected[:count])
 
-    # Fallback pool — used only when AI is unavailable (all exactly 7 words)
-    fallback = [
-        "This is absolutely the best content ever 🔥",
-        "Love how you explained this so well",
-        "The future is really looking bright now 💡",
-        "This resonates with me on every level",
-        "Brilliant perspective that everyone should hear today",
-        "You always deliver the most valuable insights",
-        "This is exactly what the world needs 🙌",
-        "Couldn't agree more with everything you said",
-        "More people really need to see this",
-        "The vision here is truly next level 🚀",
-        "This changes how I think about everything",
-        "Incredible work that speaks for itself today",
-        "Can't stop sharing this with my team",
-        "This hits different for me every time 🙏",
-        "Nothing but respect for this bold move",
-        "The clarity and depth here is unmatched ✨",
-        "Genuinely impressed by everything you stand for",
-        "This is the content I live for",
-        "Big ideas like this deserve more attention",
-        "Dropping this straight into our group chat 📲",
-        "Said it better than anyone else could",
-        "The dedication and vision here really shows 🔑",
-        "Quality content that actually makes you think",
-        "On point as always without fail today 🎯",
-        "This deserves every single retweet it gets",
-        "Needed to hear this more than ever",
-        "Outstanding perspective that sets a new standard",
-        "You nailed it better than I expected 💯",
-        "Next level thinking from start to finish",
-        "Pure insight is always a welcome sight",
-        "This is what real leadership looks like",
-        "Mind expanding content that shifts the paradigm 🤯",
-        "Bookmarking this for every conversation going forward",
-        "Facts delivered with precision and genuine purpose 💪",
-        "The real deal wrapped in powerful words",
-        "Sharing this because it truly deserves attention",
-        "This vision for tomorrow starts right here",
-        "Absolutely legendary take on a complex issue",
-        "World needs more voices like yours today",
-        "This is why I follow you always 👏",
-        "Wow this just opened up a perspective",
-        "The energy and passion here is contagious",
-        "Everything about this is simply on fire 🔥",
-        "Proud to see ideas like these shared",
-        "This should be required reading for everyone",
-        "Your insight cuts through the noise perfectly",
-        "History will look back on this moment",
-        "Breaking barriers with every brilliant post today",
-        "The kind of content that inspires action",
-        "Exactly the perspective the conversation needed today",
+    # ── Fallback pool (AI unavailable) — 5 words + 2 hashtags = 7 tokens ───────
+    # Pattern: [5 real words] [#AI-tag] [#Web3-tag] [optional emoji]
+    fallback_templates = [
+        ("This vision is truly groundbreaking",     "#AI",               "#Web3",         "🔥"),
+        ("The future belongs to decentralized minds","#GenerativeAI",    "#Blockchain",   ""),
+        ("Bold innovation starts right here",        "#AIRevolution",    "#DeFi",         "🚀"),
+        ("Changing the world one idea",              "#MachineLearning", "#Crypto",       "💡"),
+        ("Intelligence meets decentralization perfectly",  "#LLM",       "#DAOs",         ""),
+        ("This is next level thinking",              "#AGI",             "#Metaverse",    "🤯"),
+        ("Decentralized AI is the future",           "#AIAgents",        "#SmartContracts",""),
+        ("Real innovation happening right now",      "#DeepLearning",    "#Web3",         "⚡"),
+        ("The paradigm shift is here",               "#ChatGPT",         "#NFT",          "🙌"),
+        ("Incredible work pushing boundaries forward","#AIInnovation",   "#CryptoTwitter",""),
+        ("This changes everything we know",          "#FutureOfAI",      "#DeFiRevolution","🌐"),
+        ("Visionary content the world needs",        "#AITech",          "#Web3Future",   ""),
+        ("The smartest move in tech today",          "#AIForGood",       "#TokenEconomy", "💯"),
+        ("Brilliant minds building the future",      "#SmartAI",         "#DigitalAssets","🔑"),
+        ("Disruption at its absolute finest",        "#AIAutomation",    "#Decentralized",""),
+        ("This is where history gets made",          "#AIModels",        "#BlockchainTech","🏆"),
+        ("Mind blown by this powerful insight",      "#NeuralNetworks",  "#Web3Community","✨"),
+        ("The intersection of two revolutions",      "#AI",              "#Web3",         "🔥"),
+        ("Exactly what the ecosystem needed",        "#GenerativeAI",    "#Blockchain",   ""),
+        ("Building tomorrow starting from today",    "#MachineLearning", "#DeFi",         "🚀"),
+        ("This is the move everyone missed",         "#LLM",             "#Crypto",       "👀"),
+        ("Proof that the future is decentralized",   "#AGI",             "#SmartContracts","💡"),
+        ("Redefining what technology can achieve",   "#AIRevolution",    "#DAOs",         ""),
+        ("Next generation thinking made visible",    "#DeepLearning",    "#NFT",          "🌟"),
+        ("Real value creation happening here",       "#AIAgents",        "#Web3",         "💎"),
+        ("The data speaks louder than words",        "#ChatGPT",         "#Blockchain",   "📊"),
+        ("Leadership that defines a generation",     "#AIInnovation",    "#DeFi",         "👑"),
+        ("This narrative is finally being written",  "#FutureOfAI",      "#Web3Future",   ""),
+        ("Pure signal in a noisy space",             "#AITech",          "#Decentralized","🎯"),
+        ("Watching history unfold in real time",     "#AIForGood",       "#CryptoTwitter",""),
+        ("Connecting the dots others always miss",   "#SmartAI",         "#TokenEconomy", "🧠"),
+        ("The revolution will be decentralized",     "#AIAutomation",    "#DigitalAssets","⚡"),
+        ("Profound insight distilled into action",   "#AIModels",        "#BlockchainTech",""),
+        ("Ahead of the curve as always here",        "#NeuralNetworks",  "#Web3Community","🚀"),
+        ("This post needed to exist today",          "#AI",              "#Web3",         "🙌"),
+        ("Powerful ideas backed by real innovation", "#GenerativeAI",    "#DeFiRevolution",""),
+        ("The smartest summary of the moment",       "#MachineLearning", "#Crypto",       "🤝"),
+        ("Turning complexity into pure clarity",     "#LLM",             "#SmartContracts","✅"),
+        ("Rare clarity in a complex world",          "#AGI",             "#DAOs",         "💫"),
+        ("The convergence everyone should understand","#DeepLearning",   "#NFT",          ""),
+        ("Adoption curve just got shorter",          "#AIAgents",        "#Metaverse",    "📈"),
+        ("Shifting power back to the people",        "#ChatGPT",         "#DeFi",         "✊"),
+        ("Thoughts that aged perfectly over time",   "#AIInnovation",    "#Blockchain",   ""),
+        ("Mainstream hasn't caught up yet",          "#FutureOfAI",      "#Web3",         "🔭"),
+        ("This thread deserves maximum engagement",  "#AIRevolution",    "#TokenEconomy", "🔥"),
+        ("The dots are finally connecting now",      "#AITech",          "#DigitalAssets","💡"),
+        ("Bold claim backed by brilliant execution", "#AIForGood",       "#BlockchainTech",""),
+        ("Insight that compounds over the years",    "#SmartAI",         "#Web3Future",   "📚"),
+        ("Every founder needs to read this",         "#AIAutomation",    "#DAOs",         ""),
+        ("Ecosystem builders take note of this",     "#NeuralNetworks",  "#DecentralizedAI","🌐"),
     ]
-    # Cycle fallback to fill remaining slots
+
+    fallback = []
+    for words, tag1, tag2, emoji in fallback_templates:
+        parts = words.split()[:5]
+        entry = " ".join(parts) + f" {tag1} {tag2}"
+        if emoji:
+            entry += f" {emoji}"
+        fallback.append(entry)
+
+    # Enforce structure on every fallback entry too
+    fallback = [_enforce_structure(c, i) for i, c in enumerate(fallback)]
+
     needed = count - len(collected)
     cycled = (fallback * ((needed // len(fallback)) + 1))[:needed]
     collected.extend(cycled)
