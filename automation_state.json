@@ -613,6 +613,20 @@
       "remains": "0",
       "added_at": "2026-07-07T02:54:48.762694+00:00",
       "completed_at": "2026-07-07T06:28:30.129265+00:00"
+    },
+    "61597579": {
+      "id": "61597579",
+      "kind": "retweets",
+      "link": "https://x.com/i/status/2073706172318916924",
+      "quantity": 500,
+      "refillable": true,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "9260",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-08T06:51:59.447681+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -838,7 +852,8 @@
     {
       "at": "2026-07-08T05:21:13.357959+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
-    }
+    },
+    "[RT-replacement-svc9260] #61597579: 500x retweets svc#9260 30d-refill for https://x.com/i/status/2073706172318916924"
   ],
   "pending_posts": [],
   "tickets_submitted": {
