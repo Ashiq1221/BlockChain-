@@ -625,7 +625,7 @@
     "61450841": {
       "refill_id": 10821862,
       "requested_at": "2026-07-07T22:37:04.919050+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450843": {
       "refill_id": 10819424,
@@ -635,7 +635,7 @@
     "61450844": {
       "refill_id": 10821863,
       "requested_at": "2026-07-07T22:37:08.774287+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450846": {
       "refill_id": 10819426,
@@ -645,7 +645,7 @@
     "61450847": {
       "refill_id": 10821864,
       "requested_at": "2026-07-07T22:37:12.482387+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61481315": {
       "refill_id": 10815884,
@@ -830,6 +830,10 @@
     {
       "at": "2026-07-07T23:52:57.451788+00:00",
       "msg": "Monitored 47 orders, attempted to trigger 5 refills but all were rejected due to various reasons including completed order status, lack of remains, and high rejection rate of similar refills. No new o"
+    },
+    {
+      "at": "2026-07-08T01:58:02.680400+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": [],
