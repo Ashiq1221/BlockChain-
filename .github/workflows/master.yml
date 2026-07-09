@@ -1,0 +1,60 @@
+name: Lateral Thinking Master
+
+on:
+  workflow_dispatch:
+    inputs:
+      budget_seconds:
+        description: "How long the master loop runs (seconds)"
+        required: false
+        default: "300"
+      auto_submit:
+        description: "Actually submit (true) or dry-run with screenshots (false)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lateral-master
+  cancel-in-progress: false
+
+jobs:
+  master:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install aiohttp beautifulsoup4 python-dotenv requests playwright
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+      - name: Run the Lateral Thinking Master
+        env:
+          CF_ACCOUNT_ID:      ${{ secrets.CF_ACCOUNT_ID }}
+          CF_EMAIL:           ${{ secrets.CF_EMAIL }}
+          CF_GLOBAL_API_KEY:  ${{ secrets.CF_GLOBAL_API_KEY }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_OWNER_ID:  ${{ secrets.TELEGRAM_OWNER_ID }}
+          APPLY_PHONE:        ${{ secrets.APPLY_PHONE }}
+          APPLY_AUTO_SUBMIT:      ${{ github.event.inputs.auto_submit || 'false' }}
+          MASTER_BUDGET_SECONDS:  ${{ github.event.inputs.budget_seconds || '300' }}
+        run: python master.py
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: master-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
