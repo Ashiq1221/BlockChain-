@@ -85,6 +85,8 @@ jobs:
           git add automation_state.json
           if ! git diff --staged --quiet; then
             git commit -m "state: auto-update $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            # Rebase onto latest remote before pushing to avoid rejection
+            git pull --rebase origin claude/smmfollows-api-access-4q2rqv
             git push origin claude/smmfollows-api-access-4q2rqv
           else
             echo "No state changes — skipping commit"
