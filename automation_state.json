@@ -679,9 +679,9 @@
       "status": "Rejected"
     },
     "61498651": {
-      "refill_id": 10823235,
-      "requested_at": "2026-07-09T17:49:45.050239+00:00",
-      "status": "Rejected"
+      "refill_id": 10824340,
+      "requested_at": "2026-07-10T19:18:44.143744+00:00",
+      "status": "Pending"
     },
     "61564364": {
       "refill_id": 10823857,
@@ -705,11 +705,6 @@
     "https://x.com/i/status/2073706172318916924"
   ],
   "agent_log": [
-    "[RT-replacement-svc9260] #61597579: 500x retweets svc#9260 30d-refill for https://x.com/i/status/2073706172318916924",
-    {
-      "at": "2026-07-08T07:46:17.638320+00:00",
-      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
-    },
     {
       "at": "2026-07-08T10:09:30.350388+00:00",
       "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
@@ -900,6 +895,14 @@
     },
     {
       "at": "2026-07-10T17:43:11.079598+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-10T19:18:17.806985+00:00",
+      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
+    },
+    {
+      "at": "2026-07-10T19:19:20.705753+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
