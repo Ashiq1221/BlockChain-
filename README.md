@@ -242,9 +242,9 @@ The script installs everything, asks for your (optional) Anthropic key and
 Telegram alert settings, and starts the bot in the background with a wake
 lock. Then: `bash solbot_termux.sh status` / `log` / `stop`. Disable battery
 optimization for Termux (Settings → Apps → Termux → Battery → Unrestricted)
-or Android will kill it. Live mode on Termux needs the Rust toolchain to
-build `solders` — the script handles it, but the one-time build takes
-15-30 minutes on a phone.
+or Android will kill it. Live trading works on Termux out of the box —
+transaction signing uses the bot's built-in pure-Python Ed25519 signer
+(validated byte-for-byte against solders), so nothing needs compiling.
 
 The bot is fully autonomous once started — it discovers, vets (AI-reviewed),
 buys, manages exits, and reports every trade to Telegram. To keep it running

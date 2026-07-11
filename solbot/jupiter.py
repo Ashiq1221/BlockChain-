@@ -34,9 +34,9 @@ def load_keypair():
     """Load the trading wallet from SOLBOT_PRIVATE_KEY (base58, Phantom export)."""
     if not config.PRIVATE_KEY:
         raise RuntimeError("SOLBOT_PRIVATE_KEY is not set — required for live trading")
-    from solders.keypair import Keypair  # imported lazily: paper mode needs no solders
+    from .signing import Wallet  # pure Python — no compiled dependencies
 
-    return Keypair.from_base58_string(config.PRIVATE_KEY.strip())
+    return Wallet(config.PRIVATE_KEY)
 
 
 async def get_quote(input_mint: str, output_mint: str, amount_raw: int) -> dict:
@@ -62,7 +62,7 @@ async def get_quote(input_mint: str, output_mint: str, amount_raw: int) -> dict:
 
 async def execute_swap(quote: dict, keypair) -> str | None:
     """Build, sign, and submit the swap. Returns the tx signature or None."""
-    from solders.transaction import VersionedTransaction
+    from .signing import sign_versioned_transaction
 
     body = {
         "quoteResponse": quote,
@@ -85,9 +85,8 @@ async def execute_swap(quote: dict, keypair) -> str | None:
         log.error("could not build swap transaction")
         return None
 
-    unsigned = VersionedTransaction.from_bytes(base64.b64decode(swap_b64))
-    signed = VersionedTransaction(unsigned.message, [keypair])
-    raw_b64 = base64.b64encode(bytes(signed)).decode()
+    signed = sign_versioned_transaction(base64.b64decode(swap_b64), keypair)
+    raw_b64 = base64.b64encode(signed).decode()
 
     signature = await rpc.send_raw_transaction(raw_b64)
     log.info("swap submitted: %s", signature)

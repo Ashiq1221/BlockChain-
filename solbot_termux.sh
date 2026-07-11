@@ -67,16 +67,6 @@ python3 -c "import rich"   2>/dev/null || pip install -q rich
 python3 -c "import anthropic" 2>/dev/null || pip install -q anthropic 2>/dev/null || \
     echo "ℹ️  anthropic SDK not installable here — AI analyst will use built-in HTTP client."
 
-# solders (transaction signing) is only needed for LIVE trading. It's a Rust
-# package with no Android wheels — building it needs the rust toolchain.
-if grep -q "^SOLBOT_LIVE=true" .env 2>/dev/null; then
-    if ! python3 -c "import solders" 2>/dev/null; then
-        echo "🦀 Live mode: building solders (one-time, can take 15-30 min)..."
-        pkg install -y -q rust binutils
-        pip install solders
-    fi
-fi
-
 # ── 4. Create .env on first run ───────────────────────────────────────────────
 if [ ! -f .env ]; then
     echo ""
