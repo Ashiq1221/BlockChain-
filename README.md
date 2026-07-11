@@ -189,3 +189,68 @@ Safety: dry-run by default (`APPLY_AUTO_SUBMIT=false`), never bypasses
 CAPTCHAs, and the AI is forbidden from inventing facts — unknown fields are
 left blank. Personal defaults (name, phone, salary) live in `.env`
 (`APPLY_*` vars); the resume ships in `apply_agent/data/`.
+
+---
+
+## Solana Meme-Coin Trading Bot (`sol_meme_bot.py`)
+
+Autonomous meme-coin trader for Solana: discovers fresh tokens via
+DexScreener, runs rug-safety checks on-chain, buys through the Jupiter
+aggregator, and manages exits with take-profit / stop-loss / trailing-stop
+rules. **Paper trading by default** — no wallet needed to try it.
+
+```
+DexScreener (profiles + boosts)          Solana RPC                Jupiter
+   └─ candidate mints ──▶ market filters ──▶ mint/holder checks ──▶ swap
+        liquidity, volume,      mint & freeze authority renounced,
+        txns, momentum, age     top-10 holder concentration
+```
+
+### Quick start
+
+```bash
+pip install -r requirements.txt
+python sol_meme_bot.py scan      # one-off: see which tokens pass filters right now
+python sol_meme_bot.py run      # start the loop (paper mode — simulated fills)
+python sol_meme_bot.py status   # portfolio + realized PnL
+```
+
+### Going live
+
+1. Create a **dedicated burner wallet** and fund it with only what you can
+   afford to lose entirely.
+2. In `.env`: set `SOLBOT_LIVE=true` and `SOLBOT_PRIVATE_KEY=<base58 key>`
+   (Phantom → Settings → Export Private Key).
+3. Use a paid RPC (Helius/QuickNode/Triton) via `SOLBOT_RPC_URL` — the public
+   mainnet endpoint rate-limits aggressively.
+4. `python sol_meme_bot.py run`
+
+Manual controls: `python sol_meme_bot.py sell <mint>` and
+`python sol_meme_bot.py close-all`.
+
+### Strategy knobs (`.env`, all `SOLBOT_*`)
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `BUY_AMOUNT_SOL` | 0.05 | SOL per entry |
+| `MAX_POSITIONS` / `MAX_DAILY_BUYS` | 5 / 20 | exposure caps |
+| `TAKE_PROFIT_PCT` / `STOP_LOSS_PCT` | 60 / 25 | hard exits vs entry |
+| `TRAILING_STOP_PCT` | 20 | from peak, arms at +TP/2 |
+| `MAX_HOLD_MINUTES` | 240 | timeout exit |
+| `MIN_LIQUIDITY_USD` / `MIN_VOLUME_H1_USD` | 20k / 10k | entry filters |
+| `MIN_PAIR_AGE_MINUTES` / `MAX_PAIR_AGE_HOURS` | 30 / 48 | freshness window |
+| `MAX_TOP10_HOLDER_PCT` | 40 | holder-concentration rug filter |
+| `SLIPPAGE_BPS` | 300 | swap slippage (3%) |
+
+Safety checks before every buy: mint authority renounced, freeze authority
+renounced, top-10 holder concentration, minimum liquidity/volume/txns,
+buy/sell ratio, momentum band (skips vertical pumps), and a minimum pair age
+to dodge instant rugs. Positions whose pair disappears from DexScreener are
+marked closed as suspected rugs.
+
+Optional Telegram alerts on every buy/sell: set `SOLBOT_TG_BOT_TOKEN` +
+`SOLBOT_TG_CHAT_ID`.
+
+> ⚠️ **Risk warning:** meme coins are extreme-risk assets; most go to zero
+> and filters cannot catch every rug or honeypot. Nothing here is financial
+> advice — paper-trade first, size small, and never use your main wallet.

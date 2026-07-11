@@ -42,6 +42,9 @@ __pycache__/
 *.pyc
 agent_state.json
 
+# solbot runtime state (contains trade history)
+solbot_state.json
+
 # Apply Pilot runtime output
 applications.db
 screenshots/
