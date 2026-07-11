@@ -648,13 +648,13 @@
       "link": "https://t.me/LingoAI_tmaBot?start=MjAwNzQ1NTc0MA",
       "quantity": 100,
       "refillable": false,
-      "status": "Pending",
+      "status": "Completed",
       "panel": "smmfollows",
       "service_id": "10877",
-      "start_count": null,
-      "remains": null,
+      "start_count": "0",
+      "remains": "0",
       "added_at": "2026-07-11T11:08:09.311155+00:00",
-      "completed_at": null
+      "completed_at": "2026-07-11T13:02:02.289324+00:00"
     }
   },
   "refills": {
@@ -733,14 +733,6 @@
     "https://x.com/i/status/2073706172318916924"
   ],
   "agent_log": [
-    {
-      "at": "2026-07-09T01:09:38.657290+00:00",
-      "msg": "Monitored orders, attempted to trigger refill for order 61450840 but was rejected due to low approval rate and recent refill history. No pending posts to place orders for."
-    },
-    {
-      "at": "2026-07-09T05:31:21.626824+00:00",
-      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
-    },
     {
       "at": "2026-07-09T05:35:54.853532+00:00",
       "msg": "Monitored orders, attempted to trigger refills, but refill requests were rejected due to completed order status and past refill rejections"
@@ -932,6 +924,14 @@
     {
       "at": "2026-07-11T11:08:09.311231+00:00",
       "msg": "[tg-bot-start] #61642297: 100x svc#10877 (Geo Mixed, No Drop) for t.me/LingoAI_tmaBot"
+    },
+    {
+      "at": "2026-07-11T13:00:31.205663+00:00",
+      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
+    },
+    {
+      "at": "2026-07-11T13:02:55.344818+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
   "pending_posts": [],
