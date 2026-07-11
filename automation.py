@@ -148,7 +148,28 @@ SERVICES = {
     "retweets": {"id": 9260,  "name": "Twitter Retweets Real SuperInstant 30d-refill", "refill": True, "min": 50, "max": 25_000, "rate_per_k": 2.30},
     "comments": {"id": 16680, "name": "Twitter Custom Comments (India)",   "refill": False, "min": 5,   "max": 1000,        "rate_per_k": 48.60},
     "views":    {"id": 17682, "name": "Twitter Views+Impressions Global",  "refill": False, "min": 100, "max": 100_000_000, "rate_per_k": 0.0015},
+    # Default Telegram Bot Start service (Geo Mixed — cheapest, no drop)
+    "telegram_bot_start": {"id": 10877, "name": "Telegram Bot Start Geo Mixed No Drop", "refill": False, "min": 10, "max": 50_000, "rate_per_k": 1.06},
 }
+
+# All authorized Telegram Bot Start service IDs (smmfollows, no drop, no refill)
+# Only these IDs may be used for telegram_bot_start orders — do NOT use svc#12669
+TELEGRAM_BOT_START_SERVICES = {
+    10877: {"geo": "Geo Mixed",  "max": 50_000,  "rate_per_k": 1.06},   # cheapest default
+    10878: {"geo": "USA",        "max": 50_000,  "rate_per_k": 1.25},
+    10879: {"geo": "UK",         "max": 50_000,  "rate_per_k": 1.44},
+    10880: {"geo": "Russia",     "max": 100_000, "rate_per_k": 1.44},
+    10882: {"geo": "India",      "max": 100_000, "rate_per_k": 1.44},
+    10883: {"geo": "Israel",     "max": 100_000, "rate_per_k": 1.44},
+    10884: {"geo": "China",      "max": 100_000, "rate_per_k": 1.44},
+    10885: {"geo": "Italy",      "max": 100_000, "rate_per_k": 1.44},
+    10886: {"geo": "Germany",    "max": 100_000, "rate_per_k": 1.44},
+    10887: {"geo": "Ukraine",    "max": 100_000, "rate_per_k": 1.44},
+    10888: {"geo": "Arabic",     "max": 100_000, "rate_per_k": 1.44},
+    10889: {"geo": "Turkey",     "max": 100_000, "rate_per_k": 1.44},
+    10890: {"geo": "Indonesia",  "max": 50_000,  "rate_per_k": 1.44},
+}
+TELEGRAM_BOT_START_DEFAULT_SVC = 10877  # Geo Mixed — cheapest, no drop
 
 STATE_FILE   = Path("automation_state.json")
 POLL_SECS    = 300
