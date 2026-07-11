@@ -72,16 +72,75 @@ class AIDecision:
         return self.verdict == "buy" and self.conviction >= MIN_CONVICTION
 
 
+try:  # the SDK's jiter dependency can't build on some platforms (e.g. Termux)
+    import anthropic
+    _HAS_SDK = True
+except ImportError:
+    _HAS_SDK = False
+
 _client = None
 
 
 def client():
     global _client
     if _client is None:
-        import anthropic
-
         _client = anthropic.AsyncAnthropic()
     return _client
+
+
+async def _ask_claude(brief: str) -> tuple[str | None, str]:
+    """Send the analysis request; returns (stop_reason, response_text).
+
+    Uses the official SDK when installed; otherwise falls back to a raw
+    Messages API call over httpx (same request shape) so the AI analyst
+    works on platforms where the SDK can't be installed.
+    """
+    system = [{
+        "type": "text",
+        "text": SYSTEM_PROMPT,
+        "cache_control": {"type": "ephemeral"},
+    }]
+    output_config = {"format": {"type": "json_schema", "schema": DECISION_SCHEMA}}
+    messages = [{"role": "user", "content": brief}]
+
+    if _HAS_SDK:
+        response = await client().messages.create(
+            model=AI_MODEL,
+            max_tokens=16000,
+            system=system,
+            output_config=output_config,
+            messages=messages,
+        )
+        text = next((b.text for b in response.content if b.type == "text"), "")
+        return response.stop_reason, text
+
+    import httpx
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
+    async with httpx.AsyncClient(timeout=180) as hc:
+        resp = await hc.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": AI_MODEL,
+                "max_tokens": 16000,
+                "system": system,
+                "output_config": output_config,
+                "messages": messages,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = next(
+            (b["text"] for b in data.get("content", []) if b.get("type") == "text"), ""
+        )
+        return data.get("stop_reason"), text
 
 
 def _candidate_brief(pair: PairInfo, top10_pct: float | None) -> str:
@@ -110,21 +169,10 @@ async def analyze(pair: PairInfo, top10_pct: float | None = None) -> AIDecision 
     if not AI_ENABLED:
         return None
     try:
-        response = await client().messages.create(
-            model=AI_MODEL,
-            max_tokens=16000,
-            system=[{
-                "type": "text",
-                "text": SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},
-            }],
-            output_config={"format": {"type": "json_schema", "schema": DECISION_SCHEMA}},
-            messages=[{"role": "user", "content": _candidate_brief(pair, top10_pct)}],
-        )
-        if response.stop_reason == "refusal":
+        stop_reason, text = await _ask_claude(_candidate_brief(pair, top10_pct))
+        if stop_reason == "refusal" or not text:
             log.warning("AI declined to analyze %s", pair.symbol)
             return None
-        text = next((b.text for b in response.content if b.type == "text"), "")
         data = json.loads(text)
         decision = AIDecision(
             verdict=data["verdict"],

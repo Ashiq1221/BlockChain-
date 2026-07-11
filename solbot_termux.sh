@@ -62,7 +62,10 @@ echo "🐍 Checking Python packages..."
 python3 -c "import httpx"  2>/dev/null || pip install -q httpx
 python3 -c "import dotenv" 2>/dev/null || pip install -q python-dotenv
 python3 -c "import rich"   2>/dev/null || pip install -q rich
-python3 -c "import anthropic" 2>/dev/null || pip install -q anthropic
+# anthropic SDK is optional — its jiter dependency won't build on Termux.
+# The bot falls back to a built-in HTTP client for the AI analyst.
+python3 -c "import anthropic" 2>/dev/null || pip install -q anthropic 2>/dev/null || \
+    echo "ℹ️  anthropic SDK not installable here — AI analyst will use built-in HTTP client."
 
 # solders (transaction signing) is only needed for LIVE trading. It's a Rust
 # package with no Android wheels — building it needs the rust toolchain.
