@@ -228,6 +228,51 @@ python sol_meme_bot.py status   # portfolio + realized PnL
 Manual controls: `python sol_meme_bot.py sell <mint>` and
 `python sol_meme_bot.py close-all`.
 
+### Running it 24/7 (hands-off trading)
+
+The bot is fully autonomous once started — it discovers, vets (AI-reviewed),
+buys, manages exits, and reports every trade to Telegram. To keep it running
+around the clock:
+
+**On your own machine / VPS (recommended — your key never leaves your box):**
+
+```bash
+# with systemd (survives reboots)
+sudo tee /etc/systemd/system/solbot.service << UNIT
+[Unit]
+Description=Solana meme trading bot
+After=network-online.target
+[Service]
+WorkingDirectory=/path/to/BlockChain-
+EnvironmentFile=/path/to/BlockChain-/.env
+ExecStart=/usr/bin/python3 -u sol_meme_bot.py run
+Restart=always
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
+UNIT
+sudo systemctl enable --now solbot
+```
+
+**With Docker:**
+
+```bash
+docker build -t solbot .
+docker run -d --restart unless-stopped --env-file .env \
+  -v "$PWD/solbot_state.json:/app/solbot_state.json" \
+  solbot python3 -u sol_meme_bot.py run
+```
+
+**On Railway/Heroku-style hosts:** deploy the repo and start the `solbot`
+process from the `Procfile`, setting the `SOLBOT_*` / `ANTHROPIC_API_KEY`
+variables in the host's environment settings (never commit them). Note the
+state file is lost on redeploys unless the host provides a persistent volume.
+
+🔑 **Key safety:** the private key belongs ONLY in your local `.env` or your
+host's secret manager. Never commit it, never paste it into chats or issues.
+Use a burner wallet holding only your trading bankroll, and check in with
+`python sol_meme_bot.py status` (or watch the Telegram alerts).
+
 ### Strategy knobs (`.env`, all `SOLBOT_*`)
 
 | Setting | Default | Meaning |
