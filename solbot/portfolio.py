@@ -21,6 +21,8 @@ class Position:
     peak_price_native: float
     live: bool
     buy_signature: str = ""
+    ai_conviction: int = -1          # -1 = AI analyst not used for this entry
+    ai_reasoning: str = ""
     status: str = "open"             # open | closed
     closed_at: float = 0.0
     exit_price_native: float = 0.0

@@ -15,6 +15,7 @@ log = logging.getLogger("solbot.safety")
 class SafetyReport:
     ok: bool
     reasons: list[str]
+    top10_pct: float | None = None  # holder concentration, reused by the AI analyst
 
     def __str__(self) -> str:
         return "PASS" if self.ok else "FAIL: " + "; ".join(self.reasons)
@@ -48,15 +49,15 @@ def check_market(pair: PairInfo) -> list[str]:
     return reasons
 
 
-async def check_onchain(mint: str) -> list[str]:
-    """On-chain mint checks. Returns list of failure reasons."""
+async def check_onchain(mint: str) -> tuple[list[str], float | None]:
+    """On-chain mint checks. Returns (failure reasons, top-10 holder pct)."""
     reasons: list[str] = []
     try:
         info = await rpc.get_mint_info(mint)
     except RuntimeError as exc:
-        return [f"mint lookup failed: {exc}"]
+        return [f"mint lookup failed: {exc}"], None
     if info is None:
-        return ["mint account not found"]
+        return ["mint account not found"], None
     if config.REQUIRE_MINT_RENOUNCED and info.get("mintAuthority"):
         reasons.append("mint authority NOT renounced (owner can print supply)")
     if config.REQUIRE_FREEZE_RENOUNCED and info.get("freezeAuthority"):
@@ -70,7 +71,7 @@ async def check_onchain(mint: str) -> list[str]:
         reasons.append(
             f"top-10 holders own {top_pct:.1f}% (> {config.MAX_TOP10_HOLDER_PCT:.0f}%)"
         )
-    return reasons
+    return reasons, top_pct
 
 
 async def evaluate(pair: PairInfo) -> SafetyReport:
@@ -78,5 +79,5 @@ async def evaluate(pair: PairInfo) -> SafetyReport:
     reasons = check_market(pair)
     if reasons:  # skip RPC cost when the market filters already reject
         return SafetyReport(False, reasons)
-    reasons = await check_onchain(pair.mint)
-    return SafetyReport(not reasons, reasons)
+    reasons, top_pct = await check_onchain(pair.mint)
+    return SafetyReport(not reasons, reasons, top_pct)

@@ -1,4 +1,4 @@
-anthropic>=0.30.0
+anthropic>=0.69.0  # solbot AI analyst needs output_config (structured outputs)
 requests>=2.31.0
 pyrogram==2.0.106
 TgCrypto==1.2.5

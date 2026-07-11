@@ -22,7 +22,7 @@ import sys
 from rich.console import Console
 from rich.table import Table
 
-from solbot import config
+from solbot import ai, config
 from solbot.portfolio import Portfolio
 from solbot.safety import evaluate
 from solbot.trader import Trader
@@ -92,6 +92,15 @@ async def cmd_scan() -> None:
                 f"h1 vol ${pair.volume_h1:>10,.0f} h1 {pair.price_change_h1:+6.1f}% "
                 f"age {pair.age_minutes:5.0f}m  {pair.url}"
             )
+            if ai.AI_ENABLED:
+                decision = await ai.analyze(pair, report.top10_pct)
+                if decision:
+                    color = "green" if decision.approved else "yellow"
+                    console.print(
+                        f"  [{color}]🤖 {decision.verdict.upper()} "
+                        f"(conviction {decision.conviction}/100, size x{decision.size_multiplier})"
+                        f"[/{color}] {decision.reasoning}"
+                    )
         else:
             console.print(f"[dim]skip {pair.symbol:<10} {report}[/dim]")
     console.print(f"\n{passed} candidate(s) passed all filters.")

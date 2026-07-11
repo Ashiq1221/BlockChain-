@@ -200,10 +200,10 @@ aggregator, and manages exits with take-profit / stop-loss / trailing-stop
 rules. **Paper trading by default** — no wallet needed to try it.
 
 ```
-DexScreener (profiles + boosts)          Solana RPC                Jupiter
-   └─ candidate mints ──▶ market filters ──▶ mint/holder checks ──▶ swap
-        liquidity, volume,      mint & freeze authority renounced,
-        txns, momentum, age     top-10 holder concentration
+DexScreener (profiles + boosts)          Solana RPC                 Claude AI          Jupiter
+   └─ candidate mints ──▶ market filters ──▶ mint/holder checks ──▶ AI analyst ──▶ swap
+        liquidity, volume,      mint & freeze authority renounced,   structured buy/skip
+        txns, momentum, age     top-10 holder concentration          verdict + sizing
 ```
 
 ### Quick start
@@ -247,6 +247,25 @@ renounced, top-10 holder concentration, minimum liquidity/volume/txns,
 buy/sell ratio, momentum band (skips vertical pumps), and a minimum pair age
 to dodge instant rugs. Positions whose pair disappears from DexScreener are
 marked closed as suspected rugs.
+
+### AI analyst (Claude)
+
+When `ANTHROPIC_API_KEY` is set, every candidate that passes the mechanical
+filters is also reviewed by Claude before the bot buys. The model receives
+the full market picture (liquidity, volume, buy/sell dynamics, momentum,
+pair age, holder concentration) and returns a structured verdict:
+`buy`/`skip`, a 0-100 conviction score, a 0.5-1.5x position-size multiplier,
+and risk flags. The bot only enters at `SOLBOT_AI_MIN_CONVICTION` (default
+60) or above, scales the position by the AI's sizing, and records the
+reasoning on each position (visible in Telegram alerts and `scan` output).
+Any AI error fails safe — the candidate is skipped, not bought. Without an
+API key the bot runs on the mechanical filters alone.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `SOLBOT_AI_ENABLED` | auto | on when `ANTHROPIC_API_KEY` is set |
+| `SOLBOT_AI_MODEL` | `claude-opus-4-8` | Claude model for analysis |
+| `SOLBOT_AI_MIN_CONVICTION` | 60 | minimum conviction to enter |
 
 Optional Telegram alerts on every buy/sell: set `SOLBOT_TG_BOT_TOKEN` +
 `SOLBOT_TG_CHAT_ID`.
