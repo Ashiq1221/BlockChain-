@@ -230,6 +230,22 @@ Manual controls: `python sol_meme_bot.py sell <mint>` and
 
 ### Running it 24/7 (hands-off trading)
 
+**On Android (Termux) — easiest:**
+
+```bash
+pkg install -y git && git clone --branch claude/sol-meme-trading-bot-k7bufm \
+  https://github.com/ashiq1221/blockchain- ~/BlockChain-
+bash ~/BlockChain-/solbot_termux.sh
+```
+
+The script installs everything, asks for your (optional) Anthropic key and
+Telegram alert settings, and starts the bot in the background with a wake
+lock. Then: `bash solbot_termux.sh status` / `log` / `stop`. Disable battery
+optimization for Termux (Settings → Apps → Termux → Battery → Unrestricted)
+or Android will kill it. Live mode on Termux needs the Rust toolchain to
+build `solders` — the script handles it, but the one-time build takes
+15-30 minutes on a phone.
+
 The bot is fully autonomous once started — it discovers, vets (AI-reviewed),
 buys, manages exits, and reports every trade to Telegram. To keep it running
 around the clock:
