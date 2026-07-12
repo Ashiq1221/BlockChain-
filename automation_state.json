@@ -723,7 +723,7 @@
     "61498651": {
       "refill_id": 10825487,
       "requested_at": "2026-07-12T20:03:16.965476+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61564364": {
       "refill_id": 10825343,
@@ -747,14 +747,6 @@
     "https://x.com/i/status/2073706172318916924"
   ],
   "agent_log": [
-    {
-      "at": "2026-07-11T10:39:51.031519+00:00",
-      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
-    },
-    {
-      "at": "2026-07-11T10:40:40.204049+00:00",
-      "msg": "Monitored orders, triggered 15 refills, checked refill status for 15 orders, and found no pending posts or issues requiring ticket escalation"
-    },
     {
       "at": "2026-07-11T11:08:09.311231+00:00",
       "msg": "[tg-bot-start] #61642297: 100x svc#10877 (Geo Mixed, No Drop) for t.me/LingoAI_tmaBot"
@@ -945,6 +937,14 @@
     },
     {
       "at": "2026-07-12T20:03:47.472255+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-12T21:13:06.551600+00:00",
+      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
+    },
+    {
+      "at": "2026-07-12T21:14:19.325376+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
