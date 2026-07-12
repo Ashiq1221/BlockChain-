@@ -143,7 +143,7 @@ async def _ask_claude(brief: str) -> tuple[str | None, str]:
         return data.get("stop_reason"), text
 
 
-def _candidate_brief(pair: PairInfo, top10_pct: float | None) -> str:
+def _candidate_brief(pair: PairInfo, top10_pct: float | None, extra: str = "") -> str:
     holder_line = (
         f"{top10_pct:.1f}% (excl. pool)" if top10_pct is not None else "unavailable"
     )
@@ -160,16 +160,20 @@ Transactions 1h: {pair.txns_h1_buys} buys / {pair.txns_h1_sells} sells (ratio {p
 Price change: {pair.price_change_h1:+.1f}% (1h) / {pair.price_change_h24:+.1f}% (24h)
 Top-10 holder share: {holder_line}
 Mint & freeze authority: renounced (verified on-chain)
-
+{extra}
 All mechanical filters passed. Should the bot enter?"""
 
 
-async def analyze(pair: PairInfo, top10_pct: float | None = None) -> AIDecision | None:
+async def analyze(
+    pair: PairInfo, top10_pct: float | None = None, extra_context: str = ""
+) -> AIDecision | None:
     """Ask Claude for a structured entry decision. None = unusable answer (skip)."""
     if not AI_ENABLED:
         return None
     try:
-        stop_reason, text = await _ask_claude(_candidate_brief(pair, top10_pct))
+        stop_reason, text = await _ask_claude(
+            _candidate_brief(pair, top10_pct, extra_context)
+        )
         if stop_reason == "refusal" or not text:
             log.warning("AI declined to analyze %s", pair.symbol)
             return None

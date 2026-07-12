@@ -328,6 +328,15 @@ API key the bot runs on the mechanical filters alone.
 | `SOLBOT_AI_MODEL` | `claude-opus-4-8` | Claude model for analysis |
 | `SOLBOT_AI_MIN_CONVICTION` | 60 | minimum conviction to enter |
 
+### Birdeye integration (optional)
+
+Set `SOLBOT_BIRDEYE_API_KEY` (free key at birdeye.so) to add: trending and
+new-listing tokens as extra candidate sources, Birdeye token-security data
+(freezeable flag, creator/top-10 holdings), and recent 15-minute candles in
+the AI's decision brief — so Claude sees the *shape* of a move (steady climb
+vs one spike) instead of a single 1h percentage. Endpoints not included in
+your Birdeye plan are detected and skipped automatically.
+
 Optional Telegram alerts on every buy/sell: set `SOLBOT_TG_BOT_TOKEN` +
 `SOLBOT_TG_CHAT_ID`.
 

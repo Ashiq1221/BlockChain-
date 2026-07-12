@@ -6,7 +6,7 @@ import asyncio
 import logging
 import time
 
-from . import ai, config, jupiter, notify, rpc
+from . import ai, birdeye, config, jupiter, notify, rpc
 from .discovery import Discovery, PairInfo
 from .portfolio import Portfolio, Position
 from .safety import evaluate
@@ -31,6 +31,11 @@ class Trader:
             return
 
         mints = await self.discovery.candidate_mints()
+        if birdeye.enabled():
+            for mint in await birdeye.trending_mints():
+                mints.setdefault(mint, "birdeye-trending")
+            for mint in await birdeye.new_listing_mints():
+                mints.setdefault(mint, "birdeye-new")
         now = time.time()
         for mint, source in mints.items():
             if len(self.portfolio.open_positions) >= config.MAX_POSITIONS:
@@ -60,12 +65,27 @@ class Trader:
 
             decision = None
             if ai.AI_ENABLED:
-                decision = await ai.analyze(pair, report.top10_pct)
+                extra = await self._birdeye_context(mint)
+                decision = await ai.analyze(pair, report.top10_pct, extra)
                 if decision is None or not decision.approved:
                     self._rejected[mint] = now
                     continue
 
             await self.buy(pair, decision)
+
+    @staticmethod
+    async def _birdeye_context(mint: str) -> str:
+        """Extra market context for the AI brief when Birdeye is configured."""
+        if not birdeye.enabled():
+            return ""
+        lines = []
+        sec = await birdeye.security(mint)
+        if sec:
+            lines.append(f"Birdeye security: {birdeye.security_summary(sec)}")
+        candles = await birdeye.recent_candles(mint)
+        if candles:
+            lines.append(f"Recent 15m candles (change/volume): {candles}")
+        return ("\n".join(lines) + "\n") if lines else ""
 
     async def buy(self, pair: PairInfo, decision: ai.AIDecision | None = None) -> None:
         sol_amount = config.BUY_AMOUNT_SOL
