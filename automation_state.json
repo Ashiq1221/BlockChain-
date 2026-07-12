@@ -655,6 +655,20 @@
       "remains": "0",
       "added_at": "2026-07-11T11:08:09.311155+00:00",
       "completed_at": "2026-07-11T13:02:02.289324+00:00"
+    },
+    "61649992": {
+      "id": "61649992",
+      "kind": "telegram_bot_start",
+      "link": "https://t.me/LingoAI_tmaBot?start=Njk2NzczMDQyNQ",
+      "quantity": 100,
+      "refillable": false,
+      "status": "Pending",
+      "panel": "smmfollows",
+      "service_id": "10877",
+      "start_count": null,
+      "remains": null,
+      "added_at": "2026-07-12T03:11:49.590467+00:00",
+      "completed_at": null
     }
   },
   "refills": {
@@ -733,10 +747,6 @@
     "https://x.com/i/status/2073706172318916924"
   ],
   "agent_log": [
-    {
-      "at": "2026-07-10T10:36:13.193861+00:00",
-      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
-    },
     {
       "at": "2026-07-10T13:06:12.765043+00:00",
       "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
@@ -932,6 +942,10 @@
     {
       "at": "2026-07-12T01:01:33.531734+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-12T03:11:49.590547+00:00",
+      "msg": "[tg-bot-start] #61649992: 100x svc#10877 (Geo Mixed) for t.me/LingoAI_tmaBot?start=Njk2NzczMDQyNQ"
     }
   ],
   "pending_posts": [],
