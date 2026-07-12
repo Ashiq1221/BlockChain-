@@ -1,12 +1,15 @@
 """Optional Birdeye integration — richer discovery, security data, and candles.
 
-Enabled when SOLBOT_BIRDEYE_API_KEY is set. Every endpoint degrades
+Enabled when SOLBOT_BIRDEYE_API_KEY is set. Tuned to fit the free "Standard"
+plan (30k compute units/month, 1 request/second): requests are throttled to
+the rate limit and the discovery feeds are cached. Every endpoint degrades
 gracefully: plans differ in which endpoints they include, so a 401/403/404
 disables just that endpoint (warned once) and the bot continues without it.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -17,9 +20,15 @@ log = logging.getLogger("solbot.birdeye")
 
 BASE = "https://public-api.birdeye.so"
 API_KEY = os.getenv("SOLBOT_BIRDEYE_API_KEY", "")
+# How long to reuse trending/new-listing results (seconds). 30 min default
+# keeps the free plan's monthly compute-unit budget comfortable.
+DISCOVERY_TTL = int(os.getenv("SOLBOT_BIRDEYE_DISCOVERY_TTL_SEC", "1800"))
 
 _client: httpx.AsyncClient | None = None
 _disabled_paths: set[str] = set()
+_cache: dict[str, tuple[float, list[str]]] = {}
+_last_request = 0.0
+_throttle = asyncio.Lock()
 
 
 def enabled() -> bool:
@@ -39,8 +48,14 @@ def client() -> httpx.AsyncClient:
 async def _get(path: str, params: dict | None = None) -> dict | None:
     if not enabled() or path in _disabled_paths:
         return None
+    global _last_request
     try:
-        resp = await client().get(f"{BASE}{path}", params=params)
+        async with _throttle:  # free plan allows 1 request/second
+            wait = _last_request + 1.1 - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            _last_request = time.monotonic()
+            resp = await client().get(f"{BASE}{path}", params=params)
         if resp.status_code in (401, 403, 404):
             _disabled_paths.add(path)
             log.warning(
@@ -56,21 +71,38 @@ async def _get(path: str, params: dict | None = None) -> dict | None:
         return None
 
 
-# ── Discovery ────────────────────────────────────────────────────────────────
+# ── Discovery (cached — free plan has a small monthly CU budget) ─────────────
+
+def _cached(key: str) -> list[str] | None:
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < DISCOVERY_TTL:
+        return hit[1]
+    return None
+
 
 async def trending_mints(limit: int = 20) -> list[str]:
+    if (hit := _cached("trending")) is not None:
+        return hit
     data = await _get(
         "/defi/token_trending",
         {"sort_by": "rank", "sort_type": "asc", "offset": 0, "limit": limit},
     )
     tokens = (data or {}).get("tokens") or (data or {}).get("items") or []
-    return [t["address"] for t in tokens if t.get("address")]
+    mints = [t["address"] for t in tokens if t.get("address")]
+    if mints:
+        _cache["trending"] = (time.time(), mints)
+    return mints
 
 
 async def new_listing_mints(limit: int = 20) -> list[str]:
+    if (hit := _cached("new_listing")) is not None:
+        return hit
     data = await _get("/defi/v2/tokens/new_listing", {"limit": limit})
     items = (data or {}).get("items") or []
-    return [t["address"] for t in items if t.get("address")]
+    mints = [t["address"] for t in items if t.get("address")]
+    if mints:
+        _cache["new_listing"] = (time.time(), mints)
+    return mints
 
 
 # ── Token security ───────────────────────────────────────────────────────────
