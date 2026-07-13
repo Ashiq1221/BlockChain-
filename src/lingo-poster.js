@@ -234,25 +234,32 @@ async function callOpenAIRaw(env, prompt, { temperature = 0.3, maxTokens = 600 }
 
 async function callXAIRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } = {}) {
   if (!env.XAI_API_KEY) return '';
-  try {
-    const r = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'grok-3-mini-fast',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
-        temperature,
-      }),
-    });
-    if (r.ok) {
-      const d = await r.json();
-      return d.choices?.[0]?.message?.content?.trim() || '';
+  const models = ['grok-3', 'grok-3-fast', 'grok-3-mini', 'grok-2-1212', 'grok-beta'];
+  for (const model of models) {
+    try {
+      const r = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+          temperature,
+        }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const text = d.choices?.[0]?.message?.content?.trim() || '';
+        if (text) return text;
+        continue; // empty response, try next model
+      }
+      if (r.status === 404) continue; // model doesn't exist, try next
+      const errText = await r.text().catch(() => r.status);
+      if (env.KV) await env.KV.put('lingo_xai_err', `${model} HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
+      break;
+    } catch (e) {
+      if (env.KV) await env.KV.put('lingo_xai_err', `${model} exception: ${e?.message || e}`, { expirationTtl: 86400 });
     }
-    const errText = await r.text().catch(() => r.status);
-    if (env.KV) await env.KV.put('lingo_xai_err', `HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
-  } catch (e) {
-    if (env.KV) await env.KV.put('lingo_xai_err', `exception: ${e?.message || e}`, { expirationTtl: 86400 });
   }
   return '';
 }
