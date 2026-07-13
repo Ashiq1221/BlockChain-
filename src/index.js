@@ -804,10 +804,20 @@ export default {
       return Response.json(result);
     }
 
-    // POST /lingo-reset — reset run counter
+    // POST /lingo-reset — full conversation reset: clears session, history, topic, errors
     if (pathname === '/lingo-reset' && request.method === 'POST') {
-      await env.KV.delete('lingo_session_num');
-      return Response.json({ ok: true, message: 'Run counter reset — next run generates fresh messages' });
+      await Promise.all([
+        env.KV.delete('lingo_session_num'),
+        env.KV.delete('lingo_conv_topic'),
+        env.KV.delete('lingo_conv_agents'),
+        env.KV.delete('lingo_recent_runs'),
+        env.KV.delete('lingo_posted_msgs'),
+        env.KV.delete('lingo_groq_err'),
+        env.KV.delete('lingo_openai_err'),
+        env.KV.delete('lingo_xai_err'),
+        env.KV.delete('lingo_cfai_err'),
+      ]);
+      return Response.json({ ok: true, message: 'Full lingo reset — session, history, errors cleared. Next run starts a fresh conversation on a new topic.' });
     }
 
     // GET /debug — test each AI + discovery component, return diagnostics

@@ -179,7 +179,7 @@ async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } =
     return '';
   }
   // Try models in order — fall to smaller model on 429 rate limit
-  const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'];
+  const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192'];
   for (const model of models) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -239,7 +239,7 @@ async function callXAIRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } = 
       method: 'POST',
       headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'grok-3-mini',
+        model: 'grok-3-mini-fast',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: maxTokens,
         temperature,
@@ -267,7 +267,12 @@ async function callCFAIRaw(env, prompt, { maxTokens = 600 } = {}) {
         messages: [{ role: 'user', content: prompt }],
         max_tokens: maxTokens,
       });
-      if (result?.response) return result.response.trim();
+      // Newer CF AI models may return {response: string} or nested objects — handle both
+      const text = typeof result?.response === 'string' ? result.response
+                 : typeof result?.result === 'string'   ? result.result
+                 : typeof result?.generated_text === 'string' ? result.generated_text
+                 : '';
+      if (text) return text.trim();
     } catch (e) {
       if (env.KV) await env.KV.put('lingo_cfai_err', `${model}: ${e?.message || e}`, { expirationTtl: 86400 });
     }
