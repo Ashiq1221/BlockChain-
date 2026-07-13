@@ -178,39 +178,49 @@ async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } =
     if (env.KV) await env.KV.put('lingo_groq_err', 'GROQ_API_KEY not set', { expirationTtl: 86400 });
     return '';
   }
-  try {
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: maxTokens,
-        temperature,
-      }),
-    });
-    if (r.ok) {
-      const d = await r.json();
-      return d.choices?.[0]?.message?.content?.trim() || '';
+  // Try models in order — fall to smaller model on 429 rate limit
+  const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'];
+  for (const model of models) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: maxTokens,
+          temperature,
+        }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        return d.choices?.[0]?.message?.content?.trim() || '';
+      }
+      if (r.status === 429) continue; // try next model on rate limit
+      const errText = await r.text().catch(() => r.status);
+      if (env.KV) await env.KV.put('lingo_groq_err', `${model} HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
+      break;
+    } catch (e) {
+      if (env.KV) await env.KV.put('lingo_groq_err', `${model} exception: ${e?.message || e}`, { expirationTtl: 86400 });
     }
-    const errText = await r.text().catch(() => r.status);
-    if (env.KV) await env.KV.put('lingo_groq_err', `HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
-  } catch (e) {
-    if (env.KV) await env.KV.put('lingo_groq_err', `exception: ${e?.message || e}`, { expirationTtl: 86400 });
   }
   return '';
 }
 
 async function callCFAIRaw(env, prompt, { maxTokens = 600 } = {}) {
   if (!env.AI) return '';
-  try {
-    const result = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: maxTokens,
-    });
-    return (result?.response || '').trim();
-  } catch (e) {
-    if (env.KV) await env.KV.put('lingo_cfai_err', `${e?.message || e}`, { expirationTtl: 86400 });
+  // Try models in order — fallback if first is deprecated/unavailable
+  const models = ['@cf/meta/llama-3.2-3b-instruct', '@cf/meta/llama-3.2-1b-instruct', '@cf/mistral/mistral-7b-instruct-v0.2'];
+  for (const model of models) {
+    try {
+      const result = await env.AI.run(model, {
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+      });
+      if (result?.response) return result.response.trim();
+    } catch (e) {
+      if (env.KV) await env.KV.put('lingo_cfai_err', `${model}: ${e?.message || e}`, { expirationTtl: 86400 });
+    }
   }
   return '';
 }
