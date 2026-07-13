@@ -207,6 +207,56 @@ async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } =
   return '';
 }
 
+async function callOpenAIRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } = {}) {
+  if (!env.OPENAI_API_KEY) return '';
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature,
+      }),
+    });
+    if (r.ok) {
+      const d = await r.json();
+      return d.choices?.[0]?.message?.content?.trim() || '';
+    }
+    const errText = await r.text().catch(() => r.status);
+    if (env.KV) await env.KV.put('lingo_openai_err', `HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
+  } catch (e) {
+    if (env.KV) await env.KV.put('lingo_openai_err', `exception: ${e?.message || e}`, { expirationTtl: 86400 });
+  }
+  return '';
+}
+
+async function callXAIRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } = {}) {
+  if (!env.XAI_API_KEY) return '';
+  try {
+    const r = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.XAI_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'grok-3-mini',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature,
+      }),
+    });
+    if (r.ok) {
+      const d = await r.json();
+      return d.choices?.[0]?.message?.content?.trim() || '';
+    }
+    const errText = await r.text().catch(() => r.status);
+    if (env.KV) await env.KV.put('lingo_xai_err', `HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
+  } catch (e) {
+    if (env.KV) await env.KV.put('lingo_xai_err', `exception: ${e?.message || e}`, { expirationTtl: 86400 });
+  }
+  return '';
+}
+
 async function callCFAIRaw(env, prompt, { maxTokens = 600 } = {}) {
   if (!env.AI) return '';
   // Try models in order — fallback if first is deprecated/unavailable
@@ -226,7 +276,10 @@ async function callCFAIRaw(env, prompt, { maxTokens = 600 } = {}) {
 }
 
 async function callRaw(env, prompt, opts = {}) {
-  return (await callGroqRaw(env, prompt, opts)) || (await callCFAIRaw(env, prompt, opts));
+  return (await callGroqRaw(env, prompt, opts))
+      || (await callOpenAIRaw(env, prompt, opts))
+      || (await callXAIRaw(env, prompt, opts))
+      || (await callCFAIRaw(env, prompt, opts));
 }
 
 function parseJSON(raw) {
@@ -730,6 +783,8 @@ export async function lingoStatus(env) {
   const recentRaw   = await env.KV.get(KV_RECENT);
   const recent      = recentRaw ? JSON.parse(recentRaw) : [];
   const groqErr     = await env.KV.get('lingo_groq_err');
+  const openaiErr   = await env.KV.get('lingo_openai_err');
+  const xaiErr      = await env.KV.get('lingo_xai_err');
   const cfaiErr     = await env.KV.get('lingo_cfai_err');
   const histRaw     = await env.KV.get(KV_POSTED);
   const histSize    = histRaw ? JSON.parse(histRaw).length : 0;
@@ -763,7 +818,7 @@ export async function lingoStatus(env) {
       active_agents: activeAgents.map(id => `${id} (${PERSONAS[id]?.type || '?'})`),
     } : null,
     last_5_topics: recent.slice(-5).map(r => r.seed),
-    ai_errors:     { groq: groqErr || null, cf_ai: cfaiErr || null },
+    ai_errors:     { groq: groqErr || null, openai: openaiErr || null, xai: xaiErr || null, cf_ai: cfaiErr || null },
     posted_history: { stored: histSize, capacity: 70, dedup_window: 'last 70 messages' },
     next_steps:    chatId ? 'Active — conversations run every 10 minutes' : 'Call /lingo-setup?chat_id=XXXX to activate',
   };
