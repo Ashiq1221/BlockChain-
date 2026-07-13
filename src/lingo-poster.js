@@ -90,8 +90,7 @@ const PERSONAS = {
   zara_c:    { type: 'contrarian',                 voice: 'argues the opposite of consensus. Devil\'s advocate by nature. Sharp and occasionally funny. Challenges assumptions.' },
 };
 
-// 50 themes across 4 categories — 50 × 10 = 500 messages per batch
-// category: 'lingo' | 'ai' | 'web3' | 'trending'
+// 50 themes across 4 categories
 const THEMES = [
   // ── LingoAI (20) ──────────────────────────────────────────────────────────
   { topic: 'token economics, utility sinks, and why there are no token burns',                                             cat: 'lingo' },
@@ -309,97 +308,65 @@ function wordSimilarity(a, b) {
   return denom ? intersection / denom : 0;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// CONVERSATION PIPELINE — 3 agents simulate 40 real humans chatting
-//
-//  ┌──────────────────────┐    ┌─────────────────────────┐    ┌────────────────┐
-//  │   DIRECTOR           │ →  │       WRITER             │ →  │   GUARDIAN     │
-//  │  temp 0.85           │    │      temp 0.95            │    │  rewrites dups │
-//  │  Reads session KV    │    │  Writes 7 messages in     │    │  never lets a  │
-//  │  Continues or starts │    │  the EXACT voice of each  │    │  repeat post   │
-//  │  a new conversation  │    │  selected agent — reply   │    │                │
-//  │  Selects 5-6 of 40   │    │  chains, mixed lengths,   │    │                │
-//  │  personas            │    │  organic casual tone      │    │                │
-//  │  Designs turn order  │    │                           │    │                │
-//  └──────────────────────┘    └─────────────────────────┘    └────────────────┘
-//
-//  Session management: 1-2 topics per conversation session (4-6 runs = ~40-60min)
-//  then Director naturally shifts to a new conversation with different agents
-// ════════════════════════════════════════════════════════════════════════════
-
 // ── AGENT 1: CONVERSATION DIRECTOR ───────────────────────────────────────────
-// Manages the session: continues an existing topic or starts a fresh conversation.
-// Selects 5-6 matching personas from the 40 pool and designs the turn order.
+// Casts 5-6 personas and designs a loose turn order — NO rigid "angles".
+// Writer invents what each person says from their voice + the live conversation.
 
 async function conversationDirector(env, postedHistory) {
-  // Load session and recent run history
-  const sessionRaw    = await env.KV.get(KV_CONV_TOPIC);
-  const session       = sessionRaw ? JSON.parse(sessionRaw) : null;
+  const sessionRaw     = await env.KV.get(KV_CONV_TOPIC);
+  const session        = sessionRaw ? JSON.parse(sessionRaw) : null;
   const activeAgentRaw = await env.KV.get(KV_CONV_AGENTS);
-  const activeAgents  = activeAgentRaw ? JSON.parse(activeAgentRaw) : [];
-  const recentRaw     = await env.KV.get(KV_RECENT);
-  const recentRuns    = recentRaw ? JSON.parse(recentRaw) : [];
-  const usedTopics    = recentRuns.slice(-10).map(r => r.seed).filter(Boolean);
+  const activeAgents   = activeAgentRaw ? JSON.parse(activeAgentRaw) : [];
+  const recentRaw      = await env.KV.get(KV_RECENT);
+  const recentRuns     = recentRaw ? JSON.parse(recentRaw) : [];
+  const usedTopics     = recentRuns.slice(-10).map(r => r.seed).filter(Boolean);
 
-  // Continue session if under 5 runs, otherwise start fresh
   const continueSession = session && (session.run_count || 0) < 5;
-  const recentSnippets  = postedHistory.slice(-8).map((m, i) => `[${i + 1}] "${m.msg.slice(0, 110)}"`).join('\n');
+  const recentSnippets  = postedHistory.slice(-6).map(m => m.msg.slice(0, 120)).join('\n---\n');
 
-  // Build compact persona catalogue for Director to pick from
   const personaCatalogue = Object.entries(PERSONAS)
     .map(([id, p]) => `${id}: ${p.type}`)
     .join('\n');
 
   const sessionCtx = continueSession
-    ? `CONTINUE THIS SESSION (run ${(session.run_count || 0) + 1} of 5):
-Topic: "${session.topic}"${session.topic2 ? `\nDrifting toward: "${session.topic2}"` : ''}
-Recently active personas: ${activeAgents.slice(0, 6).join(', ')}
-Last messages in the group (pick up HERE — this is a continuous conversation):
-${recentSnippets}`
-    : `START A NEW CONVERSATION.
-Topics used recently (avoid repeating): ${usedTopics.slice(-8).join(' | ') || 'none yet'}
-Recent messages to NOT echo: ${recentSnippets || 'none yet'}`;
+    ? `CONTINUE this chat (run ${(session.run_count || 0) + 1} of 5).
+Topic: "${session.topic}"
+Active personas: ${activeAgents.slice(0, 6).join(', ')}
+Last messages already posted:
+${recentSnippets || '(none yet)'}`
+    : `START a fresh conversation.
+Avoid these recent topics: ${usedTopics.slice(-8).join(' | ') || 'none yet'}`;
 
-  const prompt = `You are the Conversation Director for a 40-member Telegram crypto/AI community.
-Your job: cast the right personas for this conversation and design the turn order.
+  const prompt = `You are casting a casual Telegram group chat. Pick who speaks and in what order for the next 7 messages.
 
 ${sessionCtx}
 
-AVAILABLE PERSONAS (pick 5-6 that MATCH the topic — mix expertise levels):
+AVAILABLE PERSONAS:
 ${personaCatalogue}
 
-LingoAI product context (only relevant for lingo topics):
-${LINGO_FACTS.split('\n').slice(0, 8).join('\n')}
+Pick 5-6 personas that fit the topic. Design a loose turn order — like a real chat, not a structured debate.
+- At least 1-2 very short turns (reaction, "gm", one-word reply, quick question)
+- Some messages reply to earlier ones in this batch (responds_to = 0-6, or null)
+- People can speak twice — as a quick follow-up or reaction
+- length: "micro"=1-5 words, "short"=1 sentence, "medium"=2-3 sentences, "long"=3-5 sentences
 
-Design a 7-message conversation that feels like REAL casual Telegram chat — NOT a structured panel discussion.
-Rules:
-- Select 5-6 personas whose expertise naturally fits the topic
-- Some personas may speak twice (a quick reaction or follow-up)
-- VARY message lengths heavily — include at least 1-2 micro turns (gm, one-word reaction, quick question)
-- responds_to = index of THIS BATCH message being replied to (null for opening or standalone)
-- The conversation flows naturally: someone opens → others react casually → one digs deeper → someone asks a quick question → answered → light close
-- Include at least ONE micro or social turn ("gm", "this", "facts", "lol wait what", "anyone else think...?")
-- If continuing a session: SAME topic, agents can reference what was said before
-- length options: "micro" = 1-5 words, "short" = 1 sentence, "medium" = 2-3 sentences, "long" = 3-5 sentences
-
-Return ONLY valid JSON:
+Return ONLY valid JSON (no angle field needed — Writer invents the content):
 {
-  "topic": "<specific topic being discussed — one narrow angle, not a broad category>",
-  "topic2": "<optional second topic that naturally bleeds in, or null>",
-  "is_new_session": <true if starting fresh, false if continuing>,
-  "agents": ["id1", "id2", "id3", "id4", "id5"],
+  "topic": "<specific narrow thing they're chatting about>",
+  "is_new_session": <true/false>,
+  "agents": ["id1","id2","id3","id4","id5"],
   "turns": [
-    {"agent": "id", "angle": "casual opener or gm-style check-in to warm up the chat", "responds_to": null, "length": "micro"},
-    {"agent": "id", "angle": "<specific thing this agent says or argues about the topic>", "responds_to": null, "length": "short"},
-    {"agent": "id", "angle": "<quick reaction or agreement/disagreement — one liner>", "responds_to": 1, "length": "short"},
-    {"agent": "id", "angle": "<deeper take or data point building on the discussion>", "responds_to": 1, "length": "medium"},
-    {"agent": "id", "angle": "<challenge or pushback with substance>", "responds_to": 3, "length": "medium"},
-    {"agent": "id", "angle": "<honest newcomer question or confused reaction>", "responds_to": null, "length": "short"},
-    {"agent": "id", "angle": "<closing take, forward-looking or summary vibe>", "responds_to": null, "length": "short"}
+    {"agent":"id", "responds_to":null, "length":"micro"},
+    {"agent":"id", "responds_to":null, "length":"short"},
+    {"agent":"id", "responds_to":1,    "length":"short"},
+    {"agent":"id", "responds_to":1,    "length":"medium"},
+    {"agent":"id", "responds_to":3,    "length":"medium"},
+    {"agent":"id", "responds_to":null, "length":"short"},
+    {"agent":"id", "responds_to":5,    "length":"short"}
   ]
 }`;
 
-  const raw    = await callRaw(env, prompt, { temperature: 0.85, maxTokens: 900 });
+  const raw    = await callRaw(env, prompt, { temperature: 0.85, maxTokens: 700 });
   const parsed = parseJSON(raw);
 
   if (parsed?.turns && Array.isArray(parsed.turns) && parsed.turns.length >= 5 && parsed.topic) {
@@ -407,88 +374,81 @@ Return ONLY valid JSON:
   }
 
   // Fallback: build a default session from THEMES
-  const rnd        = THEMES[Math.floor(Math.random() * THEMES.length)];
-  const defAgents  = ['big_mike', 'ry_kow', 'd_willi', 's_chen', 'tyler_19', 'luna_p'];
+  const rnd       = THEMES[Math.floor(Math.random() * THEMES.length)];
+  const defAgents = ['sir_degen', 'big_mike', 'ry_kow', 'd_willi', 's_chen', 'tyler_19'];
   return {
-    topic:           continueSession ? (session?.topic || rnd.topic) : rnd.topic,
-    topic2:          null,
-    is_new_session:  !continueSession,
-    agents:          defAgents,
+    topic:          continueSession ? (session?.topic || rnd.topic) : rnd.topic,
+    is_new_session: !continueSession,
+    agents:         defAgents,
     continueSession,
     turns: [
-      { agent: 'sir_degen', angle: 'casual gm or one-liner to kick off the chat',   responds_to: null, length: 'micro'  },
-      { agent: 'big_mike',  angle: `open with a perspective on ${rnd.topic}`,        responds_to: null, length: 'short'  },
-      { agent: 'ry_kow',    angle: 'add a practical developer dimension',             responds_to: 1,    length: 'short'  },
-      { agent: 'd_willi',   angle: 'challenge an assumption in the opener',           responds_to: 1,    length: 'medium' },
-      { agent: 's_chen',    angle: 'bring a data point to address the challenge',     responds_to: 3,    length: 'medium' },
-      { agent: 'tyler_19',  angle: 'ask an honest newcomer question',                 responds_to: null, length: 'short'  },
-      { agent: 'luna_p',    angle: 'answer the newcomer with practical context',      responds_to: 5,    length: 'medium' },
+      { agent: 'sir_degen', responds_to: null, length: 'micro'  },
+      { agent: 'big_mike',  responds_to: null, length: 'short'  },
+      { agent: 'ry_kow',    responds_to: 1,    length: 'short'  },
+      { agent: 'd_willi',   responds_to: 1,    length: 'medium' },
+      { agent: 's_chen',    responds_to: 3,    length: 'medium' },
+      { agent: 'tyler_19',  responds_to: null, length: 'short'  },
+      { agent: 'big_mike',  responds_to: 5,    length: 'short'  },
     ],
   };
 }
 
 // ── AGENT 2: CONVERSATION WRITER ─────────────────────────────────────────────
-// Writes all 7 messages as a coherent conversation batch.
-// Each message sounds DISTINCTLY like its assigned persona — different voice, energy, length.
+// Writes all messages as natural Telegram chat — no rigid angles.
+// Each message is invented from the persona's voice + what's already been said.
 
 async function conversationWriter(env, direction, postedHistory) {
   const selectedIds = direction.agents || [];
-  const prevMsgs    = postedHistory.slice(-6).map(m => `"${m.msg}"`).join('\n');
+  const prevMsgs    = postedHistory.slice(-5).map(m => m.msg).join('\n---\n');
 
-  // Full voice profiles for selected personas only
   const voiceProfiles = selectedIds
     .filter(id => PERSONAS[id])
     .map(id => `${id} [${PERSONAS[id].type}]: ${PERSONAS[id].voice}`)
     .join('\n\n');
 
-  // Determine if LingoAI context is relevant
   const lingoIds = ['s_chen','m_webb','p_patel','j_kim','v_silva','a_turner','y_tanaka','r_hassan','c_adeyemi','l_zhang'];
   const needsLingo = selectedIds.some(id => lingoIds.includes(id))
     || (direction.topic || '').toLowerCase().includes('lingo');
-  const lingoCtx = needsLingo ? `\nLingoAI product facts (use specific details when relevant):\n${LINGO_FACTS}\n` : '';
+  const lingoCtx = needsLingo ? `\nLingoAI facts (use specific details naturally):\n${LINGO_FACTS}\n` : '';
 
-  // Build turn blueprint
   const turns = direction.turns || [];
-  const blueprint = turns.map((t, i) => {
-    const p        = PERSONAS[t.agent];
-    const replyCtx = t.responds_to !== null && t.responds_to !== undefined
-      ? ` → directly responds to message ${t.responds_to}`
-      : '';
-    const lenGuide = t.length === 'micro'  ? '1-5 words ONLY (e.g. "gm", "facts", "this fr", "lol wait what")'
-                   : t.length === 'short'  ? '1 sentence'
-                   : t.length === 'long'   ? '3-5 sentences'
-                   :                         '2-3 sentences';
-    return `[${i}] ${t.agent} (${p?.type || 'member'}) | ${lenGuide}${replyCtx}\n     angle: ${t.angle}`;
-  }).join('\n\n');
+  const turnList = turns.map((t, i) => {
+    const lenGuide = t.length === 'micro' ? '1-5 words' : t.length === 'short' ? '1 sentence' : t.length === 'long' ? '3-5 sentences' : '2-3 sentences';
+    const replyNote = t.responds_to != null ? ` [replies to msg ${t.responds_to}]` : '';
+    return `[${i}] ${t.agent}${replyNote} — ${lenGuide}`;
+  }).join('\n');
 
-  const prompt = `You are writing a REAL Telegram group conversation. 7 members are chatting right now. Each message must sound DISTINCTLY different — like a different human with a different brain.
+  const prompt = `Write a real Telegram group chat. These ${turns.length} people are actually talking — casual, unscripted, human.
 
-TOPIC: "${direction.topic}"${direction.topic2 ? `\n(conversation may naturally drift toward: "${direction.topic2}")` : ''}
+Topic drifting around: "${direction.topic}"
 ${lingoCtx}
-${prevMsgs ? `PREVIOUS MESSAGES ALREADY POSTED (this is a continuation — DO NOT repeat these ideas):\n${prevMsgs}\n` : ''}
-MEMBER VOICE PROFILES — write EACH message in EXACTLY this voice:
+${prevMsgs ? `Chat already in progress (DON'T repeat these):\n---\n${prevMsgs}\n---\n` : ''}
+VOICES (write each person in their exact voice):
 ${voiceProfiles}
 
-TURN BLUEPRINT (write in order, each message = its own turn):
-${blueprint}
+WHO SPEAKS NEXT:
+${turnList}
 
-WRITING RULES:
-1. Each message must SOUND like a different person — different vocabulary, rhythm, energy
-2. MICRO turns = 1-5 words literally ("gm", "facts", "this fr", "nah fam", "wait is this real?") — keep them tiny
-3. Short turns = 1 punchy sentence. Long turns = 3-5 sentences with actual reasoning
-4. Reply turns MUST reference the SPECIFIC point from the earlier turn — not vague agreement
-5. NO @mentions, NO name prefixes — just the message text itself
-6. Casual Telegram tone: lowercase fine, contractions fine, abbreviations fine, no corporate grammar
-7. NO "Hey everyone / Hi all / Good morning everyone" — just casual natural openers
-8. Stay on topic: "${direction.topic}"
-9. DO NOT repeat or paraphrase any of the previous messages listed above
-10. EMBRACE natural chat rhythm: a "gm" or "facts" or "lol wut" between longer takes makes it feel real
-11. The challenger turn must raise a REAL objection with substance
+EXAMPLE of the energy we want (different topic, just showing the style):
+[0] gm
+[1] anyone else think AI memory is the most underrated unsolved problem
+[2] 100%. every new chat starts cold
+[3] to be fair there's RAG and vector stores — issue is retrieval quality, not storage
+[4] ok but why does it still hallucinate stuff from "past" sessions tho
+[5] because context window ≠ memory. it's a very long prompt, not actual recall
+[6] so basically every AI assistant has anterograde amnesia lol
 
-Return ONLY a JSON array of exactly ${turns.length} message objects:
-[{"msg": "text", "agent": "agent_id"}, ...]`;
+Now write the actual messages. Rules:
+- micro = literally 1-5 words ("gm", "facts", "this", "nah", "wait what")
+- if replying, react to the SPECIFIC thing said in that message
+- no @mentions, no name tags
+- lowercase, casual, contractions, don't explain yourself
+- each person sounds different from the others
 
-  const raw    = await callRaw(env, prompt, { temperature: 0.95, maxTokens: 1800 });
+Return ONLY a JSON array:
+[{"msg":"text","agent":"agent_id"},...]`;
+
+  const raw    = await callRaw(env, prompt, { temperature: 0.95, maxTokens: 1600 });
   const parsed = parseJSON(raw);
 
   if (Array.isArray(parsed)) {
@@ -538,20 +498,16 @@ async function uniquenessGuardian(env, messages, topic, postedHistory) {
 // Director → Writer → Guardian, with session + history tracking
 
 async function runConversation(env, count, postedHistory = []) {
-  // ── Agent 1: Director ────────────────────────────────────────────────────
   const direction = await conversationDirector(env, postedHistory);
-
-  // ── Agent 2: Writer ──────────────────────────────────────────────────────
   const raw = await conversationWriter(env, direction, postedHistory);
 
-  // Hard filter: remove @mentions and blank/single-word messages; allow "gm", one-liners
+  // Hard filter: remove @mentions and blank messages; allow "gm", one-liners
   let msgs = raw.filter(m =>
     !/@\w+/.test(m.msg) &&
     m.msg.trim().length >= 2 &&
     !/^(hey guys|hi all|hello everyone)/i.test(m.msg)
   );
 
-  // ── Agent 3: Uniqueness Guardian ─────────────────────────────────────────
   msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory);
 
   // Pad if short — rewrite static fallback messages rather than posting verbatim
@@ -566,16 +522,16 @@ async function runConversation(env, count, postedHistory = []) {
     }
   }
 
-  // ── Update conversation session ───────────────────────────────────────────
+  // Update conversation session
   const sessionRaw = await env.KV.get(KV_CONV_TOPIC);
   const session    = sessionRaw ? JSON.parse(sessionRaw) : null;
 
   if (direction.is_new_session || !session) {
     await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
-      topic:     direction.topic,
-      topic2:    direction.topic2 || null,
+      topic:      direction.topic,
+      topic2:     direction.topic2 || null,
       started_at: Date.now(),
-      run_count: 1,
+      run_count:  1,
     }));
   } else {
     await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
@@ -586,7 +542,6 @@ async function runConversation(env, count, postedHistory = []) {
   }
   await env.KV.put(KV_CONV_AGENTS, JSON.stringify(direction.agents || []));
 
-  // ── Update topic history (for Director's "avoid repeating" context) ───────
   const recentRaw = await env.KV.get(KV_RECENT);
   const recent    = recentRaw ? JSON.parse(recentRaw) : [];
   recent.push({ seed: direction.topic.slice(0, 80), ts: Date.now() });
@@ -594,6 +549,7 @@ async function runConversation(env, count, postedHistory = []) {
 
   return {
     msgs:        msgs.slice(0, count),
+    turns:       direction.turns || [],
     topic:       direction.topic,
     topic2:      direction.topic2 || null,
     agents:      direction.agents,
@@ -611,29 +567,51 @@ export async function runLingoPoster(env) {
     return { skipped: true, reason: 'No group configured. Add @AshiqAibot and type /lingosetup.' };
   }
 
-  // Load posted history for deduplication + conversation continuity
-  const histRaw      = await env.KV.get(KV_POSTED);
+  const histRaw       = await env.KV.get(KV_POSTED);
   const postedHistory = histRaw ? JSON.parse(histRaw) : [];
 
-  // Run the 3-agent conversation pipeline: Director → Writer → Guardian
   const result = await runConversation(env, MSGS_PER_RUN, postedHistory);
-  const { msgs, topic, topic2, agents, session_run, raw_count, final_count } = result;
+  const { msgs, turns, topic, topic2, agents, session_run, raw_count, final_count } = result;
 
   if (!msgs.length) return { ok: false, reason: 'Conversation pipeline returned 0 messages' };
 
-  let posted = 0;
-  const now = Date.now();
-  const newEntries = [];
+  // Load cross-run message IDs for Telegram reply threading
+  const prevMsgIdsRaw = await env.KV.get('lingo_prev_msg_ids');
+  const prevMsgIds    = prevMsgIdsRaw ? JSON.parse(prevMsgIdsRaw) : [];
 
-  for (const item of msgs) {
-    const text = escapeHtml(item.msg);
-    await tgCall(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
+  let posted = 0;
+  const now         = Date.now();
+  const newEntries  = [];
+  const batchMsgIds = [];
+
+  for (let i = 0; i < msgs.length; i++) {
+    const item       = msgs[i];
+    const turn       = turns[i];
+    const respondsTo = turn?.responds_to;
+
+    // Determine reply target: within-batch reply or occasional cross-run reply
+    let replyToMsgId = null;
+    if (respondsTo != null && batchMsgIds[respondsTo]) {
+      replyToMsgId = batchMsgIds[respondsTo];
+    } else if (i === 0 && prevMsgIds.length > 0 && Math.random() < 0.5) {
+      replyToMsgId = prevMsgIds[prevMsgIds.length - 1];
+    }
+
+    const body = { chat_id: chatId, text: escapeHtml(item.msg), parse_mode: 'HTML' };
+    if (replyToMsgId) body.reply_to_message_id = replyToMsgId;
+
+    const tgResult = await tgCall(env, 'sendMessage', body);
+    batchMsgIds.push(tgResult?.message_id || null);
     newEntries.push({ msg: item.msg, ts: now });
     posted++;
-    if (posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
+    if (posted < msgs.length) await sleep(45000 + Math.random() * 45000);
   }
 
-  // Persist the rolling message history (keep last 70 — ~10 runs worth)
+  // Save message IDs for next run's cross-run threading (keep last 10)
+  const validIds      = batchMsgIds.filter(Boolean);
+  const updatedMsgIds = [...prevMsgIds, ...validIds].slice(-10);
+  await env.KV.put('lingo_prev_msg_ids', JSON.stringify(updatedMsgIds));
+
   const updatedHistory = [...postedHistory, ...newEntries].slice(-70);
   await env.KV.put(KV_POSTED, JSON.stringify(updatedHistory));
 
@@ -651,19 +629,14 @@ function escapeHtml(str) {
 }
 
 // ── Auto-detect group from recent updates ─────────────────────────────────────
-// Uses my_chat_member updates (fires when bot is added to a group — works even
-// when privacy mode is ON, because privacy mode only blocks regular messages,
-// not bot membership events).
 
 async function detectLingoGroup(env) {
   if (!env.TELEGRAM_BOT_TOKEN) return null;
   try {
-    // Get bot's own user ID so we can match my_chat_member events
     const meRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
     const meData = await meRes.json();
     const botId = meData.ok ? meData.result.id : null;
 
-    // Request both message types AND membership events
     const body = JSON.stringify({
       limit: 100,
       allowed_updates: ['message', 'channel_post', 'my_chat_member'],
@@ -678,12 +651,10 @@ async function detectLingoGroup(env) {
     const groups = new Map();
 
     for (const upd of (d.result || [])) {
-      // my_chat_member: fires when bot is added to a group (no privacy mode needed)
       if (upd.my_chat_member) {
         const mcm   = upd.my_chat_member;
         const chat  = mcm.chat;
         const newStatus = mcm.new_chat_member?.status;
-        // status = "member" or "administrator" means bot was just added
         if (['member', 'administrator'].includes(newStatus)) {
           const t = chat?.type;
           if (['group', 'supergroup', 'channel'].includes(t)) {
@@ -694,7 +665,6 @@ async function detectLingoGroup(env) {
         continue;
       }
 
-      // Fallback: regular messages (only visible when privacy mode is OFF)
       const msg = upd.message || upd.channel_post;
       if (!msg) continue;
       const t = msg.chat?.type;
@@ -705,25 +675,17 @@ async function detectLingoGroup(env) {
 
     if (!groups.size) return null;
 
-    // 1st priority — title contains "lingo"
     for (const [id, g] of groups) {
       if (g.title.toLowerCase().includes('lingo')) return id;
     }
 
-    // 2nd priority — join_event groups (bot was literally just added there)
     const joinGroups = [...groups.values()].filter(g => g.source === 'join_event');
     if (joinGroups.length === 1) return joinGroups[0].id;
-
-    // 3rd priority — only one group total
     if (groups.size === 1) return [...groups.keys()][0];
 
     return { ambiguous: true, groups: [...groups.values()] };
   } catch { return null; }
 }
-
-// ── Handle /lingosetup command sent inside the target group ───────────────────
-// Works with both `/lingosetup` AND `/lingosetup@AshiqAibot`
-// The @BotName form is delivered even when privacy mode is ON
 
 export async function handleLingoCommand(env, msg) {
   const text = (msg.text || '').trim();
@@ -732,14 +694,12 @@ export async function handleLingoCommand(env, msg) {
   const chatId = String(msg.chat.id);
   await env.KV.put(KV_GROUP_ID, chatId);
 
-  // Confirm in the group
   await tgCall(env, 'sendMessage', {
     chat_id: chatId,
     text: '✅ <b>LingoAI poster activated!</b>\nThis group will receive AI-generated community discussions automatically every few hours.',
     parse_mode: 'HTML',
   });
 
-  // Also notify owner
   if (env.TELEGRAM_OWNER_ID) {
     await tgCall(env, 'sendMessage', {
       chat_id: env.TELEGRAM_OWNER_ID,
@@ -750,16 +710,12 @@ export async function handleLingoCommand(env, msg) {
   return true;
 }
 
-// ── Setup: detect or set group chat ID ───────────────────────────────────────
-
 export async function setupLingoGroup(env, manualChatId = null) {
-  // Manual override — user passes ?chat_id=XXXX
   if (manualChatId) {
     await env.KV.put(KV_GROUP_ID, String(manualChatId));
     return { ok: true, chat_id: manualChatId, method: 'manual', message: `Chat ID ${manualChatId} saved. Poster will start next cron cycle.` };
   }
 
-  // Auto-detect from recent updates
   const detected = await detectLingoGroup(env);
 
   if (!detected) {
@@ -782,12 +738,9 @@ export async function setupLingoGroup(env, manualChatId = null) {
     };
   }
 
-  // Single match — save it
   await env.KV.put(KV_GROUP_ID, String(detected));
   return { ok: true, chat_id: detected, method: 'auto', message: `Auto-detected group ${detected}. Poster starts next cron cycle.` };
 }
-
-// ── Status ────────────────────────────────────────────────────────────────────
 
 export async function lingoStatus(env) {
   const chatId      = await env.KV.get(KV_GROUP_ID);
@@ -812,21 +765,11 @@ export async function lingoStatus(env) {
     total_runs:    parseInt(sessRaw || '0', 10),
     msgs_per_run:  MSGS_PER_RUN,
     cron_schedule: 'every 10min (144 runs/day × 7 msgs = ~1008 msgs/day)',
-    conversation_pipeline: {
-      agents: [
-        'Director (temp 0.85) — reads session KV, casts 5-6 of 40 personas, designs 7-turn order',
-        'Writer (temp 0.95) — writes all 7 messages in exact persona voice with reply chains',
-        'Guardian — rewrites any >40% similarity match against 70-msg history',
-      ],
-      personas: `${Object.keys(PERSONAS).length} distinct characters across: LingoAI insiders, AI enthusiasts, crypto veterans, newcomers, wild cards`,
-      ai_stack: 'Groq llama-3.3-70b-versatile (primary) → CF AI llama-3.1-8b (fallback)',
-      session_model: '1-2 topics per session × up to 5 runs = 35 messages on same topic before natural shift',
-    },
     current_session: conv ? {
-      topic:     conv.topic,
-      topic2:    conv.topic2 || null,
-      run_count: conv.run_count,
-      runs_left: Math.max(0, 5 - (conv.run_count || 0)),
+      topic:         conv.topic,
+      topic2:        conv.topic2 || null,
+      run_count:     conv.run_count,
+      runs_left:     Math.max(0, 5 - (conv.run_count || 0)),
       active_agents: activeAgents.map(id => `${id} (${PERSONAS[id]?.type || '?'})`),
     } : null,
     last_5_topics: recent.slice(-5).map(r => r.seed),
