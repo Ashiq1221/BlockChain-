@@ -296,14 +296,16 @@ ${personaCatalogue}
 LingoAI product context (only relevant for lingo topics):
 ${LINGO_FACTS.split('\n').slice(0, 8).join('\n')}
 
-Design a 7-message conversation that feels like REAL people chatting — not a panel discussion.
+Design a 7-message conversation that feels like REAL casual Telegram chat — NOT a structured panel discussion.
 Rules:
 - Select 5-6 personas whose expertise naturally fits the topic
-- Some personas may speak twice (a follow-up or counter-reply)
-- Mix message lengths: some short reactions (1 sentence), some detailed (3-4 sentences)
-- responds_to = index of THIS BATCH message being replied to (null for a new point)
-- The conversation must flow: opener → reactions → pushback → defense → newcomer question → answer → close
+- Some personas may speak twice (a quick reaction or follow-up)
+- VARY message lengths heavily — include at least 1-2 micro turns (gm, one-word reaction, quick question)
+- responds_to = index of THIS BATCH message being replied to (null for opening or standalone)
+- The conversation flows naturally: someone opens → others react casually → one digs deeper → someone asks a quick question → answered → light close
+- Include at least ONE micro or social turn ("gm", "this", "facts", "lol wait what", "anyone else think...?")
 - If continuing a session: SAME topic, agents can reference what was said before
+- length options: "micro" = 1-5 words, "short" = 1 sentence, "medium" = 2-3 sentences, "long" = 3-5 sentences
 
 Return ONLY valid JSON:
 {
@@ -312,13 +314,13 @@ Return ONLY valid JSON:
   "is_new_session": <true if starting fresh, false if continuing>,
   "agents": ["id1", "id2", "id3", "id4", "id5"],
   "turns": [
-    {"agent": "id", "angle": "<specific thing this agent says or argues>", "responds_to": null, "length": "short|medium|long"},
-    {"agent": "id", "angle": "<direct response to turn 0's specific point>", "responds_to": 0, "length": "medium"},
-    {"agent": "id", "angle": "<challenge or disagreement with turn 0>", "responds_to": 0, "length": "medium"},
-    {"agent": "id", "angle": "<data or technical point supporting or rebutting>", "responds_to": 2, "length": "long"},
-    {"agent": "id", "angle": "<genuine question from a less-experienced perspective>", "responds_to": null, "length": "short"},
-    {"agent": "id", "angle": "<clear answer to turn 4's question + extra context>", "responds_to": 4, "length": "medium"},
-    {"agent": "id", "angle": "<closing perspective or forward-looking take>", "responds_to": null, "length": "short"}
+    {"agent": "id", "angle": "casual opener or gm-style check-in to warm up the chat", "responds_to": null, "length": "micro"},
+    {"agent": "id", "angle": "<specific thing this agent says or argues about the topic>", "responds_to": null, "length": "short"},
+    {"agent": "id", "angle": "<quick reaction or agreement/disagreement — one liner>", "responds_to": 1, "length": "short"},
+    {"agent": "id", "angle": "<deeper take or data point building on the discussion>", "responds_to": 1, "length": "medium"},
+    {"agent": "id", "angle": "<challenge or pushback with substance>", "responds_to": 3, "length": "medium"},
+    {"agent": "id", "angle": "<honest newcomer question or confused reaction>", "responds_to": null, "length": "short"},
+    {"agent": "id", "angle": "<closing take, forward-looking or summary vibe>", "responds_to": null, "length": "short"}
   ]
 }`;
 
@@ -339,13 +341,13 @@ Return ONLY valid JSON:
     agents:          defAgents,
     continueSession,
     turns: [
-      { agent: 'big_mike', angle: `open with a perspective on ${rnd.topic}`,     responds_to: null, length: 'medium' },
-      { agent: 'ry_kow',   angle: 'add a practical developer dimension',          responds_to: 0,    length: 'short'  },
-      { agent: 'd_willi',  angle: 'challenge an assumption in the opener',        responds_to: 0,    length: 'medium' },
-      { agent: 's_chen',   angle: 'bring a data point to address the challenge',  responds_to: 2,    length: 'long'   },
-      { agent: 'tyler_19', angle: 'ask an honest newcomer question',              responds_to: null, length: 'short'  },
-      { agent: 'luna_p',   angle: 'answer the newcomer with practical context',   responds_to: 4,    length: 'medium' },
-      { agent: 'big_mike', angle: 'close with a broader cycle perspective',       responds_to: null, length: 'short'  },
+      { agent: 'sir_degen', angle: 'casual gm or one-liner to kick off the chat',   responds_to: null, length: 'micro'  },
+      { agent: 'big_mike',  angle: `open with a perspective on ${rnd.topic}`,        responds_to: null, length: 'short'  },
+      { agent: 'ry_kow',    angle: 'add a practical developer dimension',             responds_to: 1,    length: 'short'  },
+      { agent: 'd_willi',   angle: 'challenge an assumption in the opener',           responds_to: 1,    length: 'medium' },
+      { agent: 's_chen',    angle: 'bring a data point to address the challenge',     responds_to: 3,    length: 'medium' },
+      { agent: 'tyler_19',  angle: 'ask an honest newcomer question',                 responds_to: null, length: 'short'  },
+      { agent: 'luna_p',    angle: 'answer the newcomer with practical context',      responds_to: 5,    length: 'medium' },
     ],
   };
 }
@@ -377,7 +379,10 @@ async function conversationWriter(env, direction, postedHistory) {
     const replyCtx = t.responds_to !== null && t.responds_to !== undefined
       ? ` → directly responds to message ${t.responds_to}`
       : '';
-    const lenGuide = t.length === 'short' ? '1 sentence' : t.length === 'long' ? '3-5 sentences' : '2-3 sentences';
+    const lenGuide = t.length === 'micro'  ? '1-5 words ONLY (e.g. "gm", "facts", "this fr", "lol wait what")'
+                   : t.length === 'short'  ? '1 sentence'
+                   : t.length === 'long'   ? '3-5 sentences'
+                   :                         '2-3 sentences';
     return `[${i}] ${t.agent} (${p?.type || 'member'}) | ${lenGuide}${replyCtx}\n     angle: ${t.angle}`;
   }).join('\n\n');
 
@@ -394,14 +399,16 @@ ${blueprint}
 
 WRITING RULES:
 1. Each message must SOUND like a different person — different vocabulary, rhythm, energy
-2. Short turns = 1 punchy sentence. Long turns = 3-5 sentences with actual reasoning
-3. Reply turns MUST reference the SPECIFIC point from the earlier turn — not vague agreement
-4. NO @mentions, NO name prefixes — just the message text itself
-5. Casual Telegram tone: lowercase fine, contractions fine, no corporate grammar
-6. NO "Hey everyone / Hi all" openers
-7. Stay on topic: "${direction.topic}"
-8. DO NOT repeat or paraphrase any of the previous messages listed above
-9. The challenger turn must raise a REAL objection with substance
+2. MICRO turns = 1-5 words literally ("gm", "facts", "this fr", "nah fam", "wait is this real?") — keep them tiny
+3. Short turns = 1 punchy sentence. Long turns = 3-5 sentences with actual reasoning
+4. Reply turns MUST reference the SPECIFIC point from the earlier turn — not vague agreement
+5. NO @mentions, NO name prefixes — just the message text itself
+6. Casual Telegram tone: lowercase fine, contractions fine, abbreviations fine, no corporate grammar
+7. NO "Hey everyone / Hi all / Good morning everyone" — just casual natural openers
+8. Stay on topic: "${direction.topic}"
+9. DO NOT repeat or paraphrase any of the previous messages listed above
+10. EMBRACE natural chat rhythm: a "gm" or "facts" or "lol wut" between longer takes makes it feel real
+11. The challenger turn must raise a REAL objection with substance
 
 Return ONLY a JSON array of exactly ${turns.length} message objects:
 [{"msg": "text", "agent": "agent_id"}, ...]`;
@@ -411,7 +418,7 @@ Return ONLY a JSON array of exactly ${turns.length} message objects:
 
   if (Array.isArray(parsed)) {
     return parsed
-      .filter(m => typeof m.msg === 'string' && m.msg.trim().length > 8)
+      .filter(m => typeof m.msg === 'string' && m.msg.trim().length > 1)
       .map(m => ({ msg: m.msg.trim(), agent: m.agent || 'unknown' }));
   }
   return [];
@@ -436,7 +443,7 @@ Return ONLY the rewritten message text. No quotes. No explanation.`;
 
   const raw     = await callRaw(env, prompt, { temperature: 0.90, maxTokens: 150 });
   const cleaned = raw.replace(/^["']|["']$/g, '').trim();
-  if (cleaned.length > 20 && wordSimilarity(cleaned, original) < 0.45) return cleaned;
+  if (cleaned.length > 4 && wordSimilarity(cleaned, original) < 0.45) return cleaned;
   return null;
 }
 
@@ -462,10 +469,10 @@ async function runConversation(env, count, postedHistory = []) {
   // ── Agent 2: Writer ──────────────────────────────────────────────────────
   const raw = await conversationWriter(env, direction, postedHistory);
 
-  // Hard filter: remove @mentions, too-short messages
+  // Hard filter: remove @mentions and blank/single-word messages; allow "gm", one-liners
   let msgs = raw.filter(m =>
     !/@\w+/.test(m.msg) &&
-    m.msg.split(' ').length >= 5 &&
+    m.msg.trim().length >= 2 &&
     !/^(hey guys|hi all|hello everyone)/i.test(m.msg)
   );
 
