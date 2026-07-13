@@ -681,7 +681,7 @@
     "61450841": {
       "refill_id": 10825927,
       "requested_at": "2026-07-13T04:33:51.092510+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450843": {
       "refill_id": 10819424,
@@ -691,7 +691,7 @@
     "61450844": {
       "refill_id": 10825928,
       "requested_at": "2026-07-13T04:33:56.377948+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61450846": {
       "refill_id": 10819426,
@@ -701,7 +701,7 @@
     "61450847": {
       "refill_id": 10825929,
       "requested_at": "2026-07-13T04:34:01.444960+00:00",
-      "status": "Pending"
+      "status": "Rejected"
     },
     "61481315": {
       "refill_id": 10815884,
@@ -747,14 +747,6 @@
     "https://x.com/i/status/2073706172318916924"
   ],
   "agent_log": [
-    {
-      "at": "2026-07-11T16:48:03.438180+00:00",
-      "msg": "Monitored 43 orders, attempted to trigger 7 refills, but all were rejected due to council vote"
-    },
-    {
-      "at": "2026-07-11T17:48:02.241609+00:00",
-      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
-    },
     {
       "at": "2026-07-11T17:49:08.469390+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
@@ -945,6 +937,14 @@
     },
     {
       "at": "2026-07-13T04:34:50.574948+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-13T08:11:10.170940+00:00",
+      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
+    },
+    {
+      "at": "2026-07-13T08:12:20.147978+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
