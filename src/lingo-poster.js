@@ -1,0 +1,805 @@
+// LingoAI Community Message Auto-Poster
+// Posts AI-generated community discussion messages to the LingoAI Telegram group
+// Each cron cycle: posts MSGS_PER_RUN messages with organic delays
+// When queue is exhausted (500 messages): generates a fresh new batch via CF AI
+
+const KV_GROUP_ID    = 'lingo_group_chat_id';
+const KV_SESSION     = 'lingo_session_num';
+const KV_RECENT      = 'lingo_recent_runs';  // last 20 {seed, topic} — topic history
+const KV_POSTED      = 'lingo_posted_msgs';  // rolling window of last 70 posted {msg, ts}
+const KV_CONV_TOPIC  = 'lingo_conv_topic';   // current conversation session {topic, topic2, run_count}
+const KV_CONV_AGENTS = 'lingo_conv_agents';  // agent IDs active in current session
+
+const INVITE_LINK  = 'https://t.me/+0-Zzup1r8aY5ZmZl';
+const MSGS_PER_RUN = 7;  // messages per cron run (every 10min × 144/day = ~1008/day)
+
+// ── Core LingoAI context fed to AI for generation ─────────────────────────────
+
+const LINGO_FACTS = `LingoAI is a Web3 AI project. Key facts:
+• Token: $LINGOAI — capped at 100 billion, NO token burns — intrinsic value accrual model
+• Grand Unified Theory: Web3.0 = Data 3.0 + Finance 3.0
+• 95% of global data is "Dark Data" trapped in silos — LingoAI unlocks it
+• Products: LingoRAG (retrieval-augmented generation), LingoGraph (ontologies), MetaGraph (knowledge graphs — eliminates AI hallucinations), LingoPOD (wearable device)
+• LingoPOD hardware line: LingoGlass, LingoWatch, LingoRing, LingoPin — each is a DePIN node ("corpus mining")
+• LingoPOD features: edge LLM on-device, personal data pod (Solid protocol), digital twin, proof-of-human protocol, decentralized identity
+• Token sinks: B2B data escrows, ReviewDAO staking, hardware bonding (DePIN), data pod deposits, MetaGraph collateral
+• Revenue → token demand: fiat payments trigger $LINGOAI market buybacks
+• Mission: democratize AI for second/third-tier languages via community-driven RLHF
+• LanguageDAO: communities govern and monetize their own linguistic corpus
+• ReviewDAO: staked validators verify data quality; bad data = slashed collateral
+• "数通天下" = Exchange of Data (core philosophy)
+• Markets: $3.2B AI training data market, $16B+ by 2034 projection
+• DePIN: 10x more efficient than centralized agencies like Scale AI
+• "1+1>2 data nuclear fusion": combining fragmented data creates exponential value
+• "Phygical" = physical + digital reality merged through LingoPOD
+• Enterprise clients must use $LINGOAI to license datasets from the ecosystem`;
+
+// ── 40 community member personas ─────────────────────────────────────────────
+// Each has: type (shown to Director for casting) + voice (shown to Writer for style)
+// Stored as object so Director can reference by ID
+
+const PERSONAS = {
+  // ── LingoAI insiders (10) ─────────────────────────────────────────────────
+  s_chen:    { type: 'data scientist',             voice: 'analytical and precise. Uses specific percentages and numbers. Thinks in systems. Rarely excited. Short-to-medium sentences.' },
+  m_webb:    { type: 'early $LINGOAI investor',    voice: 'confident, occasionally smug, dismisses FUD quickly. Has seen multiple cycles. References supply mechanics naturally.' },
+  p_patel:   { type: 'developer building on LingoRAG', voice: 'code-first and practical. References actual implementation details. Uses "honestly" a lot. Very direct.' },
+  j_kim:     { type: 'Korean LingoAI holder',      voice: 'measured, brings non-English language perspective. Frustrated that major AI ignores Asian scripts. Thoughtful.' },
+  v_silva:   { type: 'Brazilian LanguageDAO advocate', voice: 'passionate about linguistic diversity and personal about the mission. Occasionally uses lowercase enthusiasm.' },
+  a_turner:  { type: 'ex-Bittensor contributor now on LingoAI', voice: 'comparative mindset. References Bittensor mechanics for contrast. Skeptical-turned-believer energy.' },
+  y_tanaka:  { type: 'hardware/IoT engineer into LingoPOD', voice: 'technical about physical devices, latency, edge compute. Thinks in specs and power consumption.' },
+  r_hassan:  { type: 'enterprise sales rep using $LINGOAI', voice: 'thinks in B2B deals, procurement cycles, ROI. Uses business language naturally. Grounded.' },
+  c_adeyemi: { type: 'Nigerian developer, African language AI', voice: 'passionate about Igbo/Yoruba being ignored by AI. Practical about infrastructure costs. Warm but firm.' },
+  l_zhang:   { type: 'Chinese ML engineer, data sovereignty focus', voice: 'focused on on-device AI and who controls data. Wary of centralised cloud. Technical.' },
+
+  // ── General AI enthusiasts (10) ───────────────────────────────────────────
+  dr_moore:  { type: 'ML researcher (academia)',   voice: 'precise, separates hype from reality, references concepts correctly. Occasionally long but always substantive.' },
+  ry_kow:    { type: 'full-stack developer',       voice: 'extremely practical. Short punchy sentences. "just ship it" energy. No patience for vague theory.' },
+  d_willi:   { type: 'AI ethics researcher',       voice: 'asks uncomfortable questions about power and bias. Not anti-AI. Pro-accountability. Measured and sharp.' },
+  c_wei:     { type: 'AI news obsessive',          voice: 'knows every model release. Runs benchmarks for fun. Gets specific about architecture differences. Nerdy.' },
+  f_ali:     { type: 'AI product manager',         voice: 'user-first lens on everything. "who actually uses this?" energy. Practical about adoption curves.' },
+  o_black:   { type: 'AI skeptic (seen the winters)', voice: 'been through AI winters. Tempers expectations without being a hater. Calm and measured.' },
+  n_khalil:  { type: 'Arabic NLP researcher',      voice: 'firsthand experience with under-resourced languages. Deeply technical about tokenization and multilingual models.' },
+  j_hern:    { type: 'AI trading bot builder',     voice: 'lives at AI + crypto intersection. Applied and results-focused. Drops specific tools and frameworks.' },
+  t_osei:    { type: 'West African AI researcher', voice: 'Africa compute access angle. Local deployment challenges. Represents Twi/Hausa NLP needs. Grounded.' },
+  i_petrov:  { type: 'Russian ML engineer',        voice: 'hardcore architecture focus. Low-level and technical. Appreciates elegant solutions. Terse.' },
+
+  // ── Crypto veterans (10) ──────────────────────────────────────────────────
+  big_mike:  { type: 'Bitcoin OG (in since 2012)', voice: 'deep historical perspective. Calm. Has seen every narrative come and go. Occasional macro wisdom. Doesn\'t hype.' },
+  luna_p:    { type: 'DeFi yield strategist',      voice: 'yield-first mindset. Always risk-adjusted. Practical about protocol risks. Drops APY numbers naturally.' },
+  whale_sam: { type: 'on-chain analyst',           voice: 'data-driven. Everything is on-chain evidence. References wallet flows and transaction patterns.' },
+  d_volkov:  { type: 'Russian crypto veteran',     voice: 'escaped fiat system. Anti-bank. Privacy advocate. Multi-chain after being a Bitcoin maxi. Blunt.' },
+  c_fox:     { type: 'NFT-turned-DAO governance nerd', voice: 'started with NFTs, now obsessed with governance design. Sees community coordination as the real product.' },
+  a_singh:   { type: 'Indian crypto influencer',   voice: 'high energy. Practical about fees and speed. Solana ecosystem. References Indian retail market a lot.' },
+  t_nguy:    { type: 'institutional crypto (ex-Goldman)', voice: 'TradFi lens. Regulatory-aware. Speaks in risk and compliance terms. Measured. Doesn\'t hype.' },
+  p_obrien:  { type: 'Irish Ethereum validator',   voice: 'runs own nodes. Infrastructure-focused. Ethereum faithful but open-minded. Practical about validator economics.' },
+  k_yilmaz:  { type: 'Turkish DeFi user (survived 80% inflation)', voice: 'crypto as economic survival, not investment. Stablecoin-focused. Real urgency. Personal.' },
+  m_rossi:   { type: 'Italian DeFi veteran',       voice: 'seen multiple protocol blowups. Risk-aware. "I\'ve been rekt before" energy. Practical not pessimistic.' },
+
+  // ── Newcomers / curious (8) ───────────────────────────────────────────────
+  tyler_19:  { type: 'college student (19), just got into crypto', voice: 'learns out loud. Asks obvious questions without shame. Energetic and curious. Short messages.' },
+  e_rod:     { type: 'tech journalist writing about Web3', voice: 'frames everything as a story. Asks clarifying questions. Skeptical but genuinely open.' },
+  k_park:    { type: 'TradFi analyst switching to crypto', voice: 'maps everything to bonds/stocks/banks. Skeptical but genuinely learning. Medium-length thoughtful takes.' },
+  jimmy_o:   { type: 'Nigerian fintech builder',   voice: 'mobile-first. Remittances use case. Practical about connectivity and fee limits. Hopeful and grounded.' },
+  sofia_r:   { type: 'Italian newcomer (first month)', voice: 'enthusiastic and slightly confused. Asks the most obvious questions. Endearing energy. Short sentences.' },
+  ahmed_f:   { type: 'Egyptian developer, new to Web3', voice: 'maps Web3 to Web2 concepts. Technically capable but unfamiliar with crypto primitives. Curious.' },
+  lena_s:    { type: 'German privacy advocate',    voice: 'GDPR-lens on everything. Data rights first. Cautiously interested. Asks pointed questions about data handling.' },
+  b_tanaka:  { type: 'Vietnamese remittance user', voice: 'sends money home monthly. Sees crypto as cheaper/faster. Personal stories about transfer fees.' },
+
+  // ── Wild cards (2) ────────────────────────────────────────────────────────
+  sir_degen: { type: 'crypto degen',               voice: 'one-liners and punchy market takes. Not stupid — just high-energy. Short. References price action and narratives.' },
+  zara_c:    { type: 'contrarian',                 voice: 'argues the opposite of consensus. Devil\'s advocate by nature. Sharp and occasionally funny. Challenges assumptions.' },
+};
+
+// 50 themes across 4 categories — 50 × 10 = 500 messages per batch
+// category: 'lingo' | 'ai' | 'web3' | 'trending'
+const THEMES = [
+  // ── LingoAI (20) ──────────────────────────────────────────────────────────
+  { topic: 'token economics, utility sinks, and why there are no token burns',                                             cat: 'lingo' },
+  { topic: 'LingoPOD hardware features, corpus mining, and the DePIN network',                                            cat: 'lingo' },
+  { topic: 'language diversity mission and why second/third-tier languages are ignored by AI',                             cat: 'lingo' },
+  { topic: 'MetaGraph architecture and how it eliminates AI hallucinations for enterprises',                               cat: 'lingo' },
+  { topic: 'comparing LingoAI to Scale AI, Helium, FET, Ocean Protocol, and Bittensor',                                   cat: 'lingo' },
+  { topic: 'ReviewDAO and LanguageDAO governance models and contributor economics',                                        cat: 'lingo' },
+  { topic: 'newcomers asking LingoAI questions and experienced holders answering naturally',                               cat: 'lingo' },
+  { topic: '$16B data market opportunity, DePIN cost advantage, and $LINGOAI value thesis',                               cat: 'lingo' },
+  { topic: 'LingoRAG technical architecture: ontologies, multi-agent query decomposition',                                cat: 'lingo' },
+  { topic: 'LingoPOD as a personal data sovereignty device — Solid protocol, digital twin',                               cat: 'lingo' },
+  { topic: '$LINGOAI fixed 100B supply, no dilution, no burns — structural scarcity explained',                           cat: 'lingo' },
+  { topic: 'B2B data escrow mechanics — enterprises pay fiat, triggering $LINGOAI buybacks',                             cat: 'lingo' },
+  { topic: 'DePIN passive income: LingoWatch, LingoRing, LingoGlass, LingoPin earning $LINGOAI daily',                   cat: 'lingo' },
+  { topic: 'hardware bonding mechanics — how LingoPOD pre-orders lock circulating supply',                                cat: 'lingo' },
+  { topic: 'dark data: 95% of global data trapped in silos — LingoAI unlocks all of it',                                 cat: 'lingo' },
+  { topic: 'LanguageDAO — minority communities owning and monetizing their own linguistic corpus',                         cat: 'lingo' },
+  { topic: 'proof-of-human protocol in LingoPOD — fighting bots and sybil attacks in Web3',                              cat: 'lingo' },
+  { topic: 'on-device edge LLM in LingoPOD vs cloud AI — privacy, latency, data ownership',                              cat: 'lingo' },
+  { topic: 'LingoAI 2030 vision: global multilingual AI data infrastructure',                                             cat: 'lingo' },
+  { topic: 'real talk: accumulation strategy for $LINGOAI and upcoming catalyst events',                                  cat: 'lingo' },
+
+  // ── General AI (10) ───────────────────────────────────────────────────────
+  { topic: 'ChatGPT vs Claude vs Gemini vs Grok — which AI is actually best right now',                                  cat: 'ai' },
+  { topic: 'AI agents and autonomous systems — where this is heading in 2025 and beyond',                                 cat: 'ai' },
+  { topic: 'open source AI models vs closed models: Llama, Mistral, Qwen vs GPT-4o, Claude',                             cat: 'ai' },
+  { topic: 'AI hallucination problem — why LLMs still confidently make things up',                                       cat: 'ai' },
+  { topic: 'edge AI and on-device LLMs — phones running models locally without internet',                                 cat: 'ai' },
+  { topic: 'AI replacing jobs — which roles are actually at risk vs which ones are safe',                                 cat: 'ai' },
+  { topic: 'AI regulation globally — EU AI Act, US executive orders, China vs the West',                                  cat: 'ai' },
+  { topic: 'multimodal AI (vision, voice, video generation) — what is impressive and what is hype',                      cat: 'ai' },
+  { topic: 'AI memory and context — why LLMs forget and how long-term memory is being solved',                           cat: 'ai' },
+  { topic: 'AI coding assistants — Cursor, Copilot, Claude Code — which actually makes devs faster',                    cat: 'ai' },
+
+  // ── General Web3 (10) ─────────────────────────────────────────────────────
+  { topic: 'DeFi yield strategies in 2025 — what is working, what is risky, where to look',                              cat: 'web3' },
+  { topic: 'Layer 2 scaling wars — Arbitrum vs Optimism vs Base vs zkSync — who wins',                                  cat: 'web3' },
+  { topic: 'DePIN sector: Helium, Render, Hivemapper, Grass — the passive income thesis',                               cat: 'web3' },
+  { topic: 'Solana vs Ethereum for builders — ecosystems, tooling, fees, community',                                     cat: 'web3' },
+  { topic: 'RWA (real world assets) on-chain — tokenized treasuries, real estate, credit',                              cat: 'web3' },
+  { topic: 'Web3 gaming in 2025 — what GameFi 2.0 looks like vs the 2021 P2E era',                                     cat: 'web3' },
+  { topic: 'crypto wallet security — seed phrases, hardware wallets, phishing — how to stay safe',                       cat: 'web3' },
+  { topic: 'stablecoins landscape — USDT vs USDC vs DAI vs new entrants — risks and trade-offs',                        cat: 'web3' },
+  { topic: 'DAO governance in practice — what actually works and what kills participation',                               cat: 'web3' },
+  { topic: 'NFT evolution — PFPs are dead, what NFTs become in utility, gaming, IP licensing',                           cat: 'web3' },
+
+  // ── Trending Topics (10) ──────────────────────────────────────────────────
+  { topic: 'AI crypto tokens price action and fundamentals: $FET, $RNDR, $TAO, $OCEAN, $WLD',                           cat: 'trending' },
+  { topic: 'BlackRock and institutional Bitcoin/ETH adoption — what it actually means for retail',                       cat: 'trending' },
+  { topic: 'altcoin season signals — how to spot the rotation early and which sectors run first',                        cat: 'trending' },
+  { topic: 'AI + crypto convergence: autonomous AI agents running DeFi wallets in 2025',                                 cat: 'trending' },
+  { topic: 'meme coins culture — why communities form around them and how to tell signal from noise',                    cat: 'trending' },
+  { topic: 'prediction markets going mainstream — Polymarket, Kalshi, and what that means for info',                    cat: 'trending' },
+  { topic: 'crypto bear market survival tactics — DCA, staking, portfolio allocation psychology',                        cat: 'trending' },
+  { topic: 'Elon Musk, X (Twitter), xAI and Grok — the intersection of social media and crypto',                       cat: 'trending' },
+  { topic: 'central bank digital currencies (CBDCs) — threat to crypto or irrelevant',                                  cat: 'trending' },
+  { topic: 'crypto alpha sources — best channels, newsletters, on-chain analytics tools to follow',                     cat: 'trending' },
+];
+
+// ── Telegram helper ───────────────────────────────────────────────────────────
+
+async function tgCall(env, method, body = {}) {
+  if (!env.TELEGRAM_BOT_TOKEN) return null;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    return d.ok ? d.result : null;
+  } catch { return null; }
+}
+
+async function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+// ── Shared AI caller ──────────────────────────────────────────────────────────
+
+async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } = {}) {
+  if (!env.GROQ_API_KEY) {
+    if (env.KV) await env.KV.put('lingo_groq_err', 'GROQ_API_KEY not set', { expirationTtl: 86400 });
+    return '';
+  }
+  try {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature,
+      }),
+    });
+    if (r.ok) {
+      const d = await r.json();
+      return d.choices?.[0]?.message?.content?.trim() || '';
+    }
+    const errText = await r.text().catch(() => r.status);
+    if (env.KV) await env.KV.put('lingo_groq_err', `HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
+  } catch (e) {
+    if (env.KV) await env.KV.put('lingo_groq_err', `exception: ${e?.message || e}`, { expirationTtl: 86400 });
+  }
+  return '';
+}
+
+async function callCFAIRaw(env, prompt, { maxTokens = 600 } = {}) {
+  if (!env.AI) return '';
+  try {
+    const result = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: maxTokens,
+    });
+    return (result?.response || '').trim();
+  } catch (e) {
+    if (env.KV) await env.KV.put('lingo_cfai_err', `${e?.message || e}`, { expirationTtl: 86400 });
+  }
+  return '';
+}
+
+async function callRaw(env, prompt, opts = {}) {
+  return (await callGroqRaw(env, prompt, opts)) || (await callCFAIRaw(env, prompt, opts));
+}
+
+function parseJSON(raw) {
+  const m = raw.match(/[\[{][\s\S]*[\]}]/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch { return null; }
+}
+
+// Jaccard-style word overlap on words longer than 3 chars — used for duplicate detection
+function wordSimilarity(a, b) {
+  const words = s => new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 3));
+  const wa = words(a), wb = words(b);
+  const intersection = [...wa].filter(w => wb.has(w)).length;
+  const denom = Math.max(wa.size, wb.size);
+  return denom ? intersection / denom : 0;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONVERSATION PIPELINE — 3 agents simulate 40 real humans chatting
+//
+//  ┌──────────────────────┐    ┌─────────────────────────┐    ┌────────────────┐
+//  │   DIRECTOR           │ →  │       WRITER             │ →  │   GUARDIAN     │
+//  │  temp 0.85           │    │      temp 0.95            │    │  rewrites dups │
+//  │  Reads session KV    │    │  Writes 7 messages in     │    │  never lets a  │
+//  │  Continues or starts │    │  the EXACT voice of each  │    │  repeat post   │
+//  │  a new conversation  │    │  selected agent — reply   │    │                │
+//  │  Selects 5-6 of 40   │    │  chains, mixed lengths,   │    │                │
+//  │  personas            │    │  organic casual tone      │    │                │
+//  │  Designs turn order  │    │                           │    │                │
+//  └──────────────────────┘    └─────────────────────────┘    └────────────────┘
+//
+//  Session management: 1-2 topics per conversation session (4-6 runs = ~40-60min)
+//  then Director naturally shifts to a new conversation with different agents
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── AGENT 1: CONVERSATION DIRECTOR ───────────────────────────────────────────
+// Manages the session: continues an existing topic or starts a fresh conversation.
+// Selects 5-6 matching personas from the 40 pool and designs the turn order.
+
+async function conversationDirector(env, postedHistory) {
+  // Load session and recent run history
+  const sessionRaw    = await env.KV.get(KV_CONV_TOPIC);
+  const session       = sessionRaw ? JSON.parse(sessionRaw) : null;
+  const activeAgentRaw = await env.KV.get(KV_CONV_AGENTS);
+  const activeAgents  = activeAgentRaw ? JSON.parse(activeAgentRaw) : [];
+  const recentRaw     = await env.KV.get(KV_RECENT);
+  const recentRuns    = recentRaw ? JSON.parse(recentRaw) : [];
+  const usedTopics    = recentRuns.slice(-10).map(r => r.seed).filter(Boolean);
+
+  // Continue session if under 5 runs, otherwise start fresh
+  const continueSession = session && (session.run_count || 0) < 5;
+  const recentSnippets  = postedHistory.slice(-8).map((m, i) => `[${i + 1}] "${m.msg.slice(0, 110)}"`).join('\n');
+
+  // Build compact persona catalogue for Director to pick from
+  const personaCatalogue = Object.entries(PERSONAS)
+    .map(([id, p]) => `${id}: ${p.type}`)
+    .join('\n');
+
+  const sessionCtx = continueSession
+    ? `CONTINUE THIS SESSION (run ${(session.run_count || 0) + 1} of 5):
+Topic: "${session.topic}"${session.topic2 ? `\nDrifting toward: "${session.topic2}"` : ''}
+Recently active personas: ${activeAgents.slice(0, 6).join(', ')}
+Last messages in the group (pick up HERE — this is a continuous conversation):
+${recentSnippets}`
+    : `START A NEW CONVERSATION.
+Topics used recently (avoid repeating): ${usedTopics.slice(-8).join(' | ') || 'none yet'}
+Recent messages to NOT echo: ${recentSnippets || 'none yet'}`;
+
+  const prompt = `You are the Conversation Director for a 40-member Telegram crypto/AI community.
+Your job: cast the right personas for this conversation and design the turn order.
+
+${sessionCtx}
+
+AVAILABLE PERSONAS (pick 5-6 that MATCH the topic — mix expertise levels):
+${personaCatalogue}
+
+LingoAI product context (only relevant for lingo topics):
+${LINGO_FACTS.split('\n').slice(0, 8).join('\n')}
+
+Design a 7-message conversation that feels like REAL people chatting — not a panel discussion.
+Rules:
+- Select 5-6 personas whose expertise naturally fits the topic
+- Some personas may speak twice (a follow-up or counter-reply)
+- Mix message lengths: some short reactions (1 sentence), some detailed (3-4 sentences)
+- responds_to = index of THIS BATCH message being replied to (null for a new point)
+- The conversation must flow: opener → reactions → pushback → defense → newcomer question → answer → close
+- If continuing a session: SAME topic, agents can reference what was said before
+
+Return ONLY valid JSON:
+{
+  "topic": "<specific topic being discussed — one narrow angle, not a broad category>",
+  "topic2": "<optional second topic that naturally bleeds in, or null>",
+  "is_new_session": <true if starting fresh, false if continuing>,
+  "agents": ["id1", "id2", "id3", "id4", "id5"],
+  "turns": [
+    {"agent": "id", "angle": "<specific thing this agent says or argues>", "responds_to": null, "length": "short|medium|long"},
+    {"agent": "id", "angle": "<direct response to turn 0's specific point>", "responds_to": 0, "length": "medium"},
+    {"agent": "id", "angle": "<challenge or disagreement with turn 0>", "responds_to": 0, "length": "medium"},
+    {"agent": "id", "angle": "<data or technical point supporting or rebutting>", "responds_to": 2, "length": "long"},
+    {"agent": "id", "angle": "<genuine question from a less-experienced perspective>", "responds_to": null, "length": "short"},
+    {"agent": "id", "angle": "<clear answer to turn 4's question + extra context>", "responds_to": 4, "length": "medium"},
+    {"agent": "id", "angle": "<closing perspective or forward-looking take>", "responds_to": null, "length": "short"}
+  ]
+}`;
+
+  const raw    = await callRaw(env, prompt, { temperature: 0.85, maxTokens: 900 });
+  const parsed = parseJSON(raw);
+
+  if (parsed?.turns && Array.isArray(parsed.turns) && parsed.turns.length >= 5 && parsed.topic) {
+    return { ...parsed, continueSession };
+  }
+
+  // Fallback: build a default session from THEMES
+  const rnd        = THEMES[Math.floor(Math.random() * THEMES.length)];
+  const defAgents  = ['big_mike', 'ry_kow', 'd_willi', 's_chen', 'tyler_19', 'luna_p'];
+  return {
+    topic:           continueSession ? (session?.topic || rnd.topic) : rnd.topic,
+    topic2:          null,
+    is_new_session:  !continueSession,
+    agents:          defAgents,
+    continueSession,
+    turns: [
+      { agent: 'big_mike', angle: `open with a perspective on ${rnd.topic}`,     responds_to: null, length: 'medium' },
+      { agent: 'ry_kow',   angle: 'add a practical developer dimension',          responds_to: 0,    length: 'short'  },
+      { agent: 'd_willi',  angle: 'challenge an assumption in the opener',        responds_to: 0,    length: 'medium' },
+      { agent: 's_chen',   angle: 'bring a data point to address the challenge',  responds_to: 2,    length: 'long'   },
+      { agent: 'tyler_19', angle: 'ask an honest newcomer question',              responds_to: null, length: 'short'  },
+      { agent: 'luna_p',   angle: 'answer the newcomer with practical context',   responds_to: 4,    length: 'medium' },
+      { agent: 'big_mike', angle: 'close with a broader cycle perspective',       responds_to: null, length: 'short'  },
+    ],
+  };
+}
+
+// ── AGENT 2: CONVERSATION WRITER ─────────────────────────────────────────────
+// Writes all 7 messages as a coherent conversation batch.
+// Each message sounds DISTINCTLY like its assigned persona — different voice, energy, length.
+
+async function conversationWriter(env, direction, postedHistory) {
+  const selectedIds = direction.agents || [];
+  const prevMsgs    = postedHistory.slice(-6).map(m => `"${m.msg}"`).join('\n');
+
+  // Full voice profiles for selected personas only
+  const voiceProfiles = selectedIds
+    .filter(id => PERSONAS[id])
+    .map(id => `${id} [${PERSONAS[id].type}]: ${PERSONAS[id].voice}`)
+    .join('\n\n');
+
+  // Determine if LingoAI context is relevant
+  const lingoIds = ['s_chen','m_webb','p_patel','j_kim','v_silva','a_turner','y_tanaka','r_hassan','c_adeyemi','l_zhang'];
+  const needsLingo = selectedIds.some(id => lingoIds.includes(id))
+    || (direction.topic || '').toLowerCase().includes('lingo');
+  const lingoCtx = needsLingo ? `\nLingoAI product facts (use specific details when relevant):\n${LINGO_FACTS}\n` : '';
+
+  // Build turn blueprint
+  const turns = direction.turns || [];
+  const blueprint = turns.map((t, i) => {
+    const p        = PERSONAS[t.agent];
+    const replyCtx = t.responds_to !== null && t.responds_to !== undefined
+      ? ` → directly responds to message ${t.responds_to}`
+      : '';
+    const lenGuide = t.length === 'short' ? '1 sentence' : t.length === 'long' ? '3-5 sentences' : '2-3 sentences';
+    return `[${i}] ${t.agent} (${p?.type || 'member'}) | ${lenGuide}${replyCtx}\n     angle: ${t.angle}`;
+  }).join('\n\n');
+
+  const prompt = `You are writing a REAL Telegram group conversation. 7 members are chatting right now. Each message must sound DISTINCTLY different — like a different human with a different brain.
+
+TOPIC: "${direction.topic}"${direction.topic2 ? `\n(conversation may naturally drift toward: "${direction.topic2}")` : ''}
+${lingoCtx}
+${prevMsgs ? `PREVIOUS MESSAGES ALREADY POSTED (this is a continuation — DO NOT repeat these ideas):\n${prevMsgs}\n` : ''}
+MEMBER VOICE PROFILES — write EACH message in EXACTLY this voice:
+${voiceProfiles}
+
+TURN BLUEPRINT (write in order, each message = its own turn):
+${blueprint}
+
+WRITING RULES:
+1. Each message must SOUND like a different person — different vocabulary, rhythm, energy
+2. Short turns = 1 punchy sentence. Long turns = 3-5 sentences with actual reasoning
+3. Reply turns MUST reference the SPECIFIC point from the earlier turn — not vague agreement
+4. NO @mentions, NO name prefixes — just the message text itself
+5. Casual Telegram tone: lowercase fine, contractions fine, no corporate grammar
+6. NO "Hey everyone / Hi all" openers
+7. Stay on topic: "${direction.topic}"
+8. DO NOT repeat or paraphrase any of the previous messages listed above
+9. The challenger turn must raise a REAL objection with substance
+
+Return ONLY a JSON array of exactly ${turns.length} message objects:
+[{"msg": "text", "agent": "agent_id"}, ...]`;
+
+  const raw    = await callRaw(env, prompt, { temperature: 0.95, maxTokens: 1800 });
+  const parsed = parseJSON(raw);
+
+  if (Array.isArray(parsed)) {
+    return parsed
+      .filter(m => typeof m.msg === 'string' && m.msg.trim().length > 8)
+      .map(m => ({ msg: m.msg.trim(), agent: m.agent || 'unknown' }));
+  }
+  return [];
+}
+
+// ── UNIQUENESS GUARDIAN ───────────────────────────────────────────────────────
+// Final pass: rewrites any message that's too similar to posted history.
+// Uses AI rewriter — never silently drops, always tries to fix.
+
+async function rewriteMessage(env, original, topic, postedHistory) {
+  const avoidSamples = postedHistory.slice(-12).map(m => `"${m.msg.slice(0, 90)}"`).join('\n');
+  const prompt = `Rewrite this Telegram message so it expresses the SAME idea with COMPLETELY DIFFERENT words.
+
+Original: "${original}"
+Topic: "${topic}"
+
+Recent messages that already exist — your rewrite must NOT echo these:
+${avoidSamples || 'none'}
+
+Rules: same core point, 100% different expression. Casual Telegram tone. 1-2 sentences. No @mentions.
+Return ONLY the rewritten message text. No quotes. No explanation.`;
+
+  const raw     = await callRaw(env, prompt, { temperature: 0.90, maxTokens: 150 });
+  const cleaned = raw.replace(/^["']|["']$/g, '').trim();
+  if (cleaned.length > 20 && wordSimilarity(cleaned, original) < 0.45) return cleaned;
+  return null;
+}
+
+async function uniquenessGuardian(env, messages, topic, postedHistory) {
+  if (!postedHistory.length) return messages;
+  const result = [];
+  for (const msg of messages) {
+    const dup = postedHistory.find(h => wordSimilarity(h.msg, msg.msg) > 0.40);
+    if (!dup) { result.push(msg); continue; }
+    const fresh = await rewriteMessage(env, msg.msg, topic, postedHistory);
+    if (fresh) result.push({ ...msg, msg: fresh });
+  }
+  return result;
+}
+
+// ── CONVERSATION RUNNER ───────────────────────────────────────────────────────
+// Director → Writer → Guardian, with session + history tracking
+
+async function runConversation(env, count, postedHistory = []) {
+  // ── Agent 1: Director ────────────────────────────────────────────────────
+  const direction = await conversationDirector(env, postedHistory);
+
+  // ── Agent 2: Writer ──────────────────────────────────────────────────────
+  const raw = await conversationWriter(env, direction, postedHistory);
+
+  // Hard filter: remove @mentions, too-short messages
+  let msgs = raw.filter(m =>
+    !/@\w+/.test(m.msg) &&
+    m.msg.split(' ').length >= 5 &&
+    !/^(hey guys|hi all|hello everyone)/i.test(m.msg)
+  );
+
+  // ── Agent 3: Uniqueness Guardian ─────────────────────────────────────────
+  msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory);
+
+  // Pad if short — rewrite static fallback messages rather than posting verbatim
+  if (msgs.length < count) {
+    const pool = STATIC_FALLBACK
+      .filter(m => !postedHistory.some(h => wordSimilarity(h.msg, m.msg) > 0.30))
+      .sort(() => Math.random() - 0.5);
+    for (const fbMsg of pool) {
+      if (msgs.length >= count) break;
+      const fresh = await rewriteMessage(env, fbMsg.msg, direction.topic, postedHistory);
+      if (fresh) msgs.push({ msg: fresh, agent: 'fallback' });
+    }
+  }
+
+  // ── Update conversation session ───────────────────────────────────────────
+  const sessionRaw = await env.KV.get(KV_CONV_TOPIC);
+  const session    = sessionRaw ? JSON.parse(sessionRaw) : null;
+
+  if (direction.is_new_session || !session) {
+    await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
+      topic:     direction.topic,
+      topic2:    direction.topic2 || null,
+      started_at: Date.now(),
+      run_count: 1,
+    }));
+  } else {
+    await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
+      ...session,
+      run_count: (session.run_count || 0) + 1,
+      topic2:    direction.topic2 || session.topic2,
+    }));
+  }
+  await env.KV.put(KV_CONV_AGENTS, JSON.stringify(direction.agents || []));
+
+  // ── Update topic history (for Director's "avoid repeating" context) ───────
+  const recentRaw = await env.KV.get(KV_RECENT);
+  const recent    = recentRaw ? JSON.parse(recentRaw) : [];
+  recent.push({ seed: direction.topic.slice(0, 80), ts: Date.now() });
+  await env.KV.put(KV_RECENT, JSON.stringify(recent.slice(-20)));
+
+  return {
+    msgs:        msgs.slice(0, count),
+    topic:       direction.topic,
+    topic2:      direction.topic2 || null,
+    agents:      direction.agents,
+    session_run: direction.is_new_session ? 1 : ((session?.run_count || 0) + 1),
+    raw_count:   raw.length,
+    final_count: Math.min(msgs.length, count),
+  };
+}
+
+// ── Main poster ───────────────────────────────────────────────────────────────
+
+export async function runLingoPoster(env) {
+  const chatId = await env.KV.get(KV_GROUP_ID);
+  if (!chatId) {
+    return { skipped: true, reason: 'No group configured. Add @AshiqAibot and type /lingosetup.' };
+  }
+
+  // Load posted history for deduplication + conversation continuity
+  const histRaw      = await env.KV.get(KV_POSTED);
+  const postedHistory = histRaw ? JSON.parse(histRaw) : [];
+
+  // Run the 3-agent conversation pipeline: Director → Writer → Guardian
+  const result = await runConversation(env, MSGS_PER_RUN, postedHistory);
+  const { msgs, topic, topic2, agents, session_run, raw_count, final_count } = result;
+
+  if (!msgs.length) return { ok: false, reason: 'Conversation pipeline returned 0 messages' };
+
+  let posted = 0;
+  const now = Date.now();
+  const newEntries = [];
+
+  for (const item of msgs) {
+    const text = escapeHtml(item.msg);
+    await tgCall(env, 'sendMessage', { chat_id: chatId, text, parse_mode: 'HTML' });
+    newEntries.push({ msg: item.msg, ts: now });
+    posted++;
+    if (posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
+  }
+
+  // Persist the rolling message history (keep last 70 — ~10 runs worth)
+  const updatedHistory = [...postedHistory, ...newEntries].slice(-70);
+  await env.KV.put(KV_POSTED, JSON.stringify(updatedHistory));
+
+  const runs = parseInt((await env.KV.get(KV_SESSION)) || '0', 10);
+  await env.KV.put(KV_SESSION, String(runs + 1));
+
+  return { ok: true, posted, topic, topic2, agents, session_run, raw_generated: raw_count, after_guardian: final_count, total_runs: runs + 1, history_size: updatedHistory.length };
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ── Auto-detect group from recent updates ─────────────────────────────────────
+// Uses my_chat_member updates (fires when bot is added to a group — works even
+// when privacy mode is ON, because privacy mode only blocks regular messages,
+// not bot membership events).
+
+async function detectLingoGroup(env) {
+  if (!env.TELEGRAM_BOT_TOKEN) return null;
+  try {
+    // Get bot's own user ID so we can match my_chat_member events
+    const meRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
+    const meData = await meRes.json();
+    const botId = meData.ok ? meData.result.id : null;
+
+    // Request both message types AND membership events
+    const body = JSON.stringify({
+      limit: 100,
+      allowed_updates: ['message', 'channel_post', 'my_chat_member'],
+    });
+    const r = await fetch(
+      `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
+    );
+    const d = await r.json();
+    if (!d.ok) return null;
+
+    const groups = new Map();
+
+    for (const upd of (d.result || [])) {
+      // my_chat_member: fires when bot is added to a group (no privacy mode needed)
+      if (upd.my_chat_member) {
+        const mcm   = upd.my_chat_member;
+        const chat  = mcm.chat;
+        const newStatus = mcm.new_chat_member?.status;
+        // status = "member" or "administrator" means bot was just added
+        if (['member', 'administrator'].includes(newStatus)) {
+          const t = chat?.type;
+          if (['group', 'supergroup', 'channel'].includes(t)) {
+            const id = String(chat.id);
+            if (!groups.has(id)) groups.set(id, { id, title: chat.title || '', type: t, source: 'join_event' });
+          }
+        }
+        continue;
+      }
+
+      // Fallback: regular messages (only visible when privacy mode is OFF)
+      const msg = upd.message || upd.channel_post;
+      if (!msg) continue;
+      const t = msg.chat?.type;
+      if (!['group', 'supergroup', 'channel'].includes(t)) continue;
+      const id = String(msg.chat.id);
+      if (!groups.has(id)) groups.set(id, { id, title: msg.chat.title || '', type: t, source: 'message' });
+    }
+
+    if (!groups.size) return null;
+
+    // 1st priority — title contains "lingo"
+    for (const [id, g] of groups) {
+      if (g.title.toLowerCase().includes('lingo')) return id;
+    }
+
+    // 2nd priority — join_event groups (bot was literally just added there)
+    const joinGroups = [...groups.values()].filter(g => g.source === 'join_event');
+    if (joinGroups.length === 1) return joinGroups[0].id;
+
+    // 3rd priority — only one group total
+    if (groups.size === 1) return [...groups.keys()][0];
+
+    return { ambiguous: true, groups: [...groups.values()] };
+  } catch { return null; }
+}
+
+// ── Handle /lingosetup command sent inside the target group ───────────────────
+// Works with both `/lingosetup` AND `/lingosetup@AshiqAibot`
+// The @BotName form is delivered even when privacy mode is ON
+
+export async function handleLingoCommand(env, msg) {
+  const text = (msg.text || '').trim();
+  if (!text.match(/^\/lingosetup(@\w+)?(\s|$)/i)) return false;
+
+  const chatId = String(msg.chat.id);
+  await env.KV.put(KV_GROUP_ID, chatId);
+
+  // Confirm in the group
+  await tgCall(env, 'sendMessage', {
+    chat_id: chatId,
+    text: '✅ <b>LingoAI poster activated!</b>\nThis group will receive AI-generated community discussions automatically every few hours.',
+    parse_mode: 'HTML',
+  });
+
+  // Also notify owner
+  if (env.TELEGRAM_OWNER_ID) {
+    await tgCall(env, 'sendMessage', {
+      chat_id: env.TELEGRAM_OWNER_ID,
+      text: `✅ <b>LingoAI poster configured</b>\nGroup: <b>${escapeHtml(msg.chat.title || 'unknown')}</b>\nChat ID: <code>${chatId}</code>\nPosting starts next cron cycle.`,
+      parse_mode: 'HTML',
+    });
+  }
+  return true;
+}
+
+// ── Setup: detect or set group chat ID ───────────────────────────────────────
+
+export async function setupLingoGroup(env, manualChatId = null) {
+  // Manual override — user passes ?chat_id=XXXX
+  if (manualChatId) {
+    await env.KV.put(KV_GROUP_ID, String(manualChatId));
+    return { ok: true, chat_id: manualChatId, method: 'manual', message: `Chat ID ${manualChatId} saved. Poster will start next cron cycle.` };
+  }
+
+  // Auto-detect from recent updates
+  const detected = await detectLingoGroup(env);
+
+  if (!detected) {
+    return {
+      ok: false,
+      instructions: [
+        `1. Add @AshiqAibot to your LingoAI group: ${INVITE_LINK}`,
+        '2. Type /lingosetup in the group — bot saves the ID automatically',
+        '   OR: call /lingo-setup?chat_id=CHAT_ID to set it manually',
+      ],
+    };
+  }
+
+  if (detected?.ambiguous) {
+    return {
+      ok: false,
+      ambiguous: true,
+      groups_found: detected.groups,
+      instructions: 'Multiple groups found. Type /lingosetup inside the LingoAI group, or call /lingo-setup?chat_id=ID with the correct ID above.',
+    };
+  }
+
+  // Single match — save it
+  await env.KV.put(KV_GROUP_ID, String(detected));
+  return { ok: true, chat_id: detected, method: 'auto', message: `Auto-detected group ${detected}. Poster starts next cron cycle.` };
+}
+
+// ── Status ────────────────────────────────────────────────────────────────────
+
+export async function lingoStatus(env) {
+  const chatId      = await env.KV.get(KV_GROUP_ID);
+  const sessRaw     = await env.KV.get(KV_SESSION);
+  const recentRaw   = await env.KV.get(KV_RECENT);
+  const recent      = recentRaw ? JSON.parse(recentRaw) : [];
+  const groqErr     = await env.KV.get('lingo_groq_err');
+  const cfaiErr     = await env.KV.get('lingo_cfai_err');
+  const histRaw     = await env.KV.get(KV_POSTED);
+  const histSize    = histRaw ? JSON.parse(histRaw).length : 0;
+  const convRaw     = await env.KV.get(KV_CONV_TOPIC);
+  const conv        = convRaw ? JSON.parse(convRaw) : null;
+  const agentRaw    = await env.KV.get(KV_CONV_AGENTS);
+  const activeAgents = agentRaw ? JSON.parse(agentRaw) : [];
+
+  return {
+    configured:    !!chatId,
+    chat_id:       chatId || null,
+    invite_link:   INVITE_LINK,
+    total_runs:    parseInt(sessRaw || '0', 10),
+    msgs_per_run:  MSGS_PER_RUN,
+    cron_schedule: 'every 10min (144 runs/day × 7 msgs = ~1008 msgs/day)',
+    conversation_pipeline: {
+      agents: [
+        'Director (temp 0.85) — reads session KV, casts 5-6 of 40 personas, designs 7-turn order',
+        'Writer (temp 0.95) — writes all 7 messages in exact persona voice with reply chains',
+        'Guardian — rewrites any >40% similarity match against 70-msg history',
+      ],
+      personas: `${Object.keys(PERSONAS).length} distinct characters across: LingoAI insiders, AI enthusiasts, crypto veterans, newcomers, wild cards`,
+      ai_stack: 'Groq llama-3.3-70b-versatile (primary) → CF AI llama-3.1-8b (fallback)',
+      session_model: '1-2 topics per session × up to 5 runs = 35 messages on same topic before natural shift',
+    },
+    current_session: conv ? {
+      topic:     conv.topic,
+      topic2:    conv.topic2 || null,
+      run_count: conv.run_count,
+      runs_left: Math.max(0, 5 - (conv.run_count || 0)),
+      active_agents: activeAgents.map(id => `${id} (${PERSONAS[id]?.type || '?'})`),
+    } : null,
+    last_5_topics: recent.slice(-5).map(r => r.seed),
+    ai_errors:     { groq: groqErr || null, cf_ai: cfaiErr || null },
+    posted_history: { stored: histSize, capacity: 70, dedup_window: 'last 70 messages' },
+    next_steps:    chatId ? 'Active — conversations run every 10 minutes' : 'Call /lingo-setup?chat_id=XXXX to activate',
+  };
+}
+
+// ── Static fallback (diverse across all 4 categories — used when AI fails) ────
+
+const STATIC_FALLBACK = [
+  // lingo
+  { cat: 'lingo', msg: 'Just read the LingoAI whitepaper. The "no token burn" model actually makes more sense than I expected — the utility sinks replace burns entirely.' },
+  { cat: 'lingo', msg: 'LingoRAG + MetaGraph for language ontologies is genuinely different from every other AI project I\'ve seen. This isn\'t GPT wrapper #5000.' },
+  { cat: 'lingo', msg: '95% dark data unlocked = the entire addressable market for $LINGOAI just waiting to be captured. Timing is perfect.' },
+  { cat: 'lingo', msg: 'LingoPOD as a DePIN node that pays you to collect real-world data while running your personal AI on-device. The hardware moat is real.' },
+  { cat: 'lingo', msg: 'B2B procurement escrow keeps a constant % of supply locked in active business transactions. That\'s structural, not speculative.' },
+  { cat: 'lingo', msg: 'MetaGraph eliminates hallucinations through knowledge graph structure + staked verification. Enterprises terrified of LLM errors will pay a premium for this.' },
+  { cat: 'lingo', msg: 'As someone from a country where our language is ignored by all major AI models, LingoAI feels personal. LanguageDAO is the right model.' },
+  { cat: 'lingo', msg: 'Fixed supply + infinite data value growth = token price must appreciate. That\'s the mathematical core of the $LINGOAI thesis.' },
+  { cat: 'lingo', msg: 'ReviewDAO with staked collateral for data quality is exactly the right incentive design. Bad data gets slashed. Quality compounds.' },
+  { cat: 'lingo', msg: 'When all the hardware bonds hit at LingoPOD launch, circulating supply is going to drop hard. Watch the float carefully.' },
+
+  // ai
+  { cat: 'ai', msg: 'Claude 3.5 Sonnet for coding, GPT-4o for general tasks, Gemini for long context. At this point we\'re all running different models for different jobs lol' },
+  { cat: 'ai', msg: 'Honestly the open source models have closed the gap way faster than anyone predicted. Llama 3.3 70B is competitive with GPT-4 from a year ago.' },
+  { cat: 'ai', msg: 'The hallucination problem isn\'t going away with scale. It\'s a data quality issue. Models trained on garbage confidently output garbage.' },
+  { cat: 'ai', msg: 'On-device AI is going to be massive. Your phone running a capable LLM locally with your personal data never leaving your device — that\'s the future.' },
+  { cat: 'ai', msg: 'AI agents that can actually browse, code, and take actions autonomously — we\'re not there yet but 2025 is moving fast. Watch the agent frameworks.' },
+  { cat: 'ai', msg: 'EU AI Act is going to hit US AI companies harder than people realize. The compliance overhead for "high risk" systems is brutal.' },
+  { cat: 'ai', msg: 'Cursor changed how I code. I don\'t use an IDE without AI completion anymore. The productivity delta is too real to ignore.' },
+  { cat: 'ai', msg: 'The multimodal stuff (vision + voice + video) is impressive in demos but still inconsistent in production. We\'re in the "impressive prototype" phase.' },
+  { cat: 'ai', msg: 'AI replacing jobs debate: it\'s not about replacing jobs, it\'s about one person doing the work of five. That\'s what companies are quietly figuring out.' },
+  { cat: 'ai', msg: 'Long context windows solved one problem but created another — models still lose coherence past a certain point. Context != understanding.' },
+
+  // web3
+  { cat: 'web3', msg: 'Base TVL growth this year has been wild. Coinbase quietly building the most accessible L2 while everyone debates Arbitrum vs Optimism.' },
+  { cat: 'web3', msg: 'DePIN is the narrative I\'m most bullish on right now. Physical infrastructure + token incentives + real utility. Helium proved the model works.' },
+  { cat: 'web3', msg: 'Real World Assets on-chain is moving faster than most people realize. Tokenized treasuries already doing billions in volume. This is early.' },
+  { cat: 'web3', msg: 'DAO governance participation is the biggest unsolved problem in Web3. Token-weighted voting consistently produces plutocracy. We need better models.' },
+  { cat: 'web3', msg: 'NFTs aren\'t dead — they\'re just not JPEGs anymore. Gaming items, ticketing, IP licensing. The use cases are finally getting real.' },
+  { cat: 'web3', msg: 'DeFi yields came back. If you know where to look, there\'s still 15-20% APY on stablecoins with manageable risk. Not 2021 numbers but not nothing.' },
+  { cat: 'web3', msg: 'Your seed phrase IS your money. One phishing click away from losing everything. Use hardware wallets. Don\'t connect to sketchy dApps. Stay paranoid.' },
+  { cat: 'web3', msg: 'Solana developer experience has genuinely improved. Still prefer EVM for the ecosystem but Solana TPS and fees make a strong argument for certain use cases.' },
+  { cat: 'web3', msg: 'USDC vs USDT risk profile is very different. USDC has regulatory clarity, USDT has Tether\'s reserves question. Know what you\'re holding.' },
+  { cat: 'web3', msg: 'Web3 gaming is finally building actual games first, token economies second. That\'s the right order. The P2E model where the game IS the extraction failed.' },
+
+  // trending
+  { cat: 'trending', msg: '$TAO is interesting but the valuation already prices in a lot of the AI data narrative. $LINGOAI might be the more asymmetric bet on the same thesis.' },
+  { cat: 'trending', msg: 'BlackRock tokenizing everything tells you where this goes. When the largest asset manager on earth is building on-chain, the direction is set.' },
+  { cat: 'trending', msg: 'AI agents with their own crypto wallets executing DeFi strategies autonomously — this is already happening. The agent economy is not hypothetical.' },
+  { cat: 'trending', msg: 'Altcoin season rotation signal: BTC dominance dropping + ETH/BTC ratio rising = alts getting the liquidity next. Watch the dominance chart.' },
+  { cat: 'trending', msg: 'Polymarket being right about almost everything before mainstream media catches on is wild. Prediction markets are genuinely useful information aggregators.' },
+  { cat: 'trending', msg: 'Meme coins aren\'t going away. They\'re community coordination mechanisms with speculation layered on top. DOGE proved the cultural staying power.' },
+  { cat: 'trending', msg: 'CBDC vs crypto: governments want programmable money that they control. That\'s literally the opposite of what Bitcoin was built to prevent.' },
+  { cat: 'trending', msg: 'For on-chain alpha: Nansen for wallet tracking, Dune for custom queries, DefiLlama for TVL, Coinglass for futures data. That\'s the stack.' },
+  { cat: 'trending', msg: 'The AI crypto sector ($FET, $OCEAN, $RNDR, $TAO) is repricing relative to the broader AI stock rally. Convergence trade is real.' },
+  { cat: 'trending', msg: 'Bear market DCA thesis: accumulate the projects with real revenue, real users, and teams that shipped through the last bear. Filter is simple. Execution isn\'t.' },
+];

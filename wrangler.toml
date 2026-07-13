@@ -1,0 +1,32 @@
+name = "job-agent"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+CF_ACCOUNT_ID      = "92d3158363256e88393822c9ece2fb48"
+CF_EMAIL           = "ashiqah18008@gmail.com"
+CF_KV_NAMESPACE    = "cda8b9f468204833a58d79d9409133c7"
+CF_GW_BASE         = "https://gateway.ai.cloudflare.com/v1/92d3158363256e88393822c9ece2fb48/job-agent"
+SEARCH_EVERY_HOURS = "3"
+MY_EMAIL           = "naveeddurfi@gmail.com"
+
+# Secrets — set via GitHub Actions (see deploy.yml) or: wrangler secret put KEY_NAME
+# GROQ_API_KEY
+# OPENAI_API_KEY
+# ANTHROPIC_API_KEY      ← for Fable + Sonnet (orchestra agents): wrangler secret put ANTHROPIC_API_KEY
+# TAVILY_API_KEY
+# TELEGRAM_BOT_TOKEN     ← from @BotFather
+# TELEGRAM_OWNER_ID      ← your personal TG user ID (from @userinfobot)
+# CF_GLOBAL_KEY          ← your Cloudflare Global API Key
+# TG_AUTH_STRING         ← reserved for future personal account support
+
+[[kv_namespaces]]
+binding = "KV"
+id      = "cda8b9f468204833a58d79d9409133c7"
+
+[ai]
+binding = "AI"
+
+[triggers]
+crons = ["0 */3 * * *", "*/1 * * * *", "*/10 * * * *"]

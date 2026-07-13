@@ -1,0 +1,75 @@
+name: Deploy to Cloudflare Workers
+
+on:
+  push:
+    branches: [claude/telegram-automation-agent-j755h9, main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler and dependencies
+        run: |
+          npm install -g wrangler@3.50.0
+          npm install
+
+      - name: Upload secrets
+        env:
+          CLOUDFLARE_API_KEY: ${{ secrets.JOB_CF_GLOBAL_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.JOB_CF_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.JOB_CF_ACCOUNT_ID }}
+        run: |
+          echo '${{ secrets.JOB_GROQ_API_KEY }}' | wrangler secret put GROQ_API_KEY
+          echo '${{ secrets.JOB_OPENAI_API_KEY }}' | wrangler secret put OPENAI_API_KEY
+          echo '${{ secrets.JOB_TAVILY_API_KEY }}' | wrangler secret put TAVILY_API_KEY
+          echo '${{ secrets.JOB_TELEGRAM_BOT_TOKEN }}' | wrangler secret put TELEGRAM_BOT_TOKEN
+          echo '${{ secrets.JOB_TELEGRAM_OWNER_ID }}' | wrangler secret put TELEGRAM_OWNER_ID
+          echo '${{ secrets.JOB_CF_GLOBAL_KEY }}' | wrangler secret put CF_GLOBAL_KEY
+          echo '${{ secrets.JOB_XAI_API_KEY }}' | wrangler secret put XAI_API_KEY
+          echo '${{ secrets.JOB_X_BEARER_TOKEN }}' | wrangler secret put X_BEARER_TOKEN
+          echo '${{ secrets.JOB_APIFY_API_KEY }}' | wrangler secret put APIFY_API_KEY
+          echo '${{ secrets.JOB_X_GET_API_KEY }}' | wrangler secret put X_GET_API_KEY
+          if [ -n '${{ secrets.JOB_TG_AUTH_STRING }}' ]; then
+            echo '${{ secrets.JOB_TG_AUTH_STRING }}' | wrangler secret put TG_AUTH_STRING
+          fi
+
+      - name: Register workers.dev subdomain (one-time)
+        run: |
+          SUBDOMAIN=$(curl -s \
+            "https://api.cloudflare.com/client/v4/accounts/${{ secrets.JOB_CF_ACCOUNT_ID }}/workers/subdomain" \
+            -H "X-Auth-Email: ${{ secrets.JOB_CF_EMAIL }}" \
+            -H "X-Auth-Key: ${{ secrets.JOB_CF_GLOBAL_KEY }}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('result',{}).get('subdomain',''))" 2>/dev/null || echo '')
+          if [ -z "$SUBDOMAIN" ]; then
+            curl -s -X PUT \
+              "https://api.cloudflare.com/client/v4/accounts/${{ secrets.JOB_CF_ACCOUNT_ID }}/workers/subdomain" \
+              -H "X-Auth-Email: ${{ secrets.JOB_CF_EMAIL }}" \
+              -H "X-Auth-Key: ${{ secrets.JOB_CF_GLOBAL_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{"subdomain":"ashiqjobagent"}'
+            echo "Registered subdomain: ashiqjobagent"
+          else
+            echo "Subdomain already registered: $SUBDOMAIN"
+          fi
+
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_KEY: ${{ secrets.JOB_CF_GLOBAL_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.JOB_CF_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.JOB_CF_ACCOUNT_ID }}
+        run: wrangler deploy
+
+      - name: Register Telegram webhook
+        run: |
+          sleep 15
+          RESULT=$(curl -s "https://job-agent.ashiqjobagent.workers.dev/set-webhook")
+          echo "Webhook registration: $RESULT"
+          echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('ok') else 1)" || echo "WARNING: webhook may not be registered"
