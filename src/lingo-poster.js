@@ -90,7 +90,8 @@ const PERSONAS = {
   zara_c:    { type: 'contrarian',                 voice: 'argues the opposite of consensus. Devil\'s advocate by nature. Sharp and occasionally funny. Challenges assumptions.' },
 };
 
-// 50 themes across 4 categories
+// 50 themes across 4 categories — 50 × 10 = 500 messages per batch
+// category: 'lingo' | 'ai' | 'web3' | 'trending'
 const THEMES = [
   // ── LingoAI (20) ──────────────────────────────────────────────────────────
   { topic: 'token economics, utility sinks, and why there are no token burns',                                             cat: 'lingo' },
@@ -179,6 +180,7 @@ async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } =
   }
   // Try models in order — fall to smaller model on 429 rate limit
   const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192'];
+  let allRateLimited = true;
   for (const model of models) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -192,17 +194,21 @@ async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } =
         }),
       });
       if (r.ok) {
+        allRateLimited = false;
         const d = await r.json();
         return d.choices?.[0]?.message?.content?.trim() || '';
       }
       if (r.status === 429) continue; // try next model on rate limit
+      allRateLimited = false;
       const errText = await r.text().catch(() => r.status);
       if (env.KV) await env.KV.put('lingo_groq_err', `${model} HTTP ${r.status}: ${String(errText).slice(0, 200)}`, { expirationTtl: 86400 });
       break;
     } catch (e) {
+      allRateLimited = false;
       if (env.KV) await env.KV.put('lingo_groq_err', `${model} exception: ${e?.message || e}`, { expirationTtl: 86400 });
     }
   }
+  if (allRateLimited && env.KV) await env.KV.put('lingo_groq_err', 'all 4 models 429 — daily token limit exceeded', { expirationTtl: 86400 });
   return '';
 }
 
@@ -307,6 +313,24 @@ function wordSimilarity(a, b) {
   const denom = Math.max(wa.size, wb.size);
   return denom ? intersection / denom : 0;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// CONVERSATION PIPELINE — 3 agents simulate 40 real humans chatting
+//
+//  ┌──────────────────────┐    ┌─────────────────────────┐    ┌────────────────┐
+//  │   DIRECTOR           │ →  │       WRITER             │ →  │   GUARDIAN     │
+//  │  temp 0.85           │    │      temp 0.95            │    │  rewrites dups │
+//  │  Reads session KV    │    │  Writes 7 messages in     │    │  never lets a  │
+//  │  Continues or starts │    │  the EXACT voice of each  │    │  repeat post   │
+//  │  a new conversation  │    │  selected agent — reply   │    │                │
+//  │  Selects 5-6 of 40   │    │  chains, mixed lengths,   │    │                │
+//  │  personas            │    │  organic casual tone      │    │                │
+//  │  Designs turn order  │    │                           │    │                │
+//  └──────────────────────┘    └─────────────────────────┘    └────────────────┘
+//
+//  Session management: 1-2 topics per conversation session (4-6 runs = ~40-60min)
+//  then Director naturally shifts to a new conversation with different agents
+// ════════════════════════════════════════════════════════════════════════════
 
 // ── AGENT 1: CONVERSATION DIRECTOR ───────────────────────────────────────────
 // Casts 5-6 personas and designs a loose turn order — NO rigid "angles".
@@ -449,14 +473,69 @@ Return ONLY a JSON array:
 [{"msg":"text","agent":"agent_id"},...]`;
 
   const raw    = await callRaw(env, prompt, { temperature: 0.95, maxTokens: 1600 });
+
+  // Debug: log raw output length + preview so /lingo-status can show what happened
+  if (env.KV) await env.KV.put('lingo_writer_raw',
+    JSON.stringify({ len: raw.length, preview: raw.slice(0, 400) }),
+    { expirationTtl: 3600 }
+  );
+
   const parsed = parseJSON(raw);
 
-  if (Array.isArray(parsed)) {
+  if (Array.isArray(parsed) && parsed.length > 0) {
     return parsed
       .filter(m => typeof m.msg === 'string' && m.msg.trim().length > 1)
       .map(m => ({ msg: m.msg.trim(), agent: m.agent || 'unknown' }));
   }
-  return [];
+
+  // Bulk generation failed — fall back to generating each message individually.
+  // Smaller prompts (< 300 tokens each) are far more reliable across all AI providers.
+  if (env.KV) await env.KV.put('lingo_writer_raw',
+    JSON.stringify({ len: raw.length, preview: raw.slice(0, 400), fallback: 'one_by_one' }),
+    { expirationTtl: 3600 }
+  );
+  return writeMessagesOneByOne(env, direction, postedHistory);
+}
+
+// Fallback writer — generates each message as a tiny independent API call.
+// Runs when the bulk 7-message call fails (empty response or unparseable JSON).
+
+async function writeMessagesOneByOne(env, direction, postedHistory) {
+  const turns = direction.turns || [];
+  const results = [];
+  const chatSoFar = postedHistory.slice(-3).map(m => m.msg);
+
+  for (const turn of turns.slice(0, 7)) {
+    const persona = PERSONAS[turn.agent];
+    if (!persona) { results.push({ msg: '🙂', agent: turn.agent }); continue; }
+
+    const lenGuide = turn.length === 'micro' ? '1-5 words' :
+                     turn.length === 'short' ? '1 sentence' :
+                     turn.length === 'long'  ? '3-5 sentences' : '2-3 sentences';
+
+    const replyCtx = (turn.responds_to != null && results[turn.responds_to])
+      ? `\nReplying to: "${results[turn.responds_to].msg}"`
+      : '';
+
+    const recentLines = chatSoFar.concat(results.map(r => r.msg)).slice(-3).join('\n');
+
+    const singlePrompt = `You are ${turn.agent} in a Telegram group chat. ${persona.type}.
+Voice: ${persona.voice}
+Topic: ${direction.topic}
+${recentLines ? `Recent chat:\n${recentLines}` : ''}${replyCtx}
+
+Write ONE casual Telegram message. Length: ${lenGuide}.
+Rules: lowercase, casual, no @mentions, no name tags, no quotes around output.
+Return ONLY the message text.`;
+
+    const raw = await callRaw(env, singlePrompt, { temperature: 0.9, maxTokens: 180 });
+    const msg = raw.replace(/^["'`*]+|["'`*]+$/g, '').trim();
+
+    if (msg && msg.length >= 2 && msg.length < 600) {
+      results.push({ msg, agent: turn.agent });
+    }
+  }
+  return results;
 }
 
 // ── UNIQUENESS GUARDIAN ───────────────────────────────────────────────────────
@@ -498,16 +577,20 @@ async function uniquenessGuardian(env, messages, topic, postedHistory) {
 // Director → Writer → Guardian, with session + history tracking
 
 async function runConversation(env, count, postedHistory = []) {
+  // ── Agent 1: Director ────────────────────────────────────────────────────
   const direction = await conversationDirector(env, postedHistory);
+
+  // ── Agent 2: Writer ──────────────────────────────────────────────────────
   const raw = await conversationWriter(env, direction, postedHistory);
 
-  // Hard filter: remove @mentions and blank messages; allow "gm", one-liners
+  // Hard filter: remove @mentions and blank/single-word messages; allow "gm", one-liners
   let msgs = raw.filter(m =>
     !/@\w+/.test(m.msg) &&
     m.msg.trim().length >= 2 &&
     !/^(hey guys|hi all|hello everyone)/i.test(m.msg)
   );
 
+  // ── Agent 3: Uniqueness Guardian ─────────────────────────────────────────
   msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory);
 
   // Pad if short — rewrite static fallback messages rather than posting verbatim
@@ -522,16 +605,16 @@ async function runConversation(env, count, postedHistory = []) {
     }
   }
 
-  // Update conversation session
+  // ── Update conversation session ───────────────────────────────────────────
   const sessionRaw = await env.KV.get(KV_CONV_TOPIC);
   const session    = sessionRaw ? JSON.parse(sessionRaw) : null;
 
   if (direction.is_new_session || !session) {
     await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
-      topic:      direction.topic,
-      topic2:     direction.topic2 || null,
+      topic:     direction.topic,
+      topic2:    direction.topic2 || null,
       started_at: Date.now(),
-      run_count:  1,
+      run_count: 1,
     }));
   } else {
     await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
@@ -542,6 +625,7 @@ async function runConversation(env, count, postedHistory = []) {
   }
   await env.KV.put(KV_CONV_AGENTS, JSON.stringify(direction.agents || []));
 
+  // ── Update topic history (for Director's "avoid repeating" context) ───────
   const recentRaw = await env.KV.get(KV_RECENT);
   const recent    = recentRaw ? JSON.parse(recentRaw) : [];
   recent.push({ seed: direction.topic.slice(0, 80), ts: Date.now() });
@@ -549,7 +633,7 @@ async function runConversation(env, count, postedHistory = []) {
 
   return {
     msgs:        msgs.slice(0, count),
-    turns:       direction.turns || [],
+    turns:       direction.turns || [],  // passed to poster for reply threading
     topic:       direction.topic,
     topic2:      direction.topic2 || null,
     agents:      direction.agents,
@@ -567,9 +651,11 @@ export async function runLingoPoster(env) {
     return { skipped: true, reason: 'No group configured. Add @AshiqAibot and type /lingosetup.' };
   }
 
-  const histRaw       = await env.KV.get(KV_POSTED);
+  // Load posted history for deduplication + conversation continuity
+  const histRaw      = await env.KV.get(KV_POSTED);
   const postedHistory = histRaw ? JSON.parse(histRaw) : [];
 
+  // Run the 3-agent conversation pipeline: Director → Writer → Guardian
   const result = await runConversation(env, MSGS_PER_RUN, postedHistory);
   const { msgs, turns, topic, topic2, agents, session_run, raw_count, final_count } = result;
 
@@ -580,13 +666,13 @@ export async function runLingoPoster(env) {
   const prevMsgIds    = prevMsgIdsRaw ? JSON.parse(prevMsgIdsRaw) : [];
 
   let posted = 0;
-  const now         = Date.now();
+  const now = Date.now();
   const newEntries  = [];
-  const batchMsgIds = [];
+  const batchMsgIds = []; // Telegram message_ids posted in this batch
 
   for (let i = 0; i < msgs.length; i++) {
-    const item       = msgs[i];
-    const turn       = turns[i];
+    const item      = msgs[i];
+    const turn      = turns[i];
     const respondsTo = turn?.responds_to;
 
     // Determine reply target: within-batch reply or occasional cross-run reply
@@ -604,7 +690,7 @@ export async function runLingoPoster(env) {
     batchMsgIds.push(tgResult?.message_id || null);
     newEntries.push({ msg: item.msg, ts: now });
     posted++;
-    if (posted < msgs.length) await sleep(45000 + Math.random() * 45000);
+    if (posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
   }
 
   // Save message IDs for next run's cross-run threading (keep last 10)
@@ -612,6 +698,7 @@ export async function runLingoPoster(env) {
   const updatedMsgIds = [...prevMsgIds, ...validIds].slice(-10);
   await env.KV.put('lingo_prev_msg_ids', JSON.stringify(updatedMsgIds));
 
+  // Persist the rolling message history (keep last 70 — ~10 runs worth)
   const updatedHistory = [...postedHistory, ...newEntries].slice(-70);
   await env.KV.put(KV_POSTED, JSON.stringify(updatedHistory));
 
@@ -629,14 +716,19 @@ function escapeHtml(str) {
 }
 
 // ── Auto-detect group from recent updates ─────────────────────────────────────
+// Uses my_chat_member updates (fires when bot is added to a group — works even
+// when privacy mode is ON, because privacy mode only blocks regular messages,
+// not bot membership events).
 
 async function detectLingoGroup(env) {
   if (!env.TELEGRAM_BOT_TOKEN) return null;
   try {
+    // Get bot's own user ID so we can match my_chat_member events
     const meRes = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
     const meData = await meRes.json();
     const botId = meData.ok ? meData.result.id : null;
 
+    // Request both message types AND membership events
     const body = JSON.stringify({
       limit: 100,
       allowed_updates: ['message', 'channel_post', 'my_chat_member'],
@@ -651,10 +743,12 @@ async function detectLingoGroup(env) {
     const groups = new Map();
 
     for (const upd of (d.result || [])) {
+      // my_chat_member: fires when bot is added to a group (no privacy mode needed)
       if (upd.my_chat_member) {
         const mcm   = upd.my_chat_member;
         const chat  = mcm.chat;
         const newStatus = mcm.new_chat_member?.status;
+        // status = "member" or "administrator" means bot was just added
         if (['member', 'administrator'].includes(newStatus)) {
           const t = chat?.type;
           if (['group', 'supergroup', 'channel'].includes(t)) {
@@ -665,6 +759,7 @@ async function detectLingoGroup(env) {
         continue;
       }
 
+      // Fallback: regular messages (only visible when privacy mode is OFF)
       const msg = upd.message || upd.channel_post;
       if (!msg) continue;
       const t = msg.chat?.type;
@@ -675,17 +770,25 @@ async function detectLingoGroup(env) {
 
     if (!groups.size) return null;
 
+    // 1st priority — title contains "lingo"
     for (const [id, g] of groups) {
       if (g.title.toLowerCase().includes('lingo')) return id;
     }
 
+    // 2nd priority — join_event groups (bot was literally just added there)
     const joinGroups = [...groups.values()].filter(g => g.source === 'join_event');
     if (joinGroups.length === 1) return joinGroups[0].id;
+
+    // 3rd priority — only one group total
     if (groups.size === 1) return [...groups.keys()][0];
 
     return { ambiguous: true, groups: [...groups.values()] };
   } catch { return null; }
 }
+
+// ── Handle /lingosetup command sent inside the target group ───────────────────
+// Works with both `/lingosetup` AND `/lingosetup@AshiqAibot`
+// The @BotName form is delivered even when privacy mode is ON
 
 export async function handleLingoCommand(env, msg) {
   const text = (msg.text || '').trim();
@@ -694,12 +797,14 @@ export async function handleLingoCommand(env, msg) {
   const chatId = String(msg.chat.id);
   await env.KV.put(KV_GROUP_ID, chatId);
 
+  // Confirm in the group
   await tgCall(env, 'sendMessage', {
     chat_id: chatId,
     text: '✅ <b>LingoAI poster activated!</b>\nThis group will receive AI-generated community discussions automatically every few hours.',
     parse_mode: 'HTML',
   });
 
+  // Also notify owner
   if (env.TELEGRAM_OWNER_ID) {
     await tgCall(env, 'sendMessage', {
       chat_id: env.TELEGRAM_OWNER_ID,
@@ -710,12 +815,16 @@ export async function handleLingoCommand(env, msg) {
   return true;
 }
 
+// ── Setup: detect or set group chat ID ───────────────────────────────────────
+
 export async function setupLingoGroup(env, manualChatId = null) {
+  // Manual override — user passes ?chat_id=XXXX
   if (manualChatId) {
     await env.KV.put(KV_GROUP_ID, String(manualChatId));
     return { ok: true, chat_id: manualChatId, method: 'manual', message: `Chat ID ${manualChatId} saved. Poster will start next cron cycle.` };
   }
 
+  // Auto-detect from recent updates
   const detected = await detectLingoGroup(env);
 
   if (!detected) {
@@ -738,9 +847,12 @@ export async function setupLingoGroup(env, manualChatId = null) {
     };
   }
 
+  // Single match — save it
   await env.KV.put(KV_GROUP_ID, String(detected));
   return { ok: true, chat_id: detected, method: 'auto', message: `Auto-detected group ${detected}. Poster starts next cron cycle.` };
 }
+
+// ── Status ────────────────────────────────────────────────────────────────────
 
 export async function lingoStatus(env) {
   const chatId      = await env.KV.get(KV_GROUP_ID);
@@ -751,6 +863,7 @@ export async function lingoStatus(env) {
   const openaiErr   = await env.KV.get('lingo_openai_err');
   const xaiErr      = await env.KV.get('lingo_xai_err');
   const cfaiErr     = await env.KV.get('lingo_cfai_err');
+  const writerRaw   = await env.KV.get('lingo_writer_raw');
   const histRaw     = await env.KV.get(KV_POSTED);
   const histSize    = histRaw ? JSON.parse(histRaw).length : 0;
   const convRaw     = await env.KV.get(KV_CONV_TOPIC);
@@ -765,15 +878,26 @@ export async function lingoStatus(env) {
     total_runs:    parseInt(sessRaw || '0', 10),
     msgs_per_run:  MSGS_PER_RUN,
     cron_schedule: 'every 10min (144 runs/day × 7 msgs = ~1008 msgs/day)',
+    conversation_pipeline: {
+      agents: [
+        'Director (temp 0.85) — reads session KV, casts 5-6 of 40 personas, designs 7-turn order',
+        'Writer (temp 0.95) — writes all 7 messages in exact persona voice with reply chains',
+        'Guardian — rewrites any >40% similarity match against 70-msg history',
+      ],
+      personas: `${Object.keys(PERSONAS).length} distinct characters across: LingoAI insiders, AI enthusiasts, crypto veterans, newcomers, wild cards`,
+      ai_stack: 'Groq llama-3.3-70b-versatile (primary) → CF AI llama-3.1-8b (fallback)',
+      session_model: '1-2 topics per session × up to 5 runs = 35 messages on same topic before natural shift',
+    },
     current_session: conv ? {
-      topic:         conv.topic,
-      topic2:        conv.topic2 || null,
-      run_count:     conv.run_count,
-      runs_left:     Math.max(0, 5 - (conv.run_count || 0)),
+      topic:     conv.topic,
+      topic2:    conv.topic2 || null,
+      run_count: conv.run_count,
+      runs_left: Math.max(0, 5 - (conv.run_count || 0)),
       active_agents: activeAgents.map(id => `${id} (${PERSONAS[id]?.type || '?'})`),
     } : null,
     last_5_topics: recent.slice(-5).map(r => r.seed),
     ai_errors:     { groq: groqErr || null, openai: openaiErr || null, xai: xaiErr || null, cf_ai: cfaiErr || null },
+    writer_debug:  writerRaw ? JSON.parse(writerRaw) : null,
     posted_history: { stored: histSize, capacity: 70, dedup_window: 'last 70 messages' },
     next_steps:    chatId ? 'Active — conversations run every 10 minutes' : 'Call /lingo-setup?chat_id=XXXX to activate',
   };
