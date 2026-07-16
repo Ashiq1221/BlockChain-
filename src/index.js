@@ -14,7 +14,7 @@ import { startAuth, verifyCode, verify2FA, isAuthed, checkReplies } from './tele
 import { loadLearningContext, recordOutcome }  from './learning.js';
 import { scanGroups }                          from './group-scanner.js';
 import { TG_BOTS_DB, SCAN_TARGETS, dbStats }  from './tg-bots-db.js';
-import { runLingoPoster, setupLingoGroup, lingoStatus } from './lingo-poster.js';
+import { runLingoPoster, setupLingoGroup, lingoStatus, updateRLScores } from './lingo-poster.js';
 import { runOrchestra, sendHelpMessage }               from './lingo-orchestra.js';
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ async function ensureWebhook(env) {
     await tgCall(env, 'deleteWebhook', { drop_pending_updates: false });
     const d = await tgCall(env, 'setWebhook', {
       url:             `${WORKER_URL}/webhook`,
-      allowed_updates: ['message', 'channel_post', 'my_chat_member'],
+      allowed_updates: ['message', 'channel_post', 'my_chat_member', 'message_reaction'],
     });
     await notifyOwner(env,
       d?.ok
@@ -116,6 +116,17 @@ async function fastMentionPoll(env) {
 
 // ── Webhook update processor ──────────────────────────────────────────────────
 async function handleTelegramUpdate(env, update) {
+
+  // ── message_reaction: someone reacted to a bot message ─────────────────────
+  if (update.message_reaction) {
+    const reaction = update.message_reaction;
+    // Only count new reactions (not removed ones) and only non-empty reaction lists
+    if (reaction.new_reaction?.length > 0) {
+      await updateRLScores(env, reaction.message_id, 'reaction').catch(() => {});
+    }
+    return;
+  }
+
   const msg = update.message || update.channel_post;
 
   if (msg) {
@@ -123,6 +134,14 @@ async function handleTelegramUpdate(env, update) {
     const chatId   = String(msg.chat.id);
     const replyId  = msg.message_id;
     const text     = msg.text || msg.caption || '';
+
+    // ── Human replies to bot messages: RL signal ────────────────────────────
+    // If this is a reply to another message AND the reply target was likely posted
+    // by the bot (i.e. we have it in our RL tracking), credit it as engagement.
+    if (msg.reply_to_message && !msg.from?.is_bot) {
+      const repliedToId = msg.reply_to_message.message_id;
+      await updateRLScores(env, repliedToId, 'reply').catch(() => {});
+    }
 
     // /lingosetup command
     if (text.match(/^\/lingosetup(@\w+)?(\s|$)/i)) {
@@ -804,6 +823,23 @@ export default {
       return Response.json(result);
     }
 
+    // GET /lingo-rl-scores — show RL engagement scores (top topics + agents)
+    if (pathname === '/lingo-rl-scores' && request.method === 'GET') {
+      return Response.json(await lingoStatus(env).then(s => ({
+        reinforcement_learning: s.reinforcement_learning,
+        note: 'POST /lingo-rl-reset to wipe scores and start fresh',
+      })));
+    }
+
+    // POST /lingo-rl-reset — wipe RL scores and message tracking
+    if (pathname === '/lingo-rl-reset' && request.method === 'POST') {
+      await Promise.all([
+        env.KV.delete('lingo_rl_scores'),
+        env.KV.delete('lingo_msg_track'),
+      ]);
+      return Response.json({ ok: true, message: 'RL scores and message tracking cleared.' });
+    }
+
     // POST /lingo-reset — full conversation reset: clears session, history, topic, errors
     if (pathname === '/lingo-reset' && request.method === 'POST') {
       await Promise.all([
@@ -812,6 +848,7 @@ export default {
         env.KV.delete('lingo_conv_agents'),
         env.KV.delete('lingo_recent_runs'),
         env.KV.delete('lingo_posted_msgs'),
+        env.KV.delete('lingo_prev_msg_ids'),
         env.KV.delete('lingo_groq_err'),
         env.KV.delete('lingo_openai_err'),
         env.KV.delete('lingo_xai_err'),
@@ -974,7 +1011,7 @@ export default {
       const r = await fetch(
         `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setWebhook`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message', 'channel_post', 'my_chat_member'] }) }
+          body: JSON.stringify({ url: webhookUrl, allowed_updates: ['message', 'channel_post', 'my_chat_member', 'message_reaction'] }) }
       );
       const d = await r.json();
       return Response.json({ ok: d.ok, webhook_url: webhookUrl, telegram_response: d });
@@ -1041,6 +1078,7 @@ export default {
       '  GET  /export-db         full KV data export  ?format=json for download',
       '  GET  /draft/:lead_id',
       '  GET  /lingo-status',
+      '  GET  /lingo-rl-scores   RL engagement scores (top topics + agents)',
       '  GET  /lingo-setup       ?chat_id=XXXX',
       '  GET  /set-webhook       register Telegram webhook (enables real-time @mention responses)',
       '  GET  /del-webhook       remove webhook (switch back to getUpdates polling)',
@@ -1048,6 +1086,7 @@ export default {
       '  POST /group-reset',
       '  POST /lingo-post',
       '  POST /lingo-reset',
+      '  POST /lingo-rl-reset    wipe RL scores and message tracking',
       '  POST /webhook           Telegram webhook receiver',
       '  POST /tg-auth         body: {"phone":"+91XXXXXXXXXX"}',
       '  POST /tg-auth-code    body: {"code":"12345"}',
