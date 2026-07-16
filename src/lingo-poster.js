@@ -9,11 +9,16 @@ const KV_RECENT      = 'lingo_recent_runs';  // last 20 {seed, topic} — topic 
 const KV_POSTED      = 'lingo_posted_msgs';  // rolling window of last 70 posted {msg, ts}
 const KV_CONV_TOPIC  = 'lingo_conv_topic';   // current conversation session {topic, topic2, run_count}
 const KV_CONV_AGENTS = 'lingo_conv_agents';  // agent IDs active in current session
+const KV_RL_SCORES   = 'lingo_rl_scores';   // RL engagement scores: {topics:{}, agents:{}}
+const KV_MSG_TRACK   = 'lingo_msg_track';   // {msg_id → {topic, agent, ts}} — last 200 msgs
+
+const RL_REPLY_WEIGHT    = 3;   // real-human reply worth 3× a reaction (more intentional)
+const RL_DECAY_HALF_LIFE = 7;   // score halves every 7 days — keeps bias fresh, not stale
 
 const INVITE_LINK  = 'https://t.me/+0-Zzup1r8aY5ZmZl';
 const MSGS_PER_RUN = 7;  // messages per cron run (every 10min × 144/day = ~1008/day)
 
-// ── Core LingoAI context fed to AI for generation ─────────────────────────────
+// ── Core LingoAI context fed to AI for generation ──────────────────────────────────────────────
 
 const LINGO_FACTS = `LingoAI is a Web3 AI project. Key facts:
 • Token: $LINGOAI — capped at 100 billion, NO token burns — intrinsic value accrual model
@@ -34,12 +39,12 @@ const LINGO_FACTS = `LingoAI is a Web3 AI project. Key facts:
 • "Phygical" = physical + digital reality merged through LingoPOD
 • Enterprise clients must use $LINGOAI to license datasets from the ecosystem`;
 
-// ── 40 community member personas ─────────────────────────────────────────────
+// ── 40 community member personas ─────────────────────────────────────────────────────────────────────────
 // Each has: type (shown to Director for casting) + voice (shown to Writer for style)
 // Stored as object so Director can reference by ID
 
 const PERSONAS = {
-  // ── LingoAI insiders (10) ─────────────────────────────────────────────────
+  // ── LingoAI insiders (10) ────────────────────────────────────────────────────────────────
   s_chen:    { type: 'data scientist',             voice: 'analytical and precise. Uses specific percentages and numbers. Thinks in systems. Rarely excited. Short-to-medium sentences.' },
   m_webb:    { type: 'early $LINGOAI investor',    voice: 'confident, occasionally smug, dismisses FUD quickly. Has seen multiple cycles. References supply mechanics naturally.' },
   p_patel:   { type: 'developer building on LingoRAG', voice: 'code-first and practical. References actual implementation details. Uses "honestly" a lot. Very direct.' },
@@ -51,7 +56,7 @@ const PERSONAS = {
   c_adeyemi: { type: 'Nigerian developer, African language AI', voice: 'passionate about Igbo/Yoruba being ignored by AI. Practical about infrastructure costs. Warm but firm.' },
   l_zhang:   { type: 'Chinese ML engineer, data sovereignty focus', voice: 'focused on on-device AI and who controls data. Wary of centralised cloud. Technical.' },
 
-  // ── General AI enthusiasts (10) ───────────────────────────────────────────
+  // ── General AI enthusiasts (10) ───────────────────────────────────────────────────────────────
   dr_moore:  { type: 'ML researcher (academia)',   voice: 'precise, separates hype from reality, references concepts correctly. Occasionally long but always substantive.' },
   ry_kow:    { type: 'full-stack developer',       voice: 'extremely practical. Short punchy sentences. "just ship it" energy. No patience for vague theory.' },
   d_willi:   { type: 'AI ethics researcher',       voice: 'asks uncomfortable questions about power and bias. Not anti-AI. Pro-accountability. Measured and sharp.' },
@@ -63,7 +68,7 @@ const PERSONAS = {
   t_osei:    { type: 'West African AI researcher', voice: 'Africa compute access angle. Local deployment challenges. Represents Twi/Hausa NLP needs. Grounded.' },
   i_petrov:  { type: 'Russian ML engineer',        voice: 'hardcore architecture focus. Low-level and technical. Appreciates elegant solutions. Terse.' },
 
-  // ── Crypto veterans (10) ──────────────────────────────────────────────────
+  // ── Crypto veterans (10) ──────────────────────────────────────────────────────────────────
   big_mike:  { type: 'Bitcoin OG (in since 2012)', voice: 'deep historical perspective. Calm. Has seen every narrative come and go. Occasional macro wisdom. Doesn\'t hype.' },
   luna_p:    { type: 'DeFi yield strategist',      voice: 'yield-first mindset. Always risk-adjusted. Practical about protocol risks. Drops APY numbers naturally.' },
   whale_sam: { type: 'on-chain analyst',           voice: 'data-driven. Everything is on-chain evidence. References wallet flows and transaction patterns.' },
@@ -75,7 +80,7 @@ const PERSONAS = {
   k_yilmaz:  { type: 'Turkish DeFi user (survived 80% inflation)', voice: 'crypto as economic survival, not investment. Stablecoin-focused. Real urgency. Personal.' },
   m_rossi:   { type: 'Italian DeFi veteran',       voice: 'seen multiple protocol blowups. Risk-aware. "I\'ve been rekt before" energy. Practical not pessimistic.' },
 
-  // ── Newcomers / curious (8) ───────────────────────────────────────────────
+  // ── Newcomers / curious (8) ──────────────────────────────────────────────────────────────────
   tyler_19:  { type: 'college student (19), just got into crypto', voice: 'learns out loud. Asks obvious questions without shame. Energetic and curious. Short messages.' },
   e_rod:     { type: 'tech journalist writing about Web3', voice: 'frames everything as a story. Asks clarifying questions. Skeptical but genuinely open.' },
   k_park:    { type: 'TradFi analyst switching to crypto', voice: 'maps everything to bonds/stocks/banks. Skeptical but genuinely learning. Medium-length thoughtful takes.' },
@@ -85,7 +90,7 @@ const PERSONAS = {
   lena_s:    { type: 'German privacy advocate',    voice: 'GDPR-lens on everything. Data rights first. Cautiously interested. Asks pointed questions about data handling.' },
   b_tanaka:  { type: 'Vietnamese remittance user', voice: 'sends money home monthly. Sees crypto as cheaper/faster. Personal stories about transfer fees.' },
 
-  // ── Wild cards (2) ────────────────────────────────────────────────────────
+  // ── Wild cards (2) ────────────────────────────────────────────────────────────────────────────
   sir_degen: { type: 'crypto degen',               voice: 'one-liners and punchy market takes. Not stupid — just high-energy. Short. References price action and narratives.' },
   zara_c:    { type: 'contrarian',                 voice: 'argues the opposite of consensus. Devil\'s advocate by nature. Sharp and occasionally funny. Challenges assumptions.' },
 };
@@ -93,7 +98,7 @@ const PERSONAS = {
 // 50 themes across 4 categories — 50 × 10 = 500 messages per batch
 // category: 'lingo' | 'ai' | 'web3' | 'trending'
 const THEMES = [
-  // ── LingoAI (20) ──────────────────────────────────────────────────────────
+  // ── LingoAI (20) ────────────────────────────────────────────────────────────────────────────
   { topic: 'token economics, utility sinks, and why there are no token burns',                                             cat: 'lingo' },
   { topic: 'LingoPOD hardware features, corpus mining, and the DePIN network',                                            cat: 'lingo' },
   { topic: 'language diversity mission and why second/third-tier languages are ignored by AI',                             cat: 'lingo' },
@@ -115,7 +120,7 @@ const THEMES = [
   { topic: 'LingoAI 2030 vision: global multilingual AI data infrastructure',                                             cat: 'lingo' },
   { topic: 'real talk: accumulation strategy for $LINGOAI and upcoming catalyst events',                                  cat: 'lingo' },
 
-  // ── General AI (10) ───────────────────────────────────────────────────────
+  // ── General AI (10) ────────────────────────────────────────────────────────────────────────────
   { topic: 'ChatGPT vs Claude vs Gemini vs Grok — which AI is actually best right now',                                  cat: 'ai' },
   { topic: 'AI agents and autonomous systems — where this is heading in 2025 and beyond',                                 cat: 'ai' },
   { topic: 'open source AI models vs closed models: Llama, Mistral, Qwen vs GPT-4o, Claude',                             cat: 'ai' },
@@ -127,7 +132,7 @@ const THEMES = [
   { topic: 'AI memory and context — why LLMs forget and how long-term memory is being solved',                           cat: 'ai' },
   { topic: 'AI coding assistants — Cursor, Copilot, Claude Code — which actually makes devs faster',                    cat: 'ai' },
 
-  // ── General Web3 (10) ─────────────────────────────────────────────────────
+  // ── General Web3 (10) ───────────────────────────────────────────────────────────────────────────
   { topic: 'DeFi yield strategies in 2025 — what is working, what is risky, where to look',                              cat: 'web3' },
   { topic: 'Layer 2 scaling wars — Arbitrum vs Optimism vs Base vs zkSync — who wins',                                  cat: 'web3' },
   { topic: 'DePIN sector: Helium, Render, Hivemapper, Grass — the passive income thesis',                               cat: 'web3' },
@@ -139,7 +144,7 @@ const THEMES = [
   { topic: 'DAO governance in practice — what actually works and what kills participation',                               cat: 'web3' },
   { topic: 'NFT evolution — PFPs are dead, what NFTs become in utility, gaming, IP licensing',                           cat: 'web3' },
 
-  // ── Trending Topics (10) ──────────────────────────────────────────────────
+  // ── Trending Topics (10) ──────────────────────────────────────────────────────────────────────────
   { topic: 'AI crypto tokens price action and fundamentals: $FET, $RNDR, $TAO, $OCEAN, $WLD',                           cat: 'trending' },
   { topic: 'BlackRock and institutional Bitcoin/ETH adoption — what it actually means for retail',                       cat: 'trending' },
   { topic: 'altcoin season signals — how to spot the rotation early and which sectors run first',                        cat: 'trending' },
@@ -152,7 +157,7 @@ const THEMES = [
   { topic: 'crypto alpha sources — best channels, newsletters, on-chain analytics tools to follow',                     cat: 'trending' },
 ];
 
-// ── Telegram helper ───────────────────────────────────────────────────────────
+// ── Telegram helper ─────────────────────────────────────────────────────────────────────────────────
 
 async function tgCall(env, method, body = {}) {
   if (!env.TELEGRAM_BOT_TOKEN) return null;
@@ -171,7 +176,7 @@ async function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-// ── Shared AI caller ──────────────────────────────────────────────────────────
+// ── Shared AI caller ────────────────────────────────────────────────────────────────────────────────
 
 async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } = {}) {
   if (!env.GROQ_API_KEY) {
@@ -314,7 +319,72 @@ function wordSimilarity(a, b) {
   return denom ? intersection / denom : 0;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ── REINFORCEMENT LEARNING ────────────────────────────────────────────────────────────────────────
+// Tracks which topics/agents get real human engagement (reactions + replies).
+// Director uses these scores to bias future topic/persona selection.
+
+async function loadRLScores(env) {
+  const raw = await env.KV.get(KV_RL_SCORES);
+  if (!raw) return { topics: {}, agents: {} };
+  const scores = JSON.parse(raw);
+  const now = Date.now();
+  // Compute decay-adjusted effective score for ranking (doesn't mutate stored score)
+  for (const cat of ['topics', 'agents']) {
+    for (const entry of Object.values(scores[cat] || {})) {
+      const days = (now - (entry.ts || now)) / 86400000;
+      entry.effective = entry.score * Math.pow(0.5, days / RL_DECAY_HALF_LIFE);
+    }
+  }
+  return scores;
+}
+
+export async function updateRLScores(env, msgId, eventType) {
+  const trackRaw = await env.KV.get(KV_MSG_TRACK);
+  const track    = trackRaw ? JSON.parse(trackRaw) : {};
+  const meta     = track[String(msgId)];
+  if (!meta) return false; // unknown message — can't attribute
+
+  const weight    = eventType === 'reply' ? RL_REPLY_WEIGHT : 1;
+  const scoresRaw = await env.KV.get(KV_RL_SCORES);
+  const scores    = scoresRaw ? JSON.parse(scoresRaw) : { topics: {}, agents: {} };
+  const now       = Date.now();
+
+  const bump = (cat, key) => {
+    if (!key || key === 'fallback' || key === 'unknown') return;
+    if (!scores[cat][key]) scores[cat][key] = { score: 0, reactions: 0, replies: 0, ts: now };
+    scores[cat][key].score += weight;
+    scores[cat][key][eventType === 'reply' ? 'replies' : 'reactions']++;
+    scores[cat][key].ts = now;
+  };
+
+  bump('topics', meta.topic);
+  bump('agents', meta.agent);
+
+  await env.KV.put(KV_RL_SCORES, JSON.stringify(scores), { expirationTtl: 2592000 });
+  return true;
+}
+
+async function getRLHints(env) {
+  const scores = await loadRLScores(env);
+  const rank = (cat, n) =>
+    Object.entries(scores[cat] || {})
+      .map(([k, v]) => ({ k, eff: v.effective ?? v.score, pts: v.score }))
+      .filter(x => x.eff > 0)
+      .sort((a, b) => b.eff - a.eff)
+      .slice(0, n);
+  return { topTopics: rank('topics', 5), topAgents: rank('agents', 8) };
+}
+
+function buildRLContext({ topTopics, topAgents }) {
+  if (!topTopics.length && !topAgents.length) return '';
+  const lines = ['\nREAL ENGAGEMENT (reactions + replies from actual humans — bias toward these):'];
+  if (topTopics.length) lines.push(`High-engagement topics: ${topTopics.map(t => `"${t.k}" (${t.pts}pts)`).join(' · ')}`);
+  if (topAgents.length) lines.push(`High-engagement personas: ${topAgents.map(a => `${a.k} (${a.pts}pts)`).join(' · ')}`);
+  lines.push("Lean toward these — but still vary, don't repeat recent topics above.");
+  return lines.join('\n') + '\n';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CONVERSATION PIPELINE — 3 agents simulate 40 real humans chatting
 //
 //  ┌──────────────────────┐    ┌─────────────────────────┐    ┌────────────────┐
@@ -330,9 +400,9 @@ function wordSimilarity(a, b) {
 //
 //  Session management: 1-2 topics per conversation session (4-6 runs = ~40-60min)
 //  then Director naturally shifts to a new conversation with different agents
-// ════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
-// ── AGENT 1: CONVERSATION DIRECTOR ───────────────────────────────────────────
+// ── AGENT 1: CONVERSATION DIRECTOR ──────────────────────────────────────────────────────────────────
 // Casts 5-6 personas and designs a loose turn order — NO rigid "angles".
 // Writer invents what each person says from their voice + the live conversation.
 
@@ -361,10 +431,13 @@ ${recentSnippets || '(none yet)'}`
     : `START a fresh conversation.
 Avoid these recent topics: ${usedTopics.slice(-8).join(' | ') || 'none yet'}`;
 
+  const rlHints = await getRLHints(env);
+  const rlCtx   = buildRLContext(rlHints);
+
   const prompt = `You are casting a casual Telegram group chat. Pick who speaks and in what order for the next 7 messages.
 
 ${sessionCtx}
-
+${rlCtx}
 AVAILABLE PERSONAS:
 ${personaCatalogue}
 
@@ -417,7 +490,7 @@ Return ONLY valid JSON (no angle field needed — Writer invents the content):
   };
 }
 
-// ── AGENT 2: CONVERSATION WRITER ─────────────────────────────────────────────
+// ── AGENT 2: CONVERSATION WRITER ─────────────────────────────────────────────────────────────────
 // Writes all messages as natural Telegram chat — no rigid angles.
 // Each message is invented from the persona's voice + what's already been said.
 
@@ -538,7 +611,7 @@ Return ONLY the message text.`;
   return results;
 }
 
-// ── UNIQUENESS GUARDIAN ───────────────────────────────────────────────────────
+// ── UNIQUENESS GUARDIAN ────────────────────────────────────────────────────────────────────────────
 // Final pass: rewrites any message that's too similar to posted history.
 // Uses AI rewriter — never silently drops, always tries to fix.
 
@@ -573,14 +646,14 @@ async function uniquenessGuardian(env, messages, topic, postedHistory) {
   return result;
 }
 
-// ── CONVERSATION RUNNER ───────────────────────────────────────────────────────
+// ── CONVERSATION RUNNER ──────────────────────────────────────────────────────────────────────────
 // Director → Writer → Guardian, with session + history tracking
 
 async function runConversation(env, count, postedHistory = []) {
-  // ── Agent 1: Director ────────────────────────────────────────────────────
+  // ── Agent 1: Director ──────────────────────────────────────────────────────────────────
   const direction = await conversationDirector(env, postedHistory);
 
-  // ── Agent 2: Writer ──────────────────────────────────────────────────────
+  // ── Agent 2: Writer ───────────────────────────────────────────────────────────────────
   const raw = await conversationWriter(env, direction, postedHistory);
 
   // Hard filter: remove @mentions and blank/single-word messages; allow "gm", one-liners
@@ -590,7 +663,7 @@ async function runConversation(env, count, postedHistory = []) {
     !/^(hey guys|hi all|hello everyone)/i.test(m.msg)
   );
 
-  // ── Agent 3: Uniqueness Guardian ─────────────────────────────────────────
+  // ── Agent 3: Uniqueness Guardian ───────────────────────────────────────────────────────────
   msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory);
 
   // Pad if short — rewrite static fallback messages rather than posting verbatim
@@ -605,7 +678,7 @@ async function runConversation(env, count, postedHistory = []) {
     }
   }
 
-  // ── Update conversation session ───────────────────────────────────────────
+  // ── Update conversation session ──────────────────────────────────────────────────────────────────
   const sessionRaw = await env.KV.get(KV_CONV_TOPIC);
   const session    = sessionRaw ? JSON.parse(sessionRaw) : null;
 
@@ -625,7 +698,7 @@ async function runConversation(env, count, postedHistory = []) {
   }
   await env.KV.put(KV_CONV_AGENTS, JSON.stringify(direction.agents || []));
 
-  // ── Update topic history (for Director's "avoid repeating" context) ───────
+  // ── Update topic history (for Director's "avoid repeating" context) ──────────────────────
   const recentRaw = await env.KV.get(KV_RECENT);
   const recent    = recentRaw ? JSON.parse(recentRaw) : [];
   recent.push({ seed: direction.topic.slice(0, 80), ts: Date.now() });
@@ -643,7 +716,7 @@ async function runConversation(env, count, postedHistory = []) {
   };
 }
 
-// ── Main poster ───────────────────────────────────────────────────────────────
+// ── Main poster ──────────────────────────────────────────────────────────────────────────────────
 
 export async function runLingoPoster(env) {
   const chatId = await env.KV.get(KV_GROUP_ID);
@@ -667,8 +740,9 @@ export async function runLingoPoster(env) {
 
   let posted = 0;
   const now = Date.now();
-  const newEntries  = [];
-  const batchMsgIds = []; // Telegram message_ids posted in this batch
+  const newEntries      = [];
+  const batchMsgIds     = []; // Telegram message_ids posted in this batch
+  const msgTrackEntries = {}; // {msgId → {topic, agent, ts}} — written to KV for RL
 
   for (let i = 0; i < msgs.length; i++) {
     const item      = msgs[i];
@@ -687,10 +761,26 @@ export async function runLingoPoster(env) {
     if (replyToMsgId) body.reply_to_message_id = replyToMsgId;
 
     const tgResult = await tgCall(env, 'sendMessage', body);
-    batchMsgIds.push(tgResult?.message_id || null);
+    const tgMsgId  = tgResult?.message_id || null;
+    batchMsgIds.push(tgMsgId);
+    if (tgMsgId) {
+      msgTrackEntries[String(tgMsgId)] = { topic, agent: item.agent, ts: now };
+    }
     newEntries.push({ msg: item.msg, ts: now });
     posted++;
     if (posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
+  }
+
+  // Persist RL message tracking (keep last 200 by message_id)
+  if (Object.keys(msgTrackEntries).length > 0) {
+    const trackRaw = await env.KV.get(KV_MSG_TRACK);
+    const track    = trackRaw ? JSON.parse(trackRaw) : {};
+    Object.assign(track, msgTrackEntries);
+    const trackKeys = Object.keys(track).sort((a, b) => parseInt(a) - parseInt(b));
+    if (trackKeys.length > 200) {
+      for (const k of trackKeys.slice(0, trackKeys.length - 200)) delete track[k];
+    }
+    await env.KV.put(KV_MSG_TRACK, JSON.stringify(track), { expirationTtl: 2592000 });
   }
 
   // Save message IDs for next run's cross-run threading (keep last 10)
@@ -715,7 +805,7 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-// ── Auto-detect group from recent updates ─────────────────────────────────────
+// ── Auto-detect group from recent updates ──────────────────────────────────────────────────
 // Uses my_chat_member updates (fires when bot is added to a group — works even
 // when privacy mode is ON, because privacy mode only blocks regular messages,
 // not bot membership events).
@@ -786,7 +876,7 @@ async function detectLingoGroup(env) {
   } catch { return null; }
 }
 
-// ── Handle /lingosetup command sent inside the target group ───────────────────
+// ── Handle /lingosetup command sent inside the target group ────────────────────────────────────
 // Works with both `/lingosetup` AND `/lingosetup@AshiqAibot`
 // The @BotName form is delivered even when privacy mode is ON
 
@@ -815,7 +905,7 @@ export async function handleLingoCommand(env, msg) {
   return true;
 }
 
-// ── Setup: detect or set group chat ID ───────────────────────────────────────
+// ── Setup: detect or set group chat ID ─────────────────────────────────────────────────────────────
 
 export async function setupLingoGroup(env, manualChatId = null) {
   // Manual override — user passes ?chat_id=XXXX
@@ -852,7 +942,7 @@ export async function setupLingoGroup(env, manualChatId = null) {
   return { ok: true, chat_id: detected, method: 'auto', message: `Auto-detected group ${detected}. Poster starts next cron cycle.` };
 }
 
-// ── Status ────────────────────────────────────────────────────────────────────
+// ── Status ────────────────────────────────────────────────────────────────────────────────────────────
 
 export async function lingoStatus(env) {
   const chatId      = await env.KV.get(KV_GROUP_ID);
@@ -870,6 +960,11 @@ export async function lingoStatus(env) {
   const conv        = convRaw ? JSON.parse(convRaw) : null;
   const agentRaw    = await env.KV.get(KV_CONV_AGENTS);
   const activeAgents = agentRaw ? JSON.parse(agentRaw) : [];
+
+  // RL scores — show top 5 topics and agents by decay-adjusted score
+  const rlHints  = await getRLHints(env);
+  const trackRaw = await env.KV.get(KV_MSG_TRACK);
+  const trackSize = trackRaw ? Object.keys(JSON.parse(trackRaw)).length : 0;
 
   return {
     configured:    !!chatId,
@@ -899,6 +994,12 @@ export async function lingoStatus(env) {
     ai_errors:     { groq: groqErr || null, openai: openaiErr || null, xai: xaiErr || null, cf_ai: cfaiErr || null },
     writer_debug:  writerRaw ? JSON.parse(writerRaw) : null,
     posted_history: { stored: histSize, capacity: 70, dedup_window: 'last 70 messages' },
+    reinforcement_learning: {
+      tracked_messages: trackSize,
+      top_topics: rlHints.topTopics.map(t => ({ topic: t.k, score: t.pts, effective: +t.eff.toFixed(2) })),
+      top_agents: rlHints.topAgents.map(a => ({ agent: a.k, score: a.pts, effective: +a.eff.toFixed(2) })),
+      decay:      `score × 0.5^(days/${RL_DECAY_HALF_LIFE}) — halves every ${RL_DECAY_HALF_LIFE} days`,
+    },
     next_steps:    chatId ? 'Active — conversations run every 10 minutes' : 'Call /lingo-setup?chat_id=XXXX to activate',
   };
 }
