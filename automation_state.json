@@ -748,14 +748,6 @@
   ],
   "agent_log": [
     {
-      "at": "2026-07-14T19:06:36.396961+00:00",
-      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
-    },
-    {
-      "at": "2026-07-14T19:07:50.598830+00:00",
-      "msg": "No pending posts. Orders monitored: 51, refills triggered: 0, issues found: potential over-delivery on views and under-delivery on engagement metrics"
-    },
-    {
       "at": "2026-07-14T20:35:45.134716+00:00",
       "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
     },
@@ -945,6 +937,14 @@
     },
     {
       "at": "2026-07-16T13:00:46.064366+00:00",
+      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-16T15:05:39.690566+00:00",
+      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
+    },
+    {
+      "at": "2026-07-16T15:06:53.308952+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
     }
   ],
