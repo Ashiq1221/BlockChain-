@@ -141,7 +141,10 @@ async function handleTelegramUpdate(env, update) {
       env.KV.get('lingo_source_group_id').catch(() => null),
       env.KV.get('lingo_group_chat_id').catch(() => null),
     ]);
-    if (sourceGroupId && chatId === sourceGroupId) {
+    // Match by numeric ID or @username (msg.chat.username for public groups)
+    const chatUsername = msg.chat?.username ? `@${msg.chat.username}` : null;
+    const isSourceGroup = sourceGroupId && (chatId === sourceGroupId || chatUsername === sourceGroupId);
+    if (isSourceGroup) {
       // Observe real human messages for Director context, then STOP — no replies, no commands
       if (!msg.from?.is_bot) {
         await observeSourceMessage(env, text, (msg.date || 0) * 1000).catch(() => {});

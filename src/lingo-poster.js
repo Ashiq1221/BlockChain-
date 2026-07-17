@@ -766,9 +766,9 @@ export async function runLingoPoster(env) {
     return { skipped: true, reason: 'No group configured. Add @AshiqAibot and type /lingosetup.' };
   }
 
-  // Safety: never post to the source/observation group
+  // Safety: never post to the source/observation group (match by numeric ID or @username)
   const sourceGroupId = await env.KV.get('lingo_source_group_id');
-  if (sourceGroupId && chatId === sourceGroupId) {
+  if (sourceGroupId && (chatId === sourceGroupId || chatId === sourceGroupId.replace(/^@/, ''))) {
     return { skipped: true, reason: 'Target group matches source observation group — bot will not post to the official LingoAI group. Fix lingo_group_chat_id via /lingo-setup?chat_id=YOUR_POSTING_GROUP.' };
   }
 
