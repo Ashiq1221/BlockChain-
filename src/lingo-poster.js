@@ -397,28 +397,95 @@ async function getSourceContext(env) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CONVERSATION PIPELINE — 3 agents simulate 40 real humans chatting
+// CONVERSATION PIPELINE — 4 agents simulate 40 real humans chatting
 //
-//  ┌──────────────────────┐    ┌─────────────────────────┐    ┌────────────────┐
-//  │   DIRECTOR           │ →  │       WRITER             │ →  │   GUARDIAN     │
-//  │  temp 0.85           │    │      temp 0.95            │    │  rewrites dups │
-//  │  Reads session KV    │    │  Writes 7 messages in     │    │  never lets a  │
-//  │  Continues or starts │    │  the EXACT voice of each  │    │  repeat post   │
-//  │  a new conversation  │    │  selected agent — reply   │    │                │
-//  │  Selects 5-6 of 40   │    │  chains, mixed lengths,   │    │                │
-//  │  personas            │    │  organic casual tone      │    │                │
-//  │  Designs turn order  │    │                           │    │                │
-//  └──────────────────────┘    └─────────────────────────┘    └────────────────┘
+//  ┌──────────────────────┐    ┌──────────────────────┐    ┌──────────────────┐    ┌────────────────┐
+//  │   OVERSEER           │ →  │   DIRECTOR           │ →  │   WRITER         │ →  │   GUARDIAN     │
+//  │  temp 0.2            │    │  temp 0.85           │    │  temp 0.95       │    │  rewrites dups │
+//  │  Reviews last 14 msgs│    │  Reads session KV    │    │  Writes 7 msgs   │    │  never lets a  │
+//  │  Detects: promo drift│    │  Continues or starts │    │  in exact persona│    │  repeat post   │
+//  │  topic loops, off-   │    │  Selects 5-6 of 40   │    │  voice, reply    │    │                │
+//  │  scope, tone issues  │    │  personas, designs   │    │  chains, organic │    │                │
+//  │  Issues directive to │    │  turn order with     │    │  casual tone     │    │                │
+//  │  Director. Resets    │    │  Overseer directive  │    │                  │    │                │
+//  │  session if score≤3  │    │                      │    │                  │    │                │
+//  └──────────────────────┘    └──────────────────────┘    └──────────────────┘    └────────────────┘
 //
 //  Session management: 1-2 topics per conversation session (4-6 runs = ~40-60min)
 //  then Director naturally shifts to a new conversation with different agents
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── AGENT 0: OVERSEER ─────────────────────────────────────────────────────────────────────────────
+// Runs before every cron cycle. Reviews recent posts, detects quality drift,
+// issues a corrective directive to the Director, resets session if critically broken.
+
+const KV_OVERSEER = 'lingo_overseer'; // {score, issues, directive, ts, action}
+
+async function conversationOverseer(env, postedHistory) {
+  if (postedHistory.length < 5) {
+    return { score: 10, issues: [], directive: '', action: 'skipped — not enough history' };
+  }
+
+  const recentMsgs = postedHistory.slice(-14).map((m, i) => `[${i + 1}] ${m.msg}`).join('\n');
+
+  const prompt = `You are a quality overseer for a LingoAI community Telegram group. The group should talk naturally about LingoAI and AI — like real community members with opinions, questions, doubts, and enthusiasm. NOT like a project team or marketing channel.
+
+Review these recent messages and detect any problems:
+
+${recentMsgs}
+
+Check for ALL of these issues:
+1. PROMOTIONAL DRIFT — messages sound like a product pitch, press release, or team briefing. Signs: "LingoAI is revolutionizing...", reciting bullet-point facts, zero skepticism or personal opinion
+2. TOPIC LOOP — the same narrow topic repeated 3+ times without variation
+3. TONE UNIFORMITY — everyone sounds identical, no real personality differences between speakers
+4. OFF-SCOPE — topics about DeFi yields, NFTs, Layer 2s, meme coins, or general crypto that have nothing to do with LingoAI or AI problems
+5. FAKE ENTHUSIASM — everything is positive, nobody asks hard questions or pushes back
+
+Score the messages 1-10 where:
+10 = diverse, natural, opinionated community talk about LingoAI/AI
+7-9 = mostly good, minor issues
+4-6 = noticeable problems, correction needed
+1-3 = serious quality failure, reset required
+
+Return ONLY valid JSON:
+{
+  "score": <1-10>,
+  "issues": ["issue description", ...],
+  "directive": "<one clear instruction for the Director to fix the problem, or empty string if score >= 7>"
+}`;
+
+  const raw    = await callRaw(env, prompt, { temperature: 0.2, maxTokens: 400 });
+  const parsed = parseJSON(raw);
+
+  const result = (parsed && typeof parsed.score === 'number')
+    ? parsed
+    : { score: 8, issues: [], directive: '' };
+
+  let action = 'monitored';
+
+  // Auto-reset session if quality is critically broken
+  if (result.score <= 3) {
+    await env.KV.delete(KV_CONV_TOPIC);
+    await env.KV.delete(KV_CONV_AGENTS);
+    action = 'session reset — score critically low';
+  }
+
+  await env.KV.put(KV_OVERSEER, JSON.stringify({
+    score:    result.score,
+    issues:   result.issues || [],
+    directive: result.directive || '',
+    action,
+    ts:       Date.now(),
+  }), { expirationTtl: 7200 });
+
+  return result;
+}
+
 // ── AGENT 1: CONVERSATION DIRECTOR ──────────────────────────────────────────────────────────────────
 // Casts 5-6 personas and designs a loose turn order — NO rigid "angles".
 // Writer invents what each person says from their voice + the live conversation.
 
-async function conversationDirector(env, postedHistory) {
+async function conversationDirector(env, postedHistory, overseerDirective = '') {
   const sessionRaw     = await env.KV.get(KV_CONV_TOPIC);
   const session        = sessionRaw ? JSON.parse(sessionRaw) : null;
   const activeAgentRaw = await env.KV.get(KV_CONV_AGENTS);
@@ -462,10 +529,14 @@ ${THEMES.map(t => `• ${t.topic}`).join('\n')}`;
   const rlCtx     = buildRLContext(rlHints);
   const sourceCtx = await getSourceContext(env);
 
+  const overseerCtx = overseerDirective
+    ? `\nOVERSEER CORRECTION (fix this before choosing topic/cast): ${overseerDirective}\n`
+    : '';
+
   const prompt = `You are casting a casual Telegram group chat about LingoAI and AI. Pick who speaks and in what order for the next 7 messages.
 
 ${sessionCtx}
-${sourceCtx}
+${overseerCtx}${sourceCtx}
 ${rlCtx}
 AVAILABLE PERSONAS:
 ${personaCatalogue}
@@ -686,11 +757,15 @@ async function uniquenessGuardian(env, messages, topic, postedHistory) {
 }
 
 // ── CONVERSATION RUNNER ──────────────────────────────────────────────────────────────────────────
-// Director → Writer → Guardian, with session + history tracking
+// Overseer → Director → Writer → Guardian, with session + history tracking
 
 async function runConversation(env, count, postedHistory = []) {
+  // ── Agent 0: Overseer ─────────────────────────────────────────────────────────────────
+  const oversight  = await conversationOverseer(env, postedHistory);
+  const directive  = oversight.directive || '';
+
   // ── Agent 1: Director ──────────────────────────────────────────────────────────────────
-  const direction = await conversationDirector(env, postedHistory);
+  const direction = await conversationDirector(env, postedHistory, directive);
 
   // ── Agent 2: Writer ───────────────────────────────────────────────────────────────────
   const raw = await conversationWriter(env, direction, postedHistory);
@@ -773,7 +848,7 @@ export async function runLingoPoster(env) {
   const histRaw      = await env.KV.get(KV_POSTED);
   const postedHistory = histRaw ? JSON.parse(histRaw) : [];
 
-  // Run the 3-agent conversation pipeline: Director → Writer → Guardian
+  // Run the 4-agent conversation pipeline: Overseer → Director → Writer → Guardian
   const result = await runConversation(env, MSGS_PER_RUN, postedHistory);
   const { msgs, turns, topic, topic2, agents, session_run, raw_count, final_count } = result;
 
@@ -999,6 +1074,7 @@ export async function lingoStatus(env) {
   const xaiErr      = await env.KV.get('lingo_xai_err');
   const cfaiErr     = await env.KV.get('lingo_cfai_err');
   const writerRaw   = await env.KV.get('lingo_writer_raw');
+  const overseerRaw = await env.KV.get(KV_OVERSEER);
   const histRaw     = await env.KV.get(KV_POSTED);
   const histSize    = histRaw ? JSON.parse(histRaw).length : 0;
   const convRaw     = await env.KV.get(KV_CONV_TOPIC);
@@ -1030,11 +1106,12 @@ export async function lingoStatus(env) {
     cron_schedule: 'every 10min (144 runs/day × 7 msgs = ~1008 msgs/day)',
     conversation_pipeline: {
       agents: [
-        'Director (temp 0.85) — reads session KV, casts 5-6 of 40 personas, designs 7-turn order',
+        'Overseer (temp 0.2) — reviews last 14 msgs, scores quality 1-10, issues correction directive, resets session if score ≤ 3',
+        'Director (temp 0.85) — receives overseer directive, casts 5-6 of 40 personas, designs 7-turn order',
         'Writer (temp 0.95) — writes all 7 messages in exact persona voice with reply chains',
         'Guardian — rewrites any >40% similarity match against 70-msg history',
       ],
-      personas: `${Object.keys(PERSONAS).length} distinct characters across: LingoAI insiders, AI enthusiasts, crypto veterans, newcomers, wild cards`,
+      personas: `${Object.keys(PERSONAS).length} distinct characters across: LingoAI community holders, AI enthusiasts, crypto veterans, newcomers, wild cards`,
       ai_stack: 'Groq llama-3.3-70b-versatile (primary) → CF AI llama-3.1-8b (fallback)',
       session_model: '1-2 topics per session × up to 5 runs = 35 messages on same topic before natural shift',
     },
@@ -1068,6 +1145,17 @@ export async function lingoStatus(env) {
       expires_at: new Date(hotTopicData.expires_at).toISOString(),
       expires_in: `${Math.round((hotTopicData.expires_at - Date.now()) / 60000)}min`,
     } : null,
+    overseer: overseerRaw ? (() => {
+      const o = JSON.parse(overseerRaw);
+      return {
+        score:     o.score,
+        quality:   o.score >= 8 ? 'good' : o.score >= 5 ? 'warning' : 'critical',
+        issues:    o.issues || [],
+        directive: o.directive || null,
+        action:    o.action || null,
+        checked:   o.ts ? `${Math.round((Date.now() - o.ts) / 60000)}min ago` : null,
+      };
+    })() : { note: 'No overseer report yet — runs on next cron cycle' },
     next_steps:    chatId ? 'Active — conversations run every 10 minutes' : 'Call /lingo-setup?chat_id=XXXX to activate',
   };
 }
