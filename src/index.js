@@ -137,13 +137,23 @@ async function handleTelegramUpdate(env, update) {
     const text     = msg.text || msg.caption || '';
 
     // ── Source group observation: READ ONLY — never respond or post here ──────
-    const sourceGroupId = await env.KV.get('lingo_source_group_id').catch(() => null);
+    const [sourceGroupId, postingGroupId] = await Promise.all([
+      env.KV.get('lingo_source_group_id').catch(() => null),
+      env.KV.get('lingo_group_chat_id').catch(() => null),
+    ]);
     if (sourceGroupId && chatId === sourceGroupId) {
       // Observe real human messages for Director context, then STOP — no replies, no commands
       if (!msg.from?.is_bot) {
         await observeSourceMessage(env, text, (msg.date || 0) * 1000).catch(() => {});
       }
       return;
+    }
+    // Auto-detect: message from an unknown group (not posting, not source) → queue as pending source
+    const isGroupMsg = ['group', 'supergroup', 'channel'].includes(chatType);
+    if (isGroupMsg && !sourceGroupId && chatId !== postingGroupId && !msg.from?.is_bot) {
+      await env.KV.put('lingo_pending_source', JSON.stringify({
+        chat_id: chatId, title: msg.chat?.title || '', added_at: Date.now(),
+      })).catch(() => {});
     }
 
     // ── Human replies to bot messages: RL signal ────────────────────────────
