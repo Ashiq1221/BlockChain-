@@ -616,7 +616,10 @@ async function conversationWriter(env, direction, postedHistory) {
 
   const turns = direction.turns || [];
   const turnList = turns.map((t, i) => {
-    const lenGuide = t.length === 'micro' ? '1-5 words' : t.length === 'short' ? '1 sentence' : t.length === 'long' ? '3-5 sentences' : '2-3 sentences';
+    const lenGuide = t.length === 'micro'  ? '1-5 words MAX — single reaction, not a sentence'
+                   : t.length === 'short'  ? '1 short sentence MAX — 8-20 words'
+                   : t.length === 'long'   ? '3-4 sentences'
+                   :                         '2 sentences';
     const replyNote = t.responds_to != null ? ` [replies to msg ${t.responds_to}]` : '';
     return `[${i}] ${t.agent}${replyNote} — ${lenGuide}`;
   }).join('\n');
@@ -629,33 +632,32 @@ ${prevMsgs ? `Chat already in progress (DON'T repeat these):\n---\n${prevMsgs}\n
 VOICES (write each person in their exact voice):
 ${voiceProfiles}
 
-WHO SPEAKS NEXT:
+WHO SPEAKS NEXT (STRICT word limits — ignore them and messages get deleted):
 ${turnList}
 
-CRITICAL RULES — break these and the whole thing fails:
-1. Every message is what that person TYPES into the chat — first person, direct. NEVER third-person narration
-2. BANNED PATTERNS — these will be deleted automatically:
-   - "r_hassan looking for deals..." ← third-person narration, not a chat message
-   - "y_tanaka thinks that..." ← never describe what a persona is doing
-   - "for us devs" / "for us too" ← sounds like internal team, not community
-   - DeFi, L2, Layer 2, arbitrum, NFTs, meme coins, stablecoins ← off-topic, filtered out
-3. These are COMMUNITY MEMBERS — not the project team, not spokespersons
-4. LingoAI holders can be excited AND doubtful AND frustrated. That's normal
-5. NEVER: "LingoAI is revolutionizing...", reciting bullet points as facts, no skepticism
-6. DO: "tbh the no-burn model confused me at first", "anyone actually used LingoRAG in prod?", "price has been flat for weeks tho"
-7. micro = literally 1-5 words ("gm", "facts", "nah", "wait what", "this")
-8. if replying, react to the SPECIFIC thing said — not a new point
-9. no @mentions, no name tags, lowercase, contractions
-10. each person sounds DIFFERENT — don't let them blur into each other
+CRITICAL RULES:
+1. Every message = what that person TYPES. First person. NEVER "r_hassan is looking at..." or any third-person narration
+2. WORD LIMITS ARE HARD: micro = 5 words or fewer. short = 1 sentence, 20 words or fewer. Do not go over.
+3. NOT EVERYONE AGREES — at least one person pushes back, asks a hard question, or changes the subject
+4. DON'T loop back to the same conclusion in every message. Real chats drift, jump, contradict
+5. Community members say "they need to" / "LingoAI needs to" — NOT "we need to" / "let's focus" (that's team talk)
+6. BANNED (auto-deleted): third-person narration · "let's [LingoAI action]" · "we need to [LingoAI action]" · DeFi / L2 / NFT / meme coins · no @mentions
+7. no name tags, lowercase, contractions, each person sounds different
 
-EXAMPLE of the energy we want (different topic, just showing naturalness):
+GOOD example (shows length variety + natural drift):
 [0] gm
-[1] anyone else think AI memory is the most underrated unsolved problem
-[2] 100%. every new chat starts cold
-[3] to be fair there's RAG and vector stores — issue is retrieval quality not storage
-[4] ok but why does it still hallucinate stuff from "past" sessions tho
-[5] because context window ≠ memory. it's a very long prompt not actual recall
-[6] so basically every AI assistant has anterograde amnesia lol
+[1] anyone seen the solid protocol actually deployed at scale anywhere
+[2] not really. cool concept tho
+[3] i mean tim berners-lee has been pushing it for years but adoption is rough
+[4] lingoai using it is interesting but feels ambitious. like who's running the nodes
+[5] that's my question too. edge case or actual infra
+[6] depends whether the hardware ships tbh
+
+BAD example (what to avoid — everything long, same structure, loops to same conclusion):
+[0] yeah i agree but we need to see real use cases before we can think about this
+[1] i totally agree, we need clarity on tokenomics before we can even consider this
+[2] yeah i agree on that, but let's focus on getting use cases solid first
+← every message is medium length, same rhythm, loops to identical point, "we need to" team talk
 
 Return ONLY a JSON array:
 [{"msg":"text","agent":"agent_id"},...]`;
@@ -783,15 +785,50 @@ async function runConversation(env, count, postedHistory = []) {
   // Off-topic keywords that should never appear (DeFi/L2/NFT/meme coins)
   const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool)\b/i;
 
+  // Team-speak: "we need to [LingoAI action]" / "let's focus on [LingoAI]" sounds like the project team
+  const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)/i;
+
   // Hard filter: remove malformed, off-topic, or third-person-narration messages
   let msgs = raw.filter(m => {
     const t = m.msg.trim();
-    if (t.length < 2) return false;                    // blank
-    if (/@\w+/.test(t)) return false;                  // @mentions
-    if (/^(hey guys|hi all|hello everyone)/i.test(t)) return false; // generic openers
-    if (agentIdPattern.test(t)) return false;           // agent name leaked as third-person narration
-    if (offTopicPattern.test(t)) return false;          // off-topic DeFi/L2/NFT content
-    if (/\bfor us\b/i.test(t) && /\bdev\b/i.test(t)) return false; // "for us devs" = team talk
+    if (t.length < 2) return false;
+    if (/@\w+/.test(t)) return false;
+    if (/^(hey guys|hi all|hello everyone)/i.test(t)) return false;
+    if (agentIdPattern.test(t)) return false;
+    if (offTopicPattern.test(t)) return false;
+    if (/\bfor us\b/i.test(t) && /\bdev\b/i.test(t)) return false;
+    if (teamSpeakPattern.test(t)) return false;         // "we need to see" / "let's focus on getting"
+    return true;
+  });
+
+  // Enforce word count for micro/short turns — if the Writer ignored length, truncate
+  const turnMap = {};
+  (direction.turns || []).forEach((t, i) => { turnMap[i] = t.length; });
+  msgs = msgs.map((m, i) => {
+    const spec = turnMap[i];
+    const words = m.msg.trim().split(/\s+/);
+    if (spec === 'micro' && words.length > 8) {
+      // Truncate to first meaningful clause
+      return { ...m, msg: words.slice(0, 6).join(' ') };
+    }
+    if (spec === 'short' && words.length > 35) {
+      // Keep only the first sentence
+      const firstSentence = m.msg.match(/^[^.!?]+[.!?]/);
+      return { ...m, msg: firstSentence ? firstSentence[0].trim() : words.slice(0, 25).join(' ') };
+    }
+    return m;
+  });
+
+  // Within-batch loop detector: if 3+ messages share the same conclusion phrase, drop the repeats
+  const conclusionPhrases = ['exchange listing', 'tokenomics', 'use cases', 'before we can', 'real-world'];
+  const phraseCounts = {};
+  msgs = msgs.filter(m => {
+    for (const phrase of conclusionPhrases) {
+      if (m.msg.toLowerCase().includes(phrase)) {
+        phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
+        if (phraseCounts[phrase] > 2) return false; // max 2 messages on same conclusion
+      }
+    }
     return true;
   });
 
