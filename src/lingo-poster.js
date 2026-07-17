@@ -507,10 +507,16 @@ async function conversationDirector(env, postedHistory, overseerDirective = '') 
     .join('\n');
 
   const sessionCtx = useHotTopic
-    ? `START a NEW conversation. A LIVE EVENT is happening right now — make it the topic.
+    ? `START a NEW conversation about this event/topic.
 Event: "${hotTopic.topic}"
 Context (use naturally, don't quote verbatim): ${hotTopic.context}
-Have people react as if someone in the group just posted about this or they just saw it. Some are excited, some ask questions, one might be skeptical about the "data sovereignty" angle, a newcomer asks what LingoAI actually is. Keep it organic — NOT a formal announcement.`
+
+CRITICAL: Everyone here is a community member or attendee — NOT an organizer, NOT part of the LingoAI team.
+- They don't know the agenda. They ask "what are they covering?" not "we'll cover X"
+- They say "LingoAI is doing X" / "they said Y" — NOT "we're doing X" / "we'll likely touch on"
+- Cast curious attendees, skeptics, people who couldn't make it asking what happened, someone sharing what they heard
+- Reactions vary: excited, curious, one mildly skeptical, a newcomer asking what LingoAI even is
+- Keep it organic — NOT a formal announcement, NOT organizer briefing`
     : continueSession
     ? `CONTINUE this chat (run ${(session.run_count || 0) + 1} of 5).
 Topic: "${session.topic}"
@@ -643,6 +649,8 @@ CRITICAL RULES:
 5. Community members say "they need to" / "LingoAI needs to" — NOT "we need to" / "let's focus" (that's team talk)
 6. BANNED (auto-deleted): third-person narration · "let's [LingoAI action]" · "we need to [LingoAI action]" · DeFi / L2 / NFT / meme coins · no @mentions
 7. no name tags, lowercase, contractions, each person sounds different
+8. For event/meetup topics: personas are ATTENDEES or curious community — they ask "what are they covering?", "did anyone go?", "what did Una talk about?" — NEVER "we'll cover X" or "we're going to discuss" (that's organizer talk)
+9. Stay grounded: no abstract "innovation vs caution" philosophy — talk about the actual concrete thing (the event, the product, the token, the data problem)
 
 GOOD example (shows length variety + natural drift):
 [0] gm
@@ -785,8 +793,8 @@ async function runConversation(env, count, postedHistory = []) {
   // Off-topic keywords that should never appear (DeFi/L2/NFT/meme coins)
   const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool)\b/i;
 
-  // Team-speak: "we need to [LingoAI action]" / "let's focus on [LingoAI]" sounds like the project team
-  const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)/i;
+  // Team-speak: organizer/insider language that sounds like the project team, not a community member
+  const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)|(we'll|we will|we're going to|we're gonna)\s+(likely|probably|touch|cover|discuss|focus|dive|address|explore)|\bwe're\s+(genuinely|really|actually)\s+(hoping|concerned|trying|looking)/i;
 
   // Hard filter: remove malformed, off-topic, or third-person-narration messages
   let msgs = raw.filter(m => {
