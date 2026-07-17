@@ -669,6 +669,15 @@
       "remains": "0",
       "added_at": "2026-07-12T03:11:49.590467+00:00",
       "completed_at": "2026-07-12T04:28:53.620986+00:00"
+    },
+    "61723696": {
+      "id": "61723696",
+      "kind": "unknown",
+      "panel": "smmfollows",
+      "status": "Pending",
+      "remains": 21,
+      "charge": "1.0206",
+      "added_at": "2026-07-17T06:10:17.240616+00:00"
     }
   },
   "refills": {
@@ -747,10 +756,6 @@
     "https://x.com/i/status/2073706172318916924"
   ],
   "agent_log": [
-    {
-      "at": "2026-07-15T12:49:15.201884+00:00",
-      "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
-    },
     {
       "at": "2026-07-15T12:50:19.901595+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
@@ -946,6 +951,10 @@
     {
       "at": "2026-07-17T05:14:26.467247+00:00",
       "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
+    },
+    {
+      "at": "2026-07-17T06:10:17.240658+00:00",
+      "msg": "[ticket-queued] Escalation ticket queued for order #61723696 \u2014 awaiting GitHub Actions mode=tickets"
     }
   ],
   "pending_posts": [],
@@ -976,5 +985,14 @@
     "refill_61564639": "2026-07-07T04:16:17.877323+00:00",
     "refill_61564692": "2026-07-07T04:16:17.877326+00:00",
     "refill_61579015": "2026-07-07T04:16:17.877328+00:00"
+  },
+  "pending_tickets": {
+    "61723696": {
+      "order_id": "61723696",
+      "subject": "Junior - Orders [ Urgent: Please Expedite Order #61723696 ]",
+      "message": "Hello,\n\nI would like to request early/expedited delivery for order #61723696.\n\nOrder #61723696 is currently in Pending status. Could you please prioritize this order and ensure it starts as soon as possible?\n\nThank you for your assistance.",
+      "type": "escalation",
+      "queued_at": "2026-07-17T06:10:17.240647+00:00"
+    }
   }
 }
