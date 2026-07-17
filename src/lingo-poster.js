@@ -762,13 +762,18 @@ Return ONLY the rewritten message text. No quotes. No explanation.`;
   return null;
 }
 
-async function uniquenessGuardian(env, messages, topic, postedHistory) {
+async function uniquenessGuardian(env, messages, topic, postedHistory, targetCount = MSGS_PER_RUN) {
   if (!postedHistory.length) return messages;
-  const result = [];
+  const result   = [];
+  let rewrites   = 0;
+  const MAX_REWRITES = 2; // cap AI rewrite calls to protect CPU budget
   for (const msg of messages) {
     const dup = postedHistory.find(h => wordSimilarity(h.msg, msg.msg) > 0.40);
     if (!dup) { result.push(msg); continue; }
+    // Skip rewrite if we already have enough unique messages or hit rewrite cap
+    if (result.length >= targetCount || rewrites >= MAX_REWRITES) continue;
     const fresh = await rewriteMessage(env, msg.msg, topic, postedHistory);
+    rewrites++;
     if (fresh) result.push({ ...msg, msg: fresh });
   }
   return result;
