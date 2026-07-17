@@ -683,31 +683,6 @@ Return ONLY a JSON array — topic first, then messages:
   return null;
 }
 
-  const raw    = await callRaw(env, prompt, { temperature: 0.95, maxTokens: 1600 });
-
-  // Debug: log raw output length + preview so /lingo-status can show what happened
-  if (env.KV) await env.KV.put('lingo_writer_raw',
-    JSON.stringify({ len: raw.length, preview: raw.slice(0, 400) }),
-    { expirationTtl: 3600 }
-  );
-
-  const parsed = parseJSON(raw);
-
-  if (Array.isArray(parsed) && parsed.length > 0) {
-    return parsed
-      .filter(m => typeof m.msg === 'string' && m.msg.trim().length > 1)
-      .map(m => ({ msg: m.msg.trim(), agent: m.agent || 'unknown' }));
-  }
-
-  // Bulk generation failed — fall back to generating each message individually.
-  // Smaller prompts (< 300 tokens each) are far more reliable across all AI providers.
-  if (env.KV) await env.KV.put('lingo_writer_raw',
-    JSON.stringify({ len: raw.length, preview: raw.slice(0, 400), fallback: 'one_by_one' }),
-    { expirationTtl: 3600 }
-  );
-  return writeMessagesOneByOne(env, direction, postedHistory);
-}
-
 // Fallback writer — generates each message as a tiny independent API call.
 // Runs when the bulk 7-message call fails (empty response or unparseable JSON).
 
