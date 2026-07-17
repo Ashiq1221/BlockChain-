@@ -136,10 +136,14 @@ async function handleTelegramUpdate(env, update) {
     const replyId  = msg.message_id;
     const text     = msg.text || msg.caption || '';
 
-    // ── Source group observation: learn from real LingoAI official group ────
+    // ── Source group observation: READ ONLY — never respond or post here ──────
     const sourceGroupId = await env.KV.get('lingo_source_group_id').catch(() => null);
-    if (sourceGroupId && chatId === sourceGroupId && !msg.from?.is_bot) {
-      await observeSourceMessage(env, text, (msg.date || 0) * 1000).catch(() => {});
+    if (sourceGroupId && chatId === sourceGroupId) {
+      // Observe real human messages for Director context, then STOP — no replies, no commands
+      if (!msg.from?.is_bot) {
+        await observeSourceMessage(env, text, (msg.date || 0) * 1000).catch(() => {});
+      }
+      return;
     }
 
     // ── Human replies to bot messages: RL signal ────────────────────────────
