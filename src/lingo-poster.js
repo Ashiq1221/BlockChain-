@@ -93,66 +93,52 @@ const PERSONAS = {
   zara_c:    { type: 'contrarian',                 voice: 'argues the opposite of consensus. Devil\'s advocate by nature. Sharp and occasionally funny. Challenges assumptions.' },
 };
 
-// 50 themes across 4 categories — 50 × 10 = 500 messages per batch
-// category: 'lingo' | 'ai' | 'web3' | 'trending'
+// 40 themes across 2 categories: LingoAI (what it is / what it solves) + AI (the problems LingoAI addresses)
+// No general Web3/DeFi/crypto topics — this is an AI + LingoAI community
 const THEMES = [
-  // ── LingoAI (20) ────────────────────────────────────────────────────────────────────────────
-  { topic: 'token economics, utility sinks, and why there are no token burns',                                             cat: 'lingo' },
-  { topic: 'LingoPOD hardware features, corpus mining, and the DePIN network',                                            cat: 'lingo' },
-  { topic: 'language diversity mission and why second/third-tier languages are ignored by AI',                             cat: 'lingo' },
-  { topic: 'MetaGraph architecture and how it eliminates AI hallucinations for enterprises',                               cat: 'lingo' },
-  { topic: 'comparing LingoAI to Scale AI, Helium, FET, Ocean Protocol, and Bittensor',                                   cat: 'lingo' },
-  { topic: 'ReviewDAO and LanguageDAO governance models and contributor economics',                                        cat: 'lingo' },
-  { topic: 'newcomers asking LingoAI questions and experienced holders answering naturally',                               cat: 'lingo' },
-  { topic: '$16B data market opportunity, DePIN cost advantage, and $LINGOAI value thesis',                               cat: 'lingo' },
-  { topic: 'LingoRAG technical architecture: ontologies, multi-agent query decomposition',                                cat: 'lingo' },
-  { topic: 'LingoPOD as a personal data sovereignty device — Solid protocol, digital twin',                               cat: 'lingo' },
-  { topic: '$LINGOAI fixed 100B supply, no dilution, no burns — structural scarcity explained',                           cat: 'lingo' },
-  { topic: 'B2B data escrow mechanics — enterprises pay fiat, triggering $LINGOAI buybacks',                             cat: 'lingo' },
-  { topic: 'DePIN passive income: LingoWatch, LingoRing, LingoGlass, LingoPin earning $LINGOAI daily',                   cat: 'lingo' },
-  { topic: 'hardware bonding mechanics — how LingoPOD pre-orders lock circulating supply',                                cat: 'lingo' },
-  { topic: 'dark data: 95% of global data trapped in silos — LingoAI unlocks all of it',                                 cat: 'lingo' },
-  { topic: 'LanguageDAO — minority communities owning and monetizing their own linguistic corpus',                         cat: 'lingo' },
-  { topic: 'proof-of-human protocol in LingoPOD — fighting bots and sybil attacks in Web3',                              cat: 'lingo' },
-  { topic: 'on-device edge LLM in LingoPOD vs cloud AI — privacy, latency, data ownership',                              cat: 'lingo' },
-  { topic: 'LingoAI 2030 vision: global multilingual AI data infrastructure',                                             cat: 'lingo' },
-  { topic: 'real talk: accumulation strategy for $LINGOAI and upcoming catalyst events',                                  cat: 'lingo' },
+  // ── LingoAI: what it is and what it solves (25) ────────────────────────────────────────────────
+  { topic: 'what LingoAI actually is and why someone built it — the dark data problem explained',             cat: 'lingo' },
+  { topic: 'why 95% of the world\'s data is "dark" and what happens when AI can\'t reach it',                cat: 'lingo' },
+  { topic: 'LingoAI vs Scale AI — community-driven data collection vs a centralized agency',                  cat: 'lingo' },
+  { topic: 'why $LINGOAI has no token burns and whether that\'s a feature or a problem',                     cat: 'lingo' },
+  { topic: 'LingoPOD explained: what it does, who it\'s for, and whether the hardware is real',              cat: 'lingo' },
+  { topic: 'LanguageDAO: can minority communities actually own and monetize their own language data?',        cat: 'lingo' },
+  { topic: 'MetaGraph and hallucinations — how knowledge graphs are supposed to fix what LLMs get wrong',    cat: 'lingo' },
+  { topic: 'LingoRAG vs standard RAG — what the ontology layer actually adds in practice',                   cat: 'lingo' },
+  { topic: 'DePIN + language data: corpus mining with wearables — skeptic and believer perspectives',        cat: 'lingo' },
+  { topic: 'ReviewDAO: staking your reputation on data quality — how it\'s supposed to work',                cat: 'lingo' },
+  { topic: 'data sovereignty and LingoPOD — can a wearable actually give you control of your data?',        cat: 'lingo' },
+  { topic: 'on-device edge LLM in LingoPOD: is running AI locally on a wearable actually feasible?',        cat: 'lingo' },
+  { topic: 'comparing LingoAI to Bittensor, Ocean Protocol, and FET — what each gets right and wrong',      cat: 'lingo' },
+  { topic: 'the enterprise buyback model: companies pay fiat, $LINGOAI gets bought — does this work?',      cat: 'lingo' },
+  { topic: 'LingoAI and multilingual AI — why Igbo, Tamil, Quechua and hundreds more are invisible to AI',  cat: 'lingo' },
+  { topic: 'what "数通天下" (exchange of data) actually means as a mission',                                  cat: 'lingo' },
+  { topic: 'proof-of-human in LingoPOD — how it fights bots and sybil attacks in a data network',           cat: 'lingo' },
+  { topic: 'newcomers asking honest questions about LingoAI — what is it, why does it matter',               cat: 'lingo' },
+  { topic: 'LingoAI 2030 vision: what does success actually look like in concrete terms?',                   cat: 'lingo' },
+  { topic: 'what would need to go right for $LINGOAI to become a major AI infrastructure token',             cat: 'lingo' },
+  { topic: 'LingoAI and the $3.2B AI training data market — is the opportunity as big as claimed?',         cat: 'lingo' },
+  { topic: 'data pods and digital twins — the Solid protocol and what personal data ownership means',        cat: 'lingo' },
+  { topic: 'honest holder talk: what genuinely excites you about LingoAI and what still worries you',        cat: 'lingo' },
+  { topic: 'LingoGlass, LingoWatch, LingoRing, LingoPin — who actually wants these devices and why',         cat: 'lingo' },
+  { topic: '$LINGOAI token mechanics: 100B fixed cap, utility sinks, and the no-dilution argument',          cat: 'lingo' },
 
-  // ── General AI (10) ────────────────────────────────────────────────────────────────────────────
-  { topic: 'ChatGPT vs Claude vs Gemini vs Grok — which AI is actually best right now',                                  cat: 'ai' },
-  { topic: 'AI agents and autonomous systems — where this is heading in 2025 and beyond',                                 cat: 'ai' },
-  { topic: 'open source AI models vs closed models: Llama, Mistral, Qwen vs GPT-4o, Claude',                             cat: 'ai' },
-  { topic: 'AI hallucination problem — why LLMs still confidently make things up',                                       cat: 'ai' },
-  { topic: 'edge AI and on-device LLMs — phones running models locally without internet',                                 cat: 'ai' },
-  { topic: 'AI replacing jobs — which roles are actually at risk vs which ones are safe',                                 cat: 'ai' },
-  { topic: 'AI regulation globally — EU AI Act, US executive orders, China vs the West',                                  cat: 'ai' },
-  { topic: 'multimodal AI (vision, voice, video generation) — what is impressive and what is hype',                      cat: 'ai' },
-  { topic: 'AI memory and context — why LLMs forget and how long-term memory is being solved',                           cat: 'ai' },
-  { topic: 'AI coding assistants — Cursor, Copilot, Claude Code — which actually makes devs faster',                    cat: 'ai' },
-
-  // ── General Web3 (10) ───────────────────────────────────────────────────────────────────────────
-  { topic: 'DeFi yield strategies in 2025 — what is working, what is risky, where to look',                              cat: 'web3' },
-  { topic: 'Layer 2 scaling wars — Arbitrum vs Optimism vs Base vs zkSync — who wins',                                  cat: 'web3' },
-  { topic: 'DePIN sector: Helium, Render, Hivemapper, Grass — the passive income thesis',                               cat: 'web3' },
-  { topic: 'Solana vs Ethereum for builders — ecosystems, tooling, fees, community',                                     cat: 'web3' },
-  { topic: 'RWA (real world assets) on-chain — tokenized treasuries, real estate, credit',                              cat: 'web3' },
-  { topic: 'Web3 gaming in 2025 — what GameFi 2.0 looks like vs the 2021 P2E era',                                     cat: 'web3' },
-  { topic: 'crypto wallet security — seed phrases, hardware wallets, phishing — how to stay safe',                       cat: 'web3' },
-  { topic: 'stablecoins landscape — USDT vs USDC vs DAI vs new entrants — risks and trade-offs',                        cat: 'web3' },
-  { topic: 'DAO governance in practice — what actually works and what kills participation',                               cat: 'web3' },
-  { topic: 'NFT evolution — PFPs are dead, what NFTs become in utility, gaming, IP licensing',                           cat: 'web3' },
-
-  // ── Trending Topics (10) ──────────────────────────────────────────────────────────────────────────
-  { topic: 'AI crypto tokens price action and fundamentals: $FET, $RNDR, $TAO, $OCEAN, $WLD',                           cat: 'trending' },
-  { topic: 'BlackRock and institutional Bitcoin/ETH adoption — what it actually means for retail',                       cat: 'trending' },
-  { topic: 'altcoin season signals — how to spot the rotation early and which sectors run first',                        cat: 'trending' },
-  { topic: 'AI + crypto convergence: autonomous AI agents running DeFi wallets in 2025',                                 cat: 'trending' },
-  { topic: 'meme coins culture — why communities form around them and how to tell signal from noise',                    cat: 'trending' },
-  { topic: 'prediction markets going mainstream — Polymarket, Kalshi, and what that means for info',                    cat: 'trending' },
-  { topic: 'crypto bear market survival tactics — DCA, staking, portfolio allocation psychology',                        cat: 'trending' },
-  { topic: 'Elon Musk, X (Twitter), xAI and Grok — the intersection of social media and crypto',                       cat: 'trending' },
-  { topic: 'central bank digital currencies (CBDCs) — threat to crypto or irrelevant',                                  cat: 'trending' },
-  { topic: 'crypto alpha sources — best channels, newsletters, on-chain analytics tools to follow',                     cat: 'trending' },
+  // ── AI problems that LingoAI is trying to solve (15) ──────────────────────────────────────────────
+  { topic: 'why AI still hallucinates — the training data quality problem nobody wants to talk about',       cat: 'ai' },
+  { topic: 'AI only works well in English — what does that mean for 7 billion non-English speakers',        cat: 'ai' },
+  { topic: 'who actually owns the data that trained ChatGPT, Gemini, and Claude?',                          cat: 'ai' },
+  { topic: 'why OpenAI, Google, and Meta control all of AI — and why decentralized alternatives matter',    cat: 'ai' },
+  { topic: 'where AI training data actually comes from — and the ethical mess behind it',                    cat: 'ai' },
+  { topic: 'edge AI and on-device models — why running AI locally changes everything about privacy',         cat: 'ai' },
+  { topic: 'AI agents in 2025: what autonomous AI systems actually need to work reliably',                   cat: 'ai' },
+  { topic: 'under-resourced languages in AI — Twi, Hausa, Swahili, and dozens more barely exist in models', cat: 'ai' },
+  { topic: 'your data is training someone\'s AI right now — and you\'re not getting paid for it',           cat: 'ai' },
+  { topic: 'AI regulation: EU AI Act, US executive orders, China — and how decentralized AI fits in',       cat: 'ai' },
+  { topic: 'open source AI vs closed models — and why training data access matters more than weights',       cat: 'ai' },
+  { topic: 'AI memory problem: why LLMs start fresh every session and what that breaks for agents',          cat: 'ai' },
+  { topic: 'knowledge graphs vs RAG vs fine-tuning — which actually makes AI more reliable?',               cat: 'ai' },
+  { topic: 'AI and data quality: garbage in, garbage out — the problem no one is solving at scale',         cat: 'ai' },
+  { topic: 'AI data tokens compared: $TAO, $FET, $RNDR, $OCEAN vs $LINGOAI — what\'s different?',          cat: 'ai' },
 ];
 
 // ── Telegram helper ─────────────────────────────────────────────────────────────────────────────────
@@ -465,13 +451,18 @@ Active personas: ${activeAgents.slice(0, 6).join(', ')}
 Last messages already posted:
 ${recentSnippets || '(none yet)'}`
     : `START a fresh conversation.
-Avoid these recent topics: ${usedTopics.slice(-8).join(' | ') || 'none yet'}`;
+Pick a topic from these areas ONLY: (1) LingoAI — what it is, what problems it solves, how it works, honest community questions about it; OR (2) AI — problems that LingoAI addresses (hallucinations, language diversity, data ownership, edge AI, training data quality).
+DO NOT pick topics about DeFi, NFTs, Layer 2s, stablecoins, meme coins, or general crypto markets.
+Avoid these recent topics: ${usedTopics.slice(-8).join(' | ') || 'none yet'}
+
+Topic inspiration (pick one or invent a specific angle within these areas):
+${THEMES.map(t => `• ${t.topic}`).join('\n')}`;
 
   const rlHints   = await getRLHints(env);
   const rlCtx     = buildRLContext(rlHints);
   const sourceCtx = await getSourceContext(env);
 
-  const prompt = `You are casting a casual Telegram group chat. Pick who speaks and in what order for the next 7 messages.
+  const prompt = `You are casting a casual Telegram group chat about LingoAI and AI. Pick who speaks and in what order for the next 7 messages.
 
 ${sessionCtx}
 ${sourceCtx}
@@ -481,9 +472,11 @@ ${personaCatalogue}
 
 Pick 5-6 personas that fit the topic. Design a loose turn order — like a real chat, not a structured debate.
 CASTING NOTES:
-- LingoAI holders are community members with opinions — NOT project reps. Cast them when they'd naturally have something personal to say, not to explain the project
-- Mix enthusiasts and skeptics, even on LingoAI topics — one person might push back or ask the hard question
-- For LingoAI topics, prefer personas who have personal stakes (someone who bought LingoPOD, someone waiting on a feature, someone frustrated about price) over generic "insider" framing
+- This group talks about LingoAI and AI only — no DeFi, NFTs, or general crypto topics
+- LingoAI holders are community members with opinions — NOT project reps. Cast them for their personal stake, not to explain the project
+- Mix enthusiasts and skeptics — one person should push back or ask the hard question
+- For LingoAI topics: prefer personas with personal stakes (bought LingoPOD, waiting on a feature, frustrated about price, curious about whether it's real)
+- AI topics should naturally lead into why LingoAI matters or what problem it's addressing
 - At least 1-2 very short turns (reaction, "gm", one-word reply, quick question)
 - Some messages reply to earlier ones in this batch (responds_to = 0-6, or null)
 - People can speak twice — as a quick follow-up or reaction
