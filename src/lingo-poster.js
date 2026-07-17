@@ -20,43 +20,39 @@ const RL_DECAY_HALF_LIFE = 7;   // score halves every 7 days — keeps bias fres
 const INVITE_LINK  = 'https://t.me/+0-Zzup1r8aY5ZmZl';
 const MSGS_PER_RUN = 7;  // messages per cron run (every 10min × 144/day = ~1008/day)
 
-// ── Core LingoAI context fed to AI for generation ──────────────────────────────────────────────
+// ── Core LingoAI context — background knowledge only, NOT a marketing pitch ────────────────────
+// Injected as what a community member already knows from hanging around, not a product deck.
 
-const LINGO_FACTS = `LingoAI is a Web3 AI project. Key facts:
-• Token: $LINGOAI — capped at 100 billion, NO token burns — intrinsic value accrual model
-• Grand Unified Theory: Web3.0 = Data 3.0 + Finance 3.0
-• 95% of global data is "Dark Data" trapped in silos — LingoAI unlocks it
-• Products: LingoRAG (retrieval-augmented generation), LingoGraph (ontologies), MetaGraph (knowledge graphs — eliminates AI hallucinations), LingoPOD (wearable device)
-• LingoPOD hardware line: LingoGlass, LingoWatch, LingoRing, LingoPin — each is a DePIN node ("corpus mining")
-• LingoPOD features: edge LLM on-device, personal data pod (Solid protocol), digital twin, proof-of-human protocol, decentralized identity
-• Token sinks: B2B data escrows, ReviewDAO staking, hardware bonding (DePIN), data pod deposits, MetaGraph collateral
-• Revenue → token demand: fiat payments trigger $LINGOAI market buybacks
-• Mission: democratize AI for second/third-tier languages via community-driven RLHF
-• LanguageDAO: communities govern and monetize their own linguistic corpus
-• ReviewDAO: staked validators verify data quality; bad data = slashed collateral
-• "数通天下" = Exchange of Data (core philosophy)
-• Markets: $3.2B AI training data market, $16B+ by 2034 projection
-• DePIN: 10x more efficient than centralized agencies like Scale AI
-• "1+1>2 data nuclear fusion": combining fragmented data creates exponential value
-• "Phygical" = physical + digital reality merged through LingoPOD
-• Enterprise clients must use $LINGOAI to license datasets from the ecosystem`;
+const LINGO_FACTS = `Background on LingoAI (what a longtime community member knows — NOT to recite, just shapes what they say):
+- $LINGOAI token: fixed 100B cap, no token burns, value supposed to come from demand not deflation
+- "dark data" angle: claim is 95% of global data is stuck in silos and can't be used for AI training
+- hardware play: LingoPOD (LingoGlass, LingoWatch, LingoRing, LingoPin) — DePIN nodes that mine language corpus
+- on-device edge LLM, personal data pod using Solid protocol, proof-of-human to fight sybots
+- MetaGraph knowledge graph layer — team says it eliminates AI hallucinations for enterprise
+- LingoRAG: retrieval-augmented generation on top of their data layer
+- LanguageDAO: minority language communities supposedly own and monetize their corpus
+- ReviewDAO: staked validators who check data quality, get slashed for bad data
+- B2B escrow model: enterprises pay fiat for data, triggers $LINGOAI market buybacks
+- competing/compared with Scale AI, Bittensor, Ocean Protocol, Helium, FET
+- "数通天下" is their motto (exchange of data)
+- phygical = physical + digital merged, their branding for LingoPOD ecosystem`;
 
 // ── 40 community member personas ─────────────────────────────────────────────────────────────────────────
 // Each has: type (shown to Director for casting) + voice (shown to Writer for style)
 // Stored as object so Director can reference by ID
 
 const PERSONAS = {
-  // ── LingoAI insiders (10) ────────────────────────────────────────────────────────────────
-  s_chen:    { type: 'data scientist',             voice: 'analytical and precise. Uses specific percentages and numbers. Thinks in systems. Rarely excited. Short-to-medium sentences.' },
-  m_webb:    { type: 'early $LINGOAI investor',    voice: 'confident, occasionally smug, dismisses FUD quickly. Has seen multiple cycles. References supply mechanics naturally.' },
-  p_patel:   { type: 'developer building on LingoRAG', voice: 'code-first and practical. References actual implementation details. Uses "honestly" a lot. Very direct.' },
-  j_kim:     { type: 'Korean LingoAI holder',      voice: 'measured, brings non-English language perspective. Frustrated that major AI ignores Asian scripts. Thoughtful.' },
-  v_silva:   { type: 'Brazilian LanguageDAO advocate', voice: 'passionate about linguistic diversity and personal about the mission. Occasionally uses lowercase enthusiasm.' },
-  a_turner:  { type: 'ex-Bittensor contributor now on LingoAI', voice: 'comparative mindset. References Bittensor mechanics for contrast. Skeptical-turned-believer energy.' },
-  y_tanaka:  { type: 'hardware/IoT engineer into LingoPOD', voice: 'technical about physical devices, latency, edge compute. Thinks in specs and power consumption.' },
-  r_hassan:  { type: 'enterprise sales rep using $LINGOAI', voice: 'thinks in B2B deals, procurement cycles, ROI. Uses business language naturally. Grounded.' },
-  c_adeyemi: { type: 'Nigerian developer, African language AI', voice: 'passionate about Igbo/Yoruba being ignored by AI. Practical about infrastructure costs. Warm but firm.' },
-  l_zhang:   { type: 'Chinese ML engineer, data sovereignty focus', voice: 'focused on on-device AI and who controls data. Wary of centralised cloud. Technical.' },
+  // ── LingoAI community holders (10) — opinionated members, NOT project team ────────────────
+  s_chen:    { type: 'data scientist who holds $LINGOAI',   voice: 'analytical and precise. Has real opinions about whether the tech holds up. Not a cheerleader — scrutinizes claims. Short-to-medium sentences. Will push back on hype.' },
+  m_webb:    { type: 'early $LINGOAI bag holder',           voice: 'been in since early. Has genuine conviction but also asks the uncomfortable questions ("when exchange?", "why is price flat?"). Dismisses pure FUD but doesn\'t ignore real concerns. Has seen cycles.' },
+  p_patel:   { type: 'developer actually building on LingoRAG', voice: 'code-first. Talks about real friction he hit while integrating. Says "honestly" a lot. Grumbles about docs or missing features. Practical — neither hype nor doom.' },
+  j_kim:     { type: 'Korean $LINGOAI holder',              voice: 'bought because major AI ignores Korean/Asian scripts. Cares about the mission personally. Occasionally frustrated at slow progress. Thoughtful and measured.' },
+  v_silva:   { type: 'Brazilian LanguageDAO participant',   voice: 'personal stake in linguistic diversity — not abstract for her. Can get emotional about it but also asks whether the DAO actually works in practice. Lowercase enthusiasm, real frustrations.' },
+  a_turner:  { type: 'ex-Bittensor contributor who switched to LingoAI', voice: 'compares architectures instinctively. Not uncritical of LingoAI — notices where Bittensor solved things better. Skeptic who found a reason to switch, not a convert.' },
+  y_tanaka:  { type: 'hardware engineer who pre-ordered LingoPOD', voice: 'deep on device specs, latency, edge compute. Interested but has real doubts about hardware timelines. Asks pointed questions about power consumption and supply chain.' },
+  r_hassan:  { type: 'B2B sales guy watching $LINGOAI closely', voice: 'thinks in deals and procurement cycles. Skeptical about whether enterprise clients will actually pay in $LINGOAI. Grounded, not promotional. Has seen vendor promises fail before.' },
+  c_adeyemi: { type: 'Nigerian dev, cares about African language AI', voice: 'Igbo and Yoruba barely exist in any AI model — that\'s personal for him. Hopes LingoAI delivers but isn\'t naive. Infrastructure cost realist. Warm but will call out BS.' },
+  l_zhang:   { type: 'Chinese ML engineer, data sovereignty angle', voice: 'data control is a real issue in his context. Wary of centralised cloud, interested in Solid protocol. Technical but asks whether any of this actually works at scale yet.' },
 
   // ── General AI enthusiasts (10) ───────────────────────────────────────────────────────────────
   dr_moore:  { type: 'ML researcher (academia)',   voice: 'precise, separates hype from reality, references concepts correctly. Occasionally long but always substantive.' },
@@ -484,6 +480,10 @@ AVAILABLE PERSONAS:
 ${personaCatalogue}
 
 Pick 5-6 personas that fit the topic. Design a loose turn order — like a real chat, not a structured debate.
+CASTING NOTES:
+- LingoAI holders are community members with opinions — NOT project reps. Cast them when they'd naturally have something personal to say, not to explain the project
+- Mix enthusiasts and skeptics, even on LingoAI topics — one person might push back or ask the hard question
+- For LingoAI topics, prefer personas who have personal stakes (someone who bought LingoPOD, someone waiting on a feature, someone frustrated about price) over generic "insider" framing
 - At least 1-2 very short turns (reaction, "gm", one-word reply, quick question)
 - Some messages reply to earlier ones in this batch (responds_to = 0-6, or null)
 - People can speak twice — as a quick follow-up or reaction
@@ -548,7 +548,7 @@ async function conversationWriter(env, direction, postedHistory) {
   const lingoIds = ['s_chen','m_webb','p_patel','j_kim','v_silva','a_turner','y_tanaka','r_hassan','c_adeyemi','l_zhang'];
   const needsLingo = selectedIds.some(id => lingoIds.includes(id))
     || (direction.topic || '').toLowerCase().includes('lingo');
-  const lingoCtx = needsLingo ? `\nLingoAI facts (use specific details naturally):\n${LINGO_FACTS}\n` : '';
+  const lingoCtx = needsLingo ? `\nLingoAI background knowledge (what these people already know — NOT facts to recite, just informs what they mention naturally in conversation):\n${LINGO_FACTS}\n` : '';
 
   const turns = direction.turns || [];
   const turnList = turns.map((t, i) => {
@@ -568,21 +568,25 @@ ${voiceProfiles}
 WHO SPEAKS NEXT:
 ${turnList}
 
-EXAMPLE of the energy we want (different topic, just showing the style):
+CRITICAL RULES — break these and the whole thing fails:
+1. These are COMMUNITY MEMBERS with personal opinions — not the project team, not spokespersons
+2. LingoAI holders can be excited AND doubtful AND frustrated in the same conversation. That's normal
+3. NEVER: "LingoAI is revolutionizing...", "This is why $LINGOAI is special", reciting bullet points as facts
+4. DO: "tbh the no-burn model confused me at first", "anyone actually used LingoRAG in prod?", "price has been flat for weeks tho", "i get the vision but the hardware timeline worries me"
+5. Disagreement, honest questions, and "wait but..." moments make conversations feel real
+6. micro = literally 1-5 words ("gm", "facts", "nah", "wait what", "this")
+7. if replying, react to the SPECIFIC thing said — not a new point
+8. no @mentions, no name tags, lowercase, contractions
+9. each person sounds DIFFERENT — don't let them blur into each other
+
+EXAMPLE of the energy we want (different topic, just showing naturalness):
 [0] gm
 [1] anyone else think AI memory is the most underrated unsolved problem
 [2] 100%. every new chat starts cold
-[3] to be fair there's RAG and vector stores — issue is retrieval quality, not storage
+[3] to be fair there's RAG and vector stores — issue is retrieval quality not storage
 [4] ok but why does it still hallucinate stuff from "past" sessions tho
-[5] because context window ≠ memory. it's a very long prompt, not actual recall
+[5] because context window ≠ memory. it's a very long prompt not actual recall
 [6] so basically every AI assistant has anterograde amnesia lol
-
-Now write the actual messages. Rules:
-- micro = literally 1-5 words ("gm", "facts", "this", "nah", "wait what")
-- if replying, react to the SPECIFIC thing said in that message
-- no @mentions, no name tags
-- lowercase, casual, contractions, don't explain yourself
-- each person sounds different from the others
 
 Return ONLY a JSON array:
 [{"msg":"text","agent":"agent_id"},...]`;
