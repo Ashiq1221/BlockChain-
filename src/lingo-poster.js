@@ -11,6 +11,7 @@ const KV_CONV_TOPIC  = 'lingo_conv_topic';   // current conversation session {to
 const KV_CONV_AGENTS = 'lingo_conv_agents';  // agent IDs active in current session
 const KV_RL_SCORES   = 'lingo_rl_scores';   // RL engagement scores: {topics:{}, agents:{}}
 const KV_MSG_TRACK   = 'lingo_msg_track';   // {msg_id → {topic, agent, ts}} — last 200 msgs
+const KV_HOT_TOPIC   = 'lingo_hot_topic';   // {topic, context, expires_at} — live event override
 
 const RL_REPLY_WEIGHT    = 3;   // real-human reply worth 3× a reaction (more intentional)
 const RL_DECAY_HALF_LIFE = 7;   // score halves every 7 days — keeps bias fresh, not stale
@@ -338,6 +339,12 @@ async function loadRLScores(env) {
   return scores;
 }
 
+export async function setHotTopic(env, topic, context, hoursToLive = 12) {
+  const payload = { topic, context, expires_at: Date.now() + hoursToLive * 3600000 };
+  await env.KV.put(KV_HOT_TOPIC, JSON.stringify(payload), { expirationTtl: hoursToLive * 3600 });
+  return payload;
+}
+
 export async function updateRLScores(env, msgId, eventType) {
   const trackRaw = await env.KV.get(KV_MSG_TRACK);
   const track    = trackRaw ? JSON.parse(trackRaw) : {};
@@ -418,11 +425,21 @@ async function conversationDirector(env, postedHistory) {
   const continueSession = session && (session.run_count || 0) < 5;
   const recentSnippets  = postedHistory.slice(-6).map(m => m.msg.slice(0, 120)).join('\n---\n');
 
+  // Check for live-event hot topic override
+  const hotTopicRaw = await env.KV.get(KV_HOT_TOPIC);
+  const hotTopic    = hotTopicRaw ? JSON.parse(hotTopicRaw) : null;
+  const useHotTopic = hotTopic && Date.now() < (hotTopic.expires_at || 0);
+
   const personaCatalogue = Object.entries(PERSONAS)
     .map(([id, p]) => `${id}: ${p.type}`)
     .join('\n');
 
-  const sessionCtx = continueSession
+  const sessionCtx = useHotTopic
+    ? `START a NEW conversation. A LIVE EVENT is happening right now — make it the topic.
+Event: "${hotTopic.topic}"
+Context (use naturally, don't quote verbatim): ${hotTopic.context}
+Have people react as if someone in the group just posted about this or they just saw it. Some are excited, some ask questions, one might be skeptical about the "data sovereignty" angle, a newcomer asks what LingoAI actually is. Keep it organic — NOT a formal announcement.`
+    : continueSession
     ? `CONTINUE this chat (run ${(session.run_count || 0) + 1} of 5).
 Topic: "${session.topic}"
 Active personas: ${activeAgents.slice(0, 6).join(', ')}
@@ -961,6 +978,11 @@ export async function lingoStatus(env) {
   const agentRaw    = await env.KV.get(KV_CONV_AGENTS);
   const activeAgents = agentRaw ? JSON.parse(agentRaw) : [];
 
+  // Hot topic override
+  const hotTopicRaw2 = await env.KV.get(KV_HOT_TOPIC);
+  const hotTopicData = hotTopicRaw2 ? JSON.parse(hotTopicRaw2) : null;
+  const hotTopicActive = hotTopicData && Date.now() < (hotTopicData.expires_at || 0);
+
   // RL scores — show top 5 topics and agents by decay-adjusted score
   const rlHints  = await getRLHints(env);
   const trackRaw = await env.KV.get(KV_MSG_TRACK);
@@ -1000,6 +1022,11 @@ export async function lingoStatus(env) {
       top_agents: rlHints.topAgents.map(a => ({ agent: a.k, score: a.pts, effective: +a.eff.toFixed(2) })),
       decay:      `score × 0.5^(days/${RL_DECAY_HALF_LIFE}) — halves every ${RL_DECAY_HALF_LIFE} days`,
     },
+    hot_topic: hotTopicActive ? {
+      topic:      hotTopicData.topic,
+      expires_at: new Date(hotTopicData.expires_at).toISOString(),
+      expires_in: `${Math.round((hotTopicData.expires_at - Date.now()) / 60000)}min`,
+    } : null,
     next_steps:    chatId ? 'Active — conversations run every 10 minutes' : 'Call /lingo-setup?chat_id=XXXX to activate',
   };
 }

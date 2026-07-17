@@ -14,7 +14,7 @@ import { startAuth, verifyCode, verify2FA, isAuthed, checkReplies } from './tele
 import { loadLearningContext, recordOutcome }  from './learning.js';
 import { scanGroups }                          from './group-scanner.js';
 import { TG_BOTS_DB, SCAN_TARGETS, dbStats }  from './tg-bots-db.js';
-import { runLingoPoster, setupLingoGroup, lingoStatus, updateRLScores } from './lingo-poster.js';
+import { runLingoPoster, setupLingoGroup, lingoStatus, updateRLScores, setHotTopic } from './lingo-poster.js';
 import { runOrchestra, sendHelpMessage }               from './lingo-orchestra.js';
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
@@ -831,6 +831,28 @@ export default {
       })));
     }
 
+    // POST /lingo-hot-topic — inject a live event topic override for next N runs
+    // body: {topic, context, hours?}  (hours defaults to 12)
+    if (pathname === '/lingo-hot-topic' && request.method === 'POST') {
+      try {
+        const { topic, context, hours } = await request.json();
+        if (!topic) return Response.json({ error: 'topic required' }, { status: 400 });
+        // Also clear current session so Director starts fresh on this topic immediately
+        await env.KV.delete('lingo_conv_topic');
+        await env.KV.delete('lingo_conv_agents');
+        const result = await setHotTopic(env, topic, context || '', hours || 12);
+        return Response.json({ ok: true, message: 'Hot topic set — next poster run will discuss this event', hot_topic: result });
+      } catch (e) {
+        return Response.json({ error: String(e) }, { status: 400 });
+      }
+    }
+
+    // DELETE /lingo-hot-topic — clear the override early
+    if (pathname === '/lingo-hot-topic' && request.method === 'DELETE') {
+      await env.KV.delete('lingo_hot_topic');
+      return Response.json({ ok: true, message: 'Hot topic cleared' });
+    }
+
     // POST /lingo-rl-reset — wipe RL scores and message tracking
     if (pathname === '/lingo-rl-reset' && request.method === 'POST') {
       await Promise.all([
@@ -1085,6 +1107,8 @@ export default {
       '  POST /run',
       '  POST /group-reset',
       '  POST /lingo-post',
+      '  POST /lingo-hot-topic    inject live event topic override  body: {topic, context, hours?}',
+      '  DELETE /lingo-hot-topic  clear hot topic early',
       '  POST /lingo-reset',
       '  POST /lingo-rl-reset    wipe RL scores and message tracking',
       '  POST /webhook           Telegram webhook receiver',
