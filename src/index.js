@@ -14,7 +14,7 @@ import { startAuth, verifyCode, verify2FA, isAuthed, checkReplies } from './tele
 import { loadLearningContext, recordOutcome }  from './learning.js';
 import { scanGroups }                          from './group-scanner.js';
 import { TG_BOTS_DB, SCAN_TARGETS, dbStats }  from './tg-bots-db.js';
-import { runLingoPoster, setupLingoGroup, lingoStatus, updateRLScores, setHotTopic } from './lingo-poster.js';
+import { runLingoPoster, setupLingoGroup, lingoStatus, updateRLScores, setHotTopic, observeSourceMessage } from './lingo-poster.js';
 import { runOrchestra, sendHelpMessage }               from './lingo-orchestra.js';
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
@@ -132,8 +132,15 @@ async function handleTelegramUpdate(env, update) {
   if (msg) {
     const chatType = msg.chat?.type;
     const chatId   = String(msg.chat.id);
+
     const replyId  = msg.message_id;
     const text     = msg.text || msg.caption || '';
+
+    // ── Source group observation: learn from real LingoAI official group ────
+    const sourceGroupId = await env.KV.get('lingo_source_group_id').catch(() => null);
+    if (sourceGroupId && chatId === sourceGroupId && !msg.from?.is_bot) {
+      await observeSourceMessage(env, text, (msg.date || 0) * 1000).catch(() => {});
+    }
 
     // ── Human replies to bot messages: RL signal ────────────────────────────
     // If this is a reply to another message AND the reply target was likely posted
@@ -811,6 +818,27 @@ export default {
       return Response.json(await lingoStatus(env));
     }
 
+    // GET /lingo-source-setup?chat_id=XXXX — set the group to observe (learn from)
+    if (pathname === '/lingo-source-setup' && request.method === 'GET') {
+      const chatId = url.searchParams.get('chat_id');
+      if (chatId) {
+        await env.KV.put('lingo_source_group_id', chatId);
+        return Response.json({
+          ok: true,
+          source_group_id: chatId,
+          message: 'Source group configured. Add @AshiqAibot as admin to that group so it can read all messages. Director will start using real community conversations as context immediately.',
+        });
+      }
+      const current = await env.KV.get('lingo_source_group_id');
+      const sourceMsgsRaw = current ? await env.KV.get('lingo_source_msgs') : null;
+      const count = sourceMsgsRaw ? JSON.parse(sourceMsgsRaw).length : 0;
+      return Response.json({
+        source_group_id: current || null,
+        observed_messages: count,
+        message: current ? `Observing group ${current} — ${count} messages buffered` : 'Not configured. Pass ?chat_id=XXXX to set.',
+      });
+    }
+
     // GET /lingo-setup?chat_id=XXXX — save group chat ID (or auto-detect)
     if (pathname === '/lingo-setup' && request.method === 'GET') {
       const chatId = url.searchParams.get('chat_id');
@@ -1100,8 +1128,9 @@ export default {
       '  GET  /export-db         full KV data export  ?format=json for download',
       '  GET  /draft/:lead_id',
       '  GET  /lingo-status',
-      '  GET  /lingo-rl-scores   RL engagement scores (top topics + agents)',
-      '  GET  /lingo-setup       ?chat_id=XXXX',
+      '  GET  /lingo-rl-scores          RL engagement scores (top topics + agents)',
+      '  GET  /lingo-setup              ?chat_id=XXXX',
+      '  GET  /lingo-source-setup       ?chat_id=XXXX  set official group to observe + learn from',
       '  GET  /set-webhook       register Telegram webhook (enables real-time @mention responses)',
       '  GET  /del-webhook       remove webhook (switch back to getUpdates polling)',
       '  POST /run',

@@ -12,6 +12,7 @@ const KV_CONV_AGENTS = 'lingo_conv_agents';  // agent IDs active in current sess
 const KV_RL_SCORES   = 'lingo_rl_scores';   // RL engagement scores: {topics:{}, agents:{}}
 const KV_MSG_TRACK   = 'lingo_msg_track';   // {msg_id → {topic, agent, ts}} — last 200 msgs
 const KV_HOT_TOPIC   = 'lingo_hot_topic';   // {topic, context, expires_at} — live event override
+const KV_SOURCE_MSGS = 'lingo_source_msgs'; // [{text, ts}] — last 40 real msgs from official group
 
 const RL_REPLY_WEIGHT    = 3;   // real-human reply worth 3× a reaction (more intentional)
 const RL_DECAY_HALF_LIFE = 7;   // score halves every 7 days — keeps bias fresh, not stale
@@ -391,6 +392,28 @@ function buildRLContext({ topTopics, topAgents }) {
   return lines.join('\n') + '\n';
 }
 
+// ── SOURCE GROUP OBSERVATION ─────────────────────────────────────────────────
+// Stores real human messages from the official LingoAI group (read-only).
+// Director uses these to mirror topics/concerns actually trending in the community.
+
+export async function observeSourceMessage(env, text, ts) {
+  const clean = (text || '').trim();
+  if (clean.length < 8 || clean.startsWith('/')) return; // skip commands and noise
+  const raw  = await env.KV.get(KV_SOURCE_MSGS);
+  const msgs = raw ? JSON.parse(raw) : [];
+  msgs.push({ text: clean.slice(0, 280), ts: ts || Date.now() });
+  await env.KV.put(KV_SOURCE_MSGS, JSON.stringify(msgs.slice(-40)), { expirationTtl: 86400 });
+}
+
+async function getSourceContext(env) {
+  const raw = await env.KV.get(KV_SOURCE_MSGS);
+  if (!raw) return '';
+  const msgs = JSON.parse(raw);
+  if (!msgs.length) return '';
+  const lines = msgs.slice(-15).map(m => `• ${m.text}`).join('\n');
+  return `\nREAL LINGOAI COMMUNITY PULSE (actual messages from the official group — use topics/questions/energy, never copy verbatim):\n${lines}\n`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CONVERSATION PIPELINE — 3 agents simulate 40 real humans chatting
 //
@@ -448,12 +471,14 @@ ${recentSnippets || '(none yet)'}`
     : `START a fresh conversation.
 Avoid these recent topics: ${usedTopics.slice(-8).join(' | ') || 'none yet'}`;
 
-  const rlHints = await getRLHints(env);
-  const rlCtx   = buildRLContext(rlHints);
+  const rlHints   = await getRLHints(env);
+  const rlCtx     = buildRLContext(rlHints);
+  const sourceCtx = await getSourceContext(env);
 
   const prompt = `You are casting a casual Telegram group chat. Pick who speaks and in what order for the next 7 messages.
 
 ${sessionCtx}
+${sourceCtx}
 ${rlCtx}
 AVAILABLE PERSONAS:
 ${personaCatalogue}
@@ -978,6 +1003,11 @@ export async function lingoStatus(env) {
   const agentRaw    = await env.KV.get(KV_CONV_AGENTS);
   const activeAgents = agentRaw ? JSON.parse(agentRaw) : [];
 
+  // Source group observation
+  const sourceGroupId  = await env.KV.get('lingo_source_group_id');
+  const sourceMsgsRaw  = await env.KV.get(KV_SOURCE_MSGS);
+  const sourceMsgCount = sourceMsgsRaw ? JSON.parse(sourceMsgsRaw).length : 0;
+
   // Hot topic override
   const hotTopicRaw2 = await env.KV.get(KV_HOT_TOPIC);
   const hotTopicData = hotTopicRaw2 ? JSON.parse(hotTopicRaw2) : null;
@@ -1021,6 +1051,14 @@ export async function lingoStatus(env) {
       top_topics: rlHints.topTopics.map(t => ({ topic: t.k, score: t.pts, effective: +t.eff.toFixed(2) })),
       top_agents: rlHints.topAgents.map(a => ({ agent: a.k, score: a.pts, effective: +a.eff.toFixed(2) })),
       decay:      `score × 0.5^(days/${RL_DECAY_HALF_LIFE}) — halves every ${RL_DECAY_HALF_LIFE} days`,
+    },
+    source_group: {
+      configured:    !!sourceGroupId,
+      chat_id:       sourceGroupId || null,
+      observed_msgs: sourceMsgCount,
+      note:          sourceGroupId
+        ? `Observing real community messages — injected into Director as live context`
+        : 'Not configured — call GET /lingo-source-setup?chat_id=XXXX then add bot as admin to that group',
     },
     hot_topic: hotTopicActive ? {
       topic:      hotTopicData.topic,
