@@ -605,73 +605,83 @@ Return ONLY valid JSON (no angle field needed — Writer invents the content):
   };
 }
 
-// ── AGENT 2: CONVERSATION WRITER ─────────────────────────────────────────────────────────────────
-// Writes all messages as natural Telegram chat — no rigid angles.
-// Each message is invented from the persona's voice + what's already been said.
+// ── AGENT 1+2 COMBINED: DIRECTOR-WRITER ──────────────────────────────────────────────────────────
+// Single AI call: picks personas, designs turn order, AND writes all 7 messages.
+// Merges what was previously two separate calls to stay under CF Workers' 30s wall clock limit.
 
-async function conversationWriter(env, direction, postedHistory) {
-  const selectedIds = direction.agents || [];
-  const prevMsgs    = postedHistory.slice(-5).map(m => m.msg).join('\n---\n');
+async function conversationDirectorWriter(env, sessionCtx, overseerCtx, sourceCtx, rlCtx, postedHistory) {
+  const prevMsgs = postedHistory.slice(-5).map(m => m.msg).join('\n---\n');
 
-  const voiceProfiles = selectedIds
-    .filter(id => PERSONAS[id])
-    .map(id => `${id} [${PERSONAS[id].type}]: ${PERSONAS[id].voice}`)
+  const personaCatalogue = Object.entries(PERSONAS)
+    .map(([id, p]) => `${id} [${p.type}]: ${p.voice}`)
     .join('\n\n');
 
-  const lingoIds = ['s_chen','m_webb','p_patel','j_kim','v_silva','a_turner','y_tanaka','r_hassan','c_adeyemi','l_zhang'];
-  const needsLingo = selectedIds.some(id => lingoIds.includes(id))
-    || (direction.topic || '').toLowerCase().includes('lingo');
-  const lingoCtx = needsLingo ? `\nLingoAI background knowledge (what these people already know — NOT facts to recite, just informs what they mention naturally in conversation):\n${LINGO_FACTS}\n` : '';
+  const lingoCtx = `\nLingoAI background knowledge (what these people already know — NOT facts to recite):\n${LINGO_FACTS}\n`;
 
-  const turns = direction.turns || [];
-  const turnList = turns.map((t, i) => {
-    const lenGuide = t.length === 'micro'  ? '1-5 words MAX — single reaction, not a sentence'
-                   : t.length === 'short'  ? '1 short sentence MAX — 8-20 words'
-                   : t.length === 'long'   ? '3-4 sentences'
-                   :                         '2 sentences';
-    const replyNote = t.responds_to != null ? ` [replies to msg ${t.responds_to}]` : '';
-    return `[${i}] ${t.agent}${replyNote} — ${lenGuide}`;
-  }).join('\n');
+  const prompt = `You are simulating a casual LingoAI community Telegram group chat. Do TWO things in one response:
 
-  const prompt = `Write a real Telegram group chat. These ${turns.length} people are actually talking — casual, unscripted, human.
+1. PICK 5-6 personas from the list below that fit the situation
+2. WRITE 7 messages as a natural chat — varied lengths, real personalities
 
-Topic drifting around: "${direction.topic}"
+${sessionCtx}
+${overseerCtx}${sourceCtx}${rlCtx}
 ${lingoCtx}
-${prevMsgs ? `Chat already in progress (DON'T repeat these):\n---\n${prevMsgs}\n---\n` : ''}
-VOICES (write each person in their exact voice):
-${voiceProfiles}
+${prevMsgs ? `Recent chat already posted (DON'T repeat these):\n---\n${prevMsgs}\n---\n` : ''}
+AVAILABLE PERSONAS (pick 5-6, then write their messages):
+${personaCatalogue}
 
-WHO SPEAKS NEXT (STRICT word limits — ignore them and messages get deleted):
-${turnList}
+MESSAGE RULES (violations are auto-deleted):
+- Vary lengths: include at least 2 micro reactions (1-5 words: "gm", "facts", "nah", "this") + 2 short (1 sentence) + 2-3 medium (2 sentences)
+- First person only — NEVER "r_hassan is looking at..." (third-person narration)
+- Community members: say "LingoAI needs to" NOT "we need to" / "let's focus" (team talk = deleted)
+- For events: speak as ATTENDEES asking questions, NOT organizers announcing plans
+- NOT everyone agrees — someone pushes back, asks a hard question, or changes subject
+- No topic loops — don't end every message with the same conclusion
+- No @mentions, no name tags, lowercase, contractions
+- Topics: LingoAI and AI only — no DeFi, L2, NFTs, meme coins
 
-CRITICAL RULES:
-1. Every message = what that person TYPES. First person. NEVER "r_hassan is looking at..." or any third-person narration
-2. WORD LIMITS ARE HARD: micro = 5 words or fewer. short = 1 sentence, 20 words or fewer. Do not go over.
-3. NOT EVERYONE AGREES — at least one person pushes back, asks a hard question, or changes the subject
-4. DON'T loop back to the same conclusion in every message. Real chats drift, jump, contradict
-5. Community members say "they need to" / "LingoAI needs to" — NOT "we need to" / "let's focus" (that's team talk)
-6. BANNED (auto-deleted): third-person narration · "let's [LingoAI action]" · "we need to [LingoAI action]" · DeFi / L2 / NFT / meme coins · no @mentions
-7. no name tags, lowercase, contractions, each person sounds different
-8. For event/meetup topics: personas are ATTENDEES or curious community — they ask "what are they covering?", "did anyone go?", "what did Una talk about?" — NEVER "we'll cover X" or "we're going to discuss" (that's organizer talk)
-9. Stay grounded: no abstract "innovation vs caution" philosophy — talk about the actual concrete thing (the event, the product, the token, the data problem)
+GOOD example (length variety, natural drift, real skepticism):
+gm → anyone seen the solid protocol actually deployed at scale → not really. cool concept tho → tim berners-lee has been pushing it for years but adoption is rough → lingoai using it feels ambitious. who's running the nodes → that's my question too → depends whether the hardware ships tbh
 
-GOOD example (shows length variety + natural drift):
-[0] gm
-[1] anyone seen the solid protocol actually deployed at scale anywhere
-[2] not really. cool concept tho
-[3] i mean tim berners-lee has been pushing it for years but adoption is rough
-[4] lingoai using it is interesting but feels ambitious. like who's running the nodes
-[5] that's my question too. edge case or actual infra
-[6] depends whether the hardware ships tbh
+BAD (everything long, same rhythm, loops to same conclusion, team talk):
+"yeah i agree but we need to see real use cases..." × 4 messages
 
-BAD example (what to avoid — everything long, same structure, loops to same conclusion):
-[0] yeah i agree but we need to see real use cases before we can think about this
-[1] i totally agree, we need clarity on tokenomics before we can even consider this
-[2] yeah i agree on that, but let's focus on getting use cases solid first
-← every message is medium length, same rhythm, loops to identical point, "we need to" team talk
+Return ONLY a JSON array — topic first, then messages:
+{
+  "topic": "<specific narrow thing they're chatting about>",
+  "agents": ["id1","id2","id3","id4","id5"],
+  "messages": [{"msg":"text","agent":"agent_id"}, ...]
+}`;
 
-Return ONLY a JSON array:
-[{"msg":"text","agent":"agent_id"},...]`;
+  const raw    = await callRaw(env, prompt, { temperature: 0.92, maxTokens: 1800 });
+
+  if (env.KV) await env.KV.put('lingo_writer_raw',
+    JSON.stringify({ len: raw.length, preview: raw.slice(0, 400) }),
+    { expirationTtl: 3600 }
+  );
+
+  const parsed = parseJSON(raw);
+  if (parsed?.messages && Array.isArray(parsed.messages) && parsed.messages.length >= 4 && parsed.topic) {
+    return {
+      topic:          parsed.topic,
+      agents:         parsed.agents || [],
+      messages:       parsed.messages,
+      is_new_session: true,
+    };
+  }
+
+  // Fallback: plain array format (Writer-style output without Director wrapper)
+  if (Array.isArray(parsed) && parsed.length >= 4) {
+    return {
+      topic:          'LingoAI and AI discussion',
+      agents:         [...new Set(parsed.map(m => m.agent).filter(Boolean))],
+      messages:       parsed,
+      is_new_session: true,
+    };
+  }
+
+  return null;
+}
 
   const raw    = await callRaw(env, prompt, { temperature: 0.95, maxTokens: 1600 });
 
@@ -780,123 +790,143 @@ async function uniquenessGuardian(env, messages, topic, postedHistory, targetCou
 }
 
 // ── CONVERSATION RUNNER ──────────────────────────────────────────────────────────────────────────
-// Overseer → Director → Writer → Guardian, with session + history tracking
+// Overseer (rule-based) → DirectorWriter (single AI call) → Guardian (max 2 rewrites)
+// Total AI calls: 1 (Director+Writer merged) + up to 2 (Guardian rewrites) = 3 max
 
 async function runConversation(env, count, postedHistory = []) {
-  // ── Agent 0: Overseer ─────────────────────────────────────────────────────────────────
-  const oversight  = await conversationOverseer(env, postedHistory);
-  const directive  = oversight.directive || '';
+  // ── Agent 0: Overseer (pure regex, no AI call) ────────────────────────────────────────
+  const oversight = await conversationOverseer(env, postedHistory);
+  const directive = oversight.directive || '';
 
-  // ── Agent 1: Director ──────────────────────────────────────────────────────────────────
-  const direction = await conversationDirector(env, postedHistory, directive);
+  // ── Build session context (KV reads, no AI) ───────────────────────────────────────────
+  const [sessionRaw, activeAgentRaw, recentRaw, hotTopicRaw, sourceMsgsRaw] = await Promise.all([
+    env.KV.get(KV_CONV_TOPIC),
+    env.KV.get(KV_CONV_AGENTS),
+    env.KV.get(KV_RECENT),
+    env.KV.get(KV_HOT_TOPIC),
+    env.KV.get(KV_SOURCE_MSGS),
+  ]);
+  const session      = sessionRaw     ? JSON.parse(sessionRaw)     : null;
+  const activeAgents = activeAgentRaw ? JSON.parse(activeAgentRaw) : [];
+  const recentRuns   = recentRaw      ? JSON.parse(recentRaw)      : [];
+  const hotTopic     = hotTopicRaw    ? JSON.parse(hotTopicRaw)    : null;
+  const useHotTopic  = hotTopic && Date.now() < (hotTopic.expires_at || 0);
 
-  // ── Agent 2: Writer ───────────────────────────────────────────────────────────────────
-  const raw = await conversationWriter(env, direction, postedHistory);
+  const continueSession  = session && (session.run_count || 0) < 5;
+  const usedTopics       = recentRuns.slice(-10).map(r => r.seed).filter(Boolean);
+  const recentSnippets   = postedHistory.slice(-4).map(m => m.msg.slice(0, 100)).join('\n---\n');
 
-  // Build a regex of all agent IDs to catch third-person narration leaks
-  const agentIdPattern = new RegExp(
-    '^(' + Object.keys(PERSONAS).join('|') + ')\\b',
-    'i'
-  );
-  // Off-topic keywords that should never appear (DeFi/L2/NFT/meme coins)
+  const sessionCtx = useHotTopic
+    ? `SITUATION: React to this event happening right now.
+Event: "${hotTopic.topic}"
+Context: ${hotTopic.context}
+CRITICAL: Everyone is an ATTENDEE or curious community member — NOT an organizer.
+They ask "what are they covering?", "did anyone go?", "what did Una say?" — NEVER "we'll cover X".
+Mix: excited, curious, skeptical, a newcomer asking what LingoAI is.`
+    : continueSession
+    ? `CONTINUE this ongoing chat (run ${(session.run_count || 0) + 1}/5).
+Topic they've been discussing: "${session.topic}"
+Recent messages already posted (continue naturally from here):
+${recentSnippets || '(none yet)'}`
+    : `START a fresh conversation about LingoAI or an AI problem it addresses.
+Avoid these recent topics: ${usedTopics.slice(-8).join(' | ') || 'none yet'}
+Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
+
+  const overseerCtx = directive
+    ? `OVERSEER NOTE (fix this): ${directive}\n`
+    : '';
+
+  // Source group pulse
+  let sourceCtx = '';
+  if (sourceMsgsRaw) {
+    const sourceMsgs = JSON.parse(sourceMsgsRaw);
+    if (sourceMsgs.length) {
+      sourceCtx = `Real community pulse (mirror topics/energy, never copy verbatim):\n${sourceMsgs.slice(-10).map(m => `• ${m.text}`).join('\n')}\n`;
+    }
+  }
+
+  // RL hints
+  const rlHints = await getRLHints(env);
+  const rlCtx   = buildRLContext(rlHints);
+
+  // ── Agent 1+2 Combined: DirectorWriter (single AI call) ───────────────────────────────
+  const direction = await conversationDirectorWriter(env, sessionCtx, overseerCtx, sourceCtx, rlCtx, postedHistory);
+
+  if (!direction) {
+    return { msgs: [], turns: [], topic: 'unknown', topic2: null, agents: [], session_run: 1, raw_count: 0, final_count: 0 };
+  }
+
+  const rawMsgs = direction.messages || [];
+
+  // ── Hard filters ─────────────────────────────────────────────────────────────────────
+  const agentIdPattern  = new RegExp('^(' + Object.keys(PERSONAS).join('|') + ')\\b', 'i');
   const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool)\b/i;
-
-  // Team-speak: organizer/insider language that sounds like the project team, not a community member
   const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)|(we'll|we will|we're going to|we're gonna)\s+(likely|probably|touch|cover|discuss|focus|dive|address|explore)|\bwe're\s+(genuinely|really|actually)\s+(hoping|concerned|trying|looking)/i;
 
-  // Hard filter: remove malformed, off-topic, or third-person-narration messages
-  let msgs = raw.filter(m => {
-    const t = m.msg.trim();
+  let msgs = rawMsgs.filter(m => {
+    const t = m.msg?.trim() || '';
     if (t.length < 2) return false;
     if (/@\w+/.test(t)) return false;
     if (/^(hey guys|hi all|hello everyone)/i.test(t)) return false;
     if (agentIdPattern.test(t)) return false;
     if (offTopicPattern.test(t)) return false;
     if (/\bfor us\b/i.test(t) && /\bdev\b/i.test(t)) return false;
-    if (teamSpeakPattern.test(t)) return false;         // "we need to see" / "let's focus on getting"
+    if (teamSpeakPattern.test(t)) return false;
     return true;
   });
 
-  // Enforce word count for micro/short turns — if the Writer ignored length, truncate
-  const turnMap = {};
-  (direction.turns || []).forEach((t, i) => { turnMap[i] = t.length; });
-  msgs = msgs.map((m, i) => {
-    const spec = turnMap[i];
-    const words = m.msg.trim().split(/\s+/);
-    if (spec === 'micro' && words.length > 8) {
-      // Truncate to first meaningful clause
-      return { ...m, msg: words.slice(0, 6).join(' ') };
-    }
-    if (spec === 'short' && words.length > 35) {
-      // Keep only the first sentence
-      const firstSentence = m.msg.match(/^[^.!?]+[.!?]/);
-      return { ...m, msg: firstSentence ? firstSentence[0].trim() : words.slice(0, 25).join(' ') };
-    }
-    return m;
-  });
-
-  // Within-batch loop detector: if 3+ messages share the same conclusion phrase, drop the repeats
+  // Within-batch loop detector
   const conclusionPhrases = ['exchange listing', 'tokenomics', 'use cases', 'before we can', 'real-world'];
   const phraseCounts = {};
   msgs = msgs.filter(m => {
     for (const phrase of conclusionPhrases) {
       if (m.msg.toLowerCase().includes(phrase)) {
         phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
-        if (phraseCounts[phrase] > 2) return false; // max 2 messages on same conclusion
+        if (phraseCounts[phrase] > 2) return false;
       }
     }
     return true;
   });
 
-  // ── Agent 3: Uniqueness Guardian ───────────────────────────────────────────────────────────
-  msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory);
+  // ── Agent 3: Uniqueness Guardian (max 2 rewrites) ─────────────────────────────────────
+  msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory, count);
 
-  // Pad if short — rewrite static fallback messages rather than posting verbatim
+  // Pad with static fallback if short (no AI rewrite — just use them as-is to stay fast)
   if (msgs.length < count) {
     const pool = STATIC_FALLBACK
       .filter(m => !postedHistory.some(h => wordSimilarity(h.msg, m.msg) > 0.30))
       .sort(() => Math.random() - 0.5);
     for (const fbMsg of pool) {
       if (msgs.length >= count) break;
-      const fresh = await rewriteMessage(env, fbMsg.msg, direction.topic, postedHistory);
-      if (fresh) msgs.push({ msg: fresh, agent: 'fallback' });
+      msgs.push({ msg: fbMsg.msg, agent: 'fallback' });
     }
   }
 
-  // ── Update conversation session ──────────────────────────────────────────────────────────────────
-  const sessionRaw = await env.KV.get(KV_CONV_TOPIC);
-  const session    = sessionRaw ? JSON.parse(sessionRaw) : null;
-
-  if (direction.is_new_session || !session) {
+  // ── Update session KV ─────────────────────────────────────────────────────────────────
+  const isNew = !continueSession || !session;
+  if (isNew) {
     await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
-      topic:     direction.topic,
-      topic2:    direction.topic2 || null,
-      started_at: Date.now(),
-      run_count: 1,
+      topic: direction.topic, topic2: null, started_at: Date.now(), run_count: 1,
     }));
   } else {
     await env.KV.put(KV_CONV_TOPIC, JSON.stringify({
-      ...session,
-      run_count: (session.run_count || 0) + 1,
-      topic2:    direction.topic2 || session.topic2,
+      ...session, run_count: (session.run_count || 0) + 1,
     }));
   }
   await env.KV.put(KV_CONV_AGENTS, JSON.stringify(direction.agents || []));
 
-  // ── Update topic history (for Director's "avoid repeating" context) ──────────────────────
-  const recentRaw = await env.KV.get(KV_RECENT);
-  const recent    = recentRaw ? JSON.parse(recentRaw) : [];
-  recent.push({ seed: direction.topic.slice(0, 80), ts: Date.now() });
-  await env.KV.put(KV_RECENT, JSON.stringify(recent.slice(-20)));
+  const recent2 = recentRuns.slice(-20);
+  recent2.push({ seed: direction.topic.slice(0, 80), ts: Date.now() });
+  await env.KV.put(KV_RECENT, JSON.stringify(recent2));
 
   return {
     msgs:        msgs.slice(0, count),
-    turns:       direction.turns || [],  // passed to poster for reply threading
+    turns:       [],
     topic:       direction.topic,
-    topic2:      direction.topic2 || null,
+    topic2:      null,
     agents:      direction.agents,
-    session_run: direction.is_new_session ? 1 : ((session?.run_count || 0) + 1),
-    raw_count:   raw.length,
+    session_run: isNew ? 1 : ((session?.run_count || 0) + 1),
+    raw_count:   rawMsgs.length,
     final_count: Math.min(msgs.length, count),
   };
 }
