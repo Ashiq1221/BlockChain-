@@ -224,7 +224,21 @@ async function handleTelegramUpdate(env, update) {
     if (['member', 'administrator'].includes(mcm.new_chat_member?.status)) {
       const chat = mcm.chat;
       if (['group', 'supergroup', 'channel'].includes(chat?.type)) {
-        await env.KV.put('lingo_group_chat_id', String(chat.id));
+        const newId = String(chat.id);
+        const [existingGroupId, existingSourceId] = await Promise.all([
+          env.KV.get('lingo_group_chat_id'),
+          env.KV.get('lingo_source_group_id'),
+        ]);
+        if (!existingGroupId) {
+          // First-time setup — save as posting group
+          await env.KV.put('lingo_group_chat_id', newId);
+        } else if (newId !== existingGroupId && newId !== existingSourceId) {
+          // Bot added to a second group while posting group already configured →
+          // queue as pending source group (auto-detected on next /lingo-source-setup)
+          await env.KV.put('lingo_pending_source', JSON.stringify({
+            chat_id: newId, title: chat.title || '', added_at: Date.now(),
+          }));
+        }
       }
     }
   }
@@ -822,24 +836,43 @@ export default {
       return Response.json(await lingoStatus(env));
     }
 
-    // GET /lingo-source-setup?chat_id=XXXX — set the group to observe (learn from)
+    // GET /lingo-source-setup?chat_id=XXXX — set the official group to observe (learn from)
+    // With no params: auto-detects from the most recent bot-join event in a second group
     if (pathname === '/lingo-source-setup' && request.method === 'GET') {
-      const chatId = url.searchParams.get('chat_id');
-      if (chatId) {
-        await env.KV.put('lingo_source_group_id', chatId);
+      const manualId = url.searchParams.get('chat_id');
+      let targetId   = manualId;
+
+      if (!targetId) {
+        // Auto-detect: use pending source queued when bot was added to a new group
+        const pendingRaw = await env.KV.get('lingo_pending_source');
+        if (pendingRaw) {
+          const pending = JSON.parse(pendingRaw);
+          targetId = pending.chat_id;
+        }
+      }
+
+      if (targetId) {
+        await env.KV.put('lingo_source_group_id', targetId);
+        await env.KV.delete('lingo_pending_source');
         return Response.json({
           ok: true,
-          source_group_id: chatId,
-          message: 'Source group configured. Add @AshiqAibot as admin to that group so it can read all messages. Director will start using real community conversations as context immediately.',
+          source_group_id: targetId,
+          method: manualId ? 'manual' : 'auto-detected from bot join event',
+          message: 'Source group configured — bot will observe messages here and NEVER post. Director now uses real community conversations as context.',
         });
       }
-      const current = await env.KV.get('lingo_source_group_id');
+
+      const current       = await env.KV.get('lingo_source_group_id');
+      const pending2      = await env.KV.get('lingo_pending_source');
       const sourceMsgsRaw = current ? await env.KV.get('lingo_source_msgs') : null;
-      const count = sourceMsgsRaw ? JSON.parse(sourceMsgsRaw).length : 0;
+      const count         = sourceMsgsRaw ? JSON.parse(sourceMsgsRaw).length : 0;
       return Response.json({
-        source_group_id: current || null,
+        source_group_id:   current || null,
+        pending_detection: pending2 ? JSON.parse(pending2) : null,
         observed_messages: count,
-        message: current ? `Observing group ${current} — ${count} messages buffered` : 'Not configured. Pass ?chat_id=XXXX to set.',
+        message: current
+          ? `Active — observing group ${current} (${count} messages buffered)`
+          : 'Not configured and no pending join detected. Add @AshiqAibot to the official group first, then call this endpoint again.',
       });
     }
 
