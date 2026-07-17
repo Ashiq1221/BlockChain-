@@ -427,7 +427,7 @@ async function conversationOverseer(env, postedHistory) {
     return { score: 10, issues: [], directive: '', action: 'skipped — not enough history' };
   }
 
-  const recent = postedHistory.slice(-14);
+  const recent = postedHistory.slice(-14).filter(m => m?.msg);
   const texts  = recent.map(m => m.msg.toLowerCase());
   const issues = [];
   let score    = 10;
@@ -454,7 +454,7 @@ async function conversationOverseer(env, postedHistory) {
   if (texts.filter(t => agreeRe.test(t)).length >= 3) { issues.push('TONE_UNIFORMITY'); score -= 2; }
 
   // 5. No short messages — every message is a paragraph (sign Writer ignored length specs)
-  const shortCount = recent.filter(m => m.msg.trim().split(/\s+/).length <= 8).length;
+  const shortCount = recent.filter(m => (m.msg || '').trim().split(/\s+/).length <= 8).length;
   if (shortCount === 0 && recent.length >= 7) { issues.push('NO_SHORT_MESSAGES'); score -= 1; }
 
   // 6. Off-scope content leaked through

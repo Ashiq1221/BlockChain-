@@ -897,8 +897,12 @@ export default {
 
     // POST /lingo-post — manually trigger a posting run right now
     if (pathname === '/lingo-post' && request.method === 'POST') {
-      const result = await runLingoPoster(env, { skipSleep: true });
-      return Response.json(result);
+      try {
+        const result = await runLingoPoster(env, { skipSleep: true });
+        return Response.json(result);
+      } catch (e) {
+        return Response.json({ ok: false, error: String(e), stack: String(e?.stack || '').slice(0, 500) }, { status: 500 });
+      }
     }
 
     // GET /lingo-rl-scores — show RL engagement scores (top topics + agents)
