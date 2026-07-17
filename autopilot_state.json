@@ -44,6 +44,7 @@
   "https://job-boards.greenhouse.io/foundry/jobs/8010801",
   "https://job-boards.greenhouse.io/janestreet/jobs/8583968002",
   "https://job-boards.greenhouse.io/layerzerolabs/jobs/6020805004",
+  "https://job-boards.greenhouse.io/layerzerolabs/jobs/6104842004",
   "https://job-boards.greenhouse.io/okx/jobs/7789698003",
   "https://job-boards.greenhouse.io/okx/jobs/7799585003",
   "https://job-boards.greenhouse.io/orderly/jobs/5253336008",
@@ -56,12 +57,14 @@
   "https://jobs.ashbyhq.com/Render/46584e6a-7116-4376-ad67-f9cad10c0c7d",
   "https://jobs.ashbyhq.com/Sardine/58054c69-7b32-4334-acba-eca28971848e",
   "https://jobs.ashbyhq.com/Solana%20Foundation/c52330c6-eece-4da2-8882-47386cc49423",
+  "https://jobs.ashbyhq.com/aztec-labs/6276693d-5a2b-4a71-846a-2a00eb1ff4fa",
   "https://jobs.ashbyhq.com/cantina/36b6d184-cc4c-4ede-97d5-649914d5b04e",
   "https://jobs.ashbyhq.com/jane/3aa00837-4187-4135-9c7a-446f87f19ead",
   "https://jobs.ashbyhq.com/nexus.xyz/e6877f82-5d71-4a52-a131-c09dd7b148dd",
   "https://jobs.ashbyhq.com/notion/c45b0b2a-0634-4cda-8b9b-ea6427093915",
   "https://jobs.ashbyhq.com/optimum/ee988161-eea5-4ef5-a16c-ec93b541a29e",
   "https://jobs.ashbyhq.com/paxos/efe6cbb7-ee04-4dab-9bfe-579f50783a90",
+  "https://jobs.ashbyhq.com/rain/6354380b-0370-48e0-9639-bd1427e8de56",
   "https://jobs.ashbyhq.com/ramp/03e2d4e1-73ad-4f09-a058-2eb9ce34c2bc",
   "https://jobs.ashbyhq.com/ramp/6a7e382f-240a-4952-b9e5-7fe2b3856bc9",
   "https://jobs.ashbyhq.com/tenderly/fbd94710-ff3e-4747-9bbc-bec864b77f58",
@@ -69,6 +72,7 @@
   "https://jobs.ashbyhq.com/trm-labs/cd679bc3-d845-47d0-ba95-5d7d31d530a8",
   "https://jobs.ashbyhq.com/trm-labs/e26723cd-a11e-4e1b-ac79-a55a41ef86e2",
   "https://jobs.ashbyhq.com/trust-wallet/2d265735-8142-42d6-8dcb-7fb508b1eaa5",
+  "https://jobs.ashbyhq.com/trust-wallet/f67c9e11-38f0-443f-9223-461b35eba46c",
   "https://jobs.lever.co/binance/064ae522-2dc8-44d7-84dc-edeb8e57383c",
   "https://jobs.lever.co/binance/33231ef0-179e-431f-b6ac-821f064e74df",
   "https://jobs.lever.co/binance/4c298dcb-73f7-40e8-93f3-79b25e0357e4",
@@ -113,6 +117,7 @@
   "https://www.bagel.com/careers/member-of-technical-staff-physical-ai-research",
   "https://www.coinbase.com/careers/positions/7962675?gh_jid=7962675",
   "https://www.coinbase.com/careers/positions/7985269?gh_jid=7985269",
+  "https://www.coinbase.com/careers/positions/8021647?gh_jid=8021647",
   "https://www.coinbase.com/careers/positions/8029711?gh_jid=8029711",
   "https://www.comeet.com/jobs/etoro/41.009/account-manager---dutch-speaking/5A.D65",
   "https://www.comeet.com/jobs/etoro/41.009/customer-service-representative-spanish--english/DE.C63",
@@ -125,5 +130,5 @@
   "https://yellowcard.bamboohr.com/careers/399"
  ],
  "submitted": [],
- "runs": 60
+ "runs": 61
 }
