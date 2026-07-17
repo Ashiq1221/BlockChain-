@@ -909,6 +909,16 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
 // ── Main poster ──────────────────────────────────────────────────────────────────────────────────
 
 export async function runLingoPoster(env, { skipSleep = false } = {}) {
+  try {
+    return await _runLingoPosterInner(env, { skipSleep });
+  } catch (e) {
+    const errStr = String(e?.stack || e);
+    if (env.KV) await env.KV.put('lingo_last_error', errStr.slice(0, 1000), { expirationTtl: 3600 }).catch(() => {});
+    throw e;
+  }
+}
+
+async function _runLingoPosterInner(env, { skipSleep = false } = {}) {
   const chatId = await env.KV.get(KV_GROUP_ID);
   if (!chatId) {
     return { skipped: true, reason: 'No group configured. Add @AshiqAibot and type /lingosetup.' };
@@ -1149,6 +1159,7 @@ export async function lingoStatus(env) {
   const openaiErr   = await env.KV.get('lingo_openai_err');
   const xaiErr      = await env.KV.get('lingo_xai_err');
   const cfaiErr     = await env.KV.get('lingo_cfai_err');
+  const lastError   = await env.KV.get('lingo_last_error');
   const writerRaw   = await env.KV.get('lingo_writer_raw');
   const overseerRaw = await env.KV.get(KV_OVERSEER);
   const histRaw     = await env.KV.get(KV_POSTED);
@@ -1199,6 +1210,7 @@ export async function lingoStatus(env) {
       active_agents: activeAgents.map(id => `${id} (${PERSONAS[id]?.type || '?'})`),
     } : null,
     last_5_topics: recent.slice(-5).map(r => r.seed),
+    last_error:    lastError || null,
     ai_errors:     { groq: groqErr || null, openai: openaiErr || null, xai: xaiErr || null, cf_ai: cfaiErr || null },
     writer_debug:  writerRaw ? JSON.parse(writerRaw) : null,
     posted_history: { stored: histSize, capacity: 70, dedup_window: 'last 70 messages' },
