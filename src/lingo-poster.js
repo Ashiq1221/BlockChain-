@@ -633,15 +633,20 @@ WHO SPEAKS NEXT:
 ${turnList}
 
 CRITICAL RULES — break these and the whole thing fails:
-1. These are COMMUNITY MEMBERS with personal opinions — not the project team, not spokespersons
-2. LingoAI holders can be excited AND doubtful AND frustrated in the same conversation. That's normal
-3. NEVER: "LingoAI is revolutionizing...", "This is why $LINGOAI is special", reciting bullet points as facts
-4. DO: "tbh the no-burn model confused me at first", "anyone actually used LingoRAG in prod?", "price has been flat for weeks tho", "i get the vision but the hardware timeline worries me"
-5. Disagreement, honest questions, and "wait but..." moments make conversations feel real
-6. micro = literally 1-5 words ("gm", "facts", "nah", "wait what", "this")
-7. if replying, react to the SPECIFIC thing said — not a new point
-8. no @mentions, no name tags, lowercase, contractions
-9. each person sounds DIFFERENT — don't let them blur into each other
+1. Every message is what that person TYPES into the chat — first person, direct. NEVER third-person narration
+2. BANNED PATTERNS — these will be deleted automatically:
+   - "r_hassan looking for deals..." ← third-person narration, not a chat message
+   - "y_tanaka thinks that..." ← never describe what a persona is doing
+   - "for us devs" / "for us too" ← sounds like internal team, not community
+   - DeFi, L2, Layer 2, arbitrum, NFTs, meme coins, stablecoins ← off-topic, filtered out
+3. These are COMMUNITY MEMBERS — not the project team, not spokespersons
+4. LingoAI holders can be excited AND doubtful AND frustrated. That's normal
+5. NEVER: "LingoAI is revolutionizing...", reciting bullet points as facts, no skepticism
+6. DO: "tbh the no-burn model confused me at first", "anyone actually used LingoRAG in prod?", "price has been flat for weeks tho"
+7. micro = literally 1-5 words ("gm", "facts", "nah", "wait what", "this")
+8. if replying, react to the SPECIFIC thing said — not a new point
+9. no @mentions, no name tags, lowercase, contractions
+10. each person sounds DIFFERENT — don't let them blur into each other
 
 EXAMPLE of the energy we want (different topic, just showing naturalness):
 [0] gm
@@ -770,12 +775,25 @@ async function runConversation(env, count, postedHistory = []) {
   // ── Agent 2: Writer ───────────────────────────────────────────────────────────────────
   const raw = await conversationWriter(env, direction, postedHistory);
 
-  // Hard filter: remove @mentions and blank/single-word messages; allow "gm", one-liners
-  let msgs = raw.filter(m =>
-    !/@\w+/.test(m.msg) &&
-    m.msg.trim().length >= 2 &&
-    !/^(hey guys|hi all|hello everyone)/i.test(m.msg)
+  // Build a regex of all agent IDs to catch third-person narration leaks
+  const agentIdPattern = new RegExp(
+    '^(' + Object.keys(PERSONAS).join('|') + ')\\b',
+    'i'
   );
+  // Off-topic keywords that should never appear (DeFi/L2/NFT/meme coins)
+  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool)\b/i;
+
+  // Hard filter: remove malformed, off-topic, or third-person-narration messages
+  let msgs = raw.filter(m => {
+    const t = m.msg.trim();
+    if (t.length < 2) return false;                    // blank
+    if (/@\w+/.test(t)) return false;                  // @mentions
+    if (/^(hey guys|hi all|hello everyone)/i.test(t)) return false; // generic openers
+    if (agentIdPattern.test(t)) return false;           // agent name leaked as third-person narration
+    if (offTopicPattern.test(t)) return false;          // off-topic DeFi/L2/NFT content
+    if (/\bfor us\b/i.test(t) && /\bdev\b/i.test(t)) return false; // "for us devs" = team talk
+    return true;
+  });
 
   // ── Agent 3: Uniqueness Guardian ───────────────────────────────────────────────────────────
   msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory);
