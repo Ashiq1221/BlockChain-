@@ -897,7 +897,7 @@ export default {
 
     // POST /lingo-post — manually trigger a posting run right now
     if (pathname === '/lingo-post' && request.method === 'POST') {
-      const result = await runLingoPoster(env);
+      const result = await runLingoPoster(env, { skipSleep: true });
       return Response.json(result);
     }
 

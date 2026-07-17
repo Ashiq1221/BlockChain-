@@ -168,7 +168,7 @@ async function callGroqRaw(env, prompt, { temperature = 0.3, maxTokens = 600 } =
     return '';
   }
   // Try models in order — fall to smaller model on 429 rate limit
-  const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192'];
+  const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.1-70b-versatile', 'llama3-8b-8192'];
   let allRateLimited = true;
   for (const model of models) {
     try {
@@ -908,7 +908,7 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
 
 // ── Main poster ──────────────────────────────────────────────────────────────────────────────────
 
-export async function runLingoPoster(env) {
+export async function runLingoPoster(env, { skipSleep = false } = {}) {
   const chatId = await env.KV.get(KV_GROUP_ID);
   if (!chatId) {
     return { skipped: true, reason: 'No group configured. Add @AshiqAibot and type /lingosetup.' };
@@ -964,7 +964,7 @@ export async function runLingoPoster(env) {
     }
     newEntries.push({ msg: item.msg, ts: now });
     posted++;
-    if (posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
+    if (!skipSleep && posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
   }
 
   // Persist RL message tracking (keep last 200 by message_id)
