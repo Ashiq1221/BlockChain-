@@ -937,6 +937,12 @@ export default {
       return Response.json({ ok: true, message: 'RL scores and message tracking cleared.' });
     }
 
+    // POST /lingo-pause — immediately stop all posting (clears group chat ID)
+    if (pathname === '/lingo-pause' && request.method === 'POST') {
+      await env.KV.delete('lingo_group_chat_id');
+      return Response.json({ ok: true, message: 'Posting stopped. Bot will not post to any group until lingo_group_chat_id is set again via /lingo-setup?chat_id=XXXX' });
+    }
+
     // POST /lingo-reset — full conversation reset: clears session, history, topic, errors
     if (pathname === '/lingo-reset' && request.method === 'POST') {
       await Promise.all([
