@@ -421,64 +421,67 @@ async function getSourceContext(env) {
 
 const KV_OVERSEER = 'lingo_overseer'; // {score, issues, directive, ts, action}
 
+// Rule-based — no AI call, pure regex. Keeps the pipeline at 3 AI calls max (Director+Writer+Guardian).
 async function conversationOverseer(env, postedHistory) {
   if (postedHistory.length < 5) {
     return { score: 10, issues: [], directive: '', action: 'skipped — not enough history' };
   }
 
-  const recentMsgs = postedHistory.slice(-14).map((m, i) => `[${i + 1}] ${m.msg}`).join('\n');
+  const recent = postedHistory.slice(-14);
+  const texts  = recent.map(m => m.msg.toLowerCase());
+  const issues = [];
+  let score    = 10;
 
-  const prompt = `You are a quality overseer for a LingoAI community Telegram group. The group should talk naturally about LingoAI and AI — like real community members with opinions, questions, doubts, and enthusiasm. NOT like a project team or marketing channel.
+  // 1. Promotional drift
+  const promoRe = /lingoai (is|has|offers|provides) (the |a )?(best|unique|revolutionary|transforming|pioneering|revolutionizing|reshaping)|this is (why|what) (makes )?\$?lingoai/i;
+  const promoHits = texts.filter(t => promoRe.test(t)).length;
+  if (promoHits >= 2) { issues.push('PROMOTIONAL_DRIFT'); score -= 3; }
 
-Review these recent messages and detect any problems:
+  // 2. Topic loop — same conclusion phrase 3+ times
+  const loopPhrases = ['exchange listing', 'tokenomics', 'use cases', 'before we can', 'real-world use'];
+  for (const phrase of loopPhrases) {
+    if (texts.filter(t => t.includes(phrase)).length >= 3) {
+      issues.push(`TOPIC_LOOP:${phrase}`); score -= 2; break;
+    }
+  }
 
-${recentMsgs}
+  // 3. Team-speak ("we need to X", "we'll cover", "we're going to") in 2+ messages
+  const teamRe = /(we need to|we'll|we're going to|we're gonna)\s+(get|fix|cover|discuss|build|make|touch|focus|dive|address)/;
+  if (texts.filter(t => teamRe.test(t)).length >= 2) { issues.push('TEAM_SPEAK'); score -= 2; }
 
-Check for ALL of these issues:
-1. PROMOTIONAL DRIFT — messages sound like a product pitch, press release, or team briefing. Signs: "LingoAI is revolutionizing...", reciting bullet-point facts, zero skepticism or personal opinion
-2. TOPIC LOOP — the same narrow topic repeated 3+ times without variation
-3. TONE UNIFORMITY — everyone sounds identical, no real personality differences between speakers
-4. OFF-SCOPE — topics about DeFi yields, NFTs, Layer 2s, meme coins, or general crypto that have nothing to do with LingoAI or AI problems
-5. FAKE ENTHUSIASM — everything is positive, nobody asks hard questions or pushes back
+  // 4. Tone uniformity — too many "yeah i agree" starts
+  const agreeRe = /^(yeah,?\s*i agree|i totally agree|i think we (all )?agree|i agree that)/;
+  if (texts.filter(t => agreeRe.test(t)).length >= 3) { issues.push('TONE_UNIFORMITY'); score -= 2; }
 
-Score the messages 1-10 where:
-10 = diverse, natural, opinionated community talk about LingoAI/AI
-7-9 = mostly good, minor issues
-4-6 = noticeable problems, correction needed
-1-3 = serious quality failure, reset required
+  // 5. No short messages — every message is a paragraph (sign Writer ignored length specs)
+  const shortCount = recent.filter(m => m.msg.trim().split(/\s+/).length <= 8).length;
+  if (shortCount === 0 && recent.length >= 7) { issues.push('NO_SHORT_MESSAGES'); score -= 1; }
 
-Return ONLY valid JSON:
-{
-  "score": <1-10>,
-  "issues": ["issue description", ...],
-  "directive": "<one clear instruction for the Director to fix the problem, or empty string if score >= 7>"
-}`;
+  // 6. Off-scope content leaked through
+  const offRe = /\b(defi|layer.?2|l2s?|arbitrum|nfts?|meme.?coin|altcoin|stablecoin)\b/i;
+  if (texts.filter(t => offRe.test(t)).length >= 1) { issues.push('OFF_SCOPE'); score -= 2; }
 
-  const raw    = await callRaw(env, prompt, { temperature: 0.2, maxTokens: 400 });
-  const parsed = parseJSON(raw);
+  score = Math.max(1, score);
 
-  const result = (parsed && typeof parsed.score === 'number')
-    ? parsed
-    : { score: 8, issues: [], directive: '' };
+  // Single most important directive for the Director
+  const directive =
+      issues.includes('PROMOTIONAL_DRIFT')   ? 'be more skeptical and personal — zero promotional language' :
+      issues.includes('TEAM_SPEAK')           ? 'personas are community members, use "LingoAI needs to" not "we need to"' :
+      issues.includes('TONE_UNIFORMITY')      ? 'vary lengths and personalities — someone should disagree or change subject' :
+      issues.some(i => i.startsWith('TOPIC_LOOP')) ? 'move away from the repeated conclusion, explore a different angle' :
+      issues.includes('NO_SHORT_MESSAGES')    ? 'include at least 2 micro reactions (1-5 words) in this batch' :
+      issues.includes('OFF_SCOPE')            ? 'stay on LingoAI/AI only — no DeFi or crypto market topics' :
+      '';
 
   let action = 'monitored';
-
-  // Auto-reset session if quality is critically broken
-  if (result.score <= 3) {
+  if (score <= 3) {
     await env.KV.delete(KV_CONV_TOPIC);
     await env.KV.delete(KV_CONV_AGENTS);
     action = 'session reset — score critically low';
   }
 
-  await env.KV.put(KV_OVERSEER, JSON.stringify({
-    score:    result.score,
-    issues:   result.issues || [],
-    directive: result.directive || '',
-    action,
-    ts:       Date.now(),
-  }), { expirationTtl: 7200 });
-
-  return result;
+  await env.KV.put(KV_OVERSEER, JSON.stringify({ score, issues, directive, action, ts: Date.now() }), { expirationTtl: 7200 });
+  return { score, issues, directive };
 }
 
 // ── AGENT 1: CONVERSATION DIRECTOR ──────────────────────────────────────────────────────────────────
