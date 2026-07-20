@@ -50,7 +50,7 @@ const PERSONAS = {
   v_silva:   { type: 'Brazilian LanguageDAO participant',   voice: 'personal stake in linguistic diversity — not abstract for her. Can get emotional about it but also asks whether the DAO actually works in practice. Lowercase enthusiasm, real frustrations.' },
   a_turner:  { type: 'ex-Bittensor contributor who switched to LingoAI', voice: 'compares architectures instinctively. Not uncritical of LingoAI — notices where Bittensor solved things better. Skeptic who found a reason to switch, not a convert.' },
   y_tanaka:  { type: 'hardware engineer who pre-ordered LingoPOD', voice: 'deep on device specs, latency, edge compute. Interested but has real doubts about hardware timelines. Asks pointed questions about power consumption and supply chain.' },
-  r_hassan:  { type: 'B2B sales guy watching $LINGOAI closely', voice: 'thinks in deals and procurement cycles. Skeptical about whether enterprise clients will actually pay in $LINGOAI. Grounded, not promotional. Has seen vendor promises fail before.' },
+  r_hassan:  { type: 'skeptical $LINGOAI holder who works in business', voice: 'works in a normal company, wonders if real companies will ever actually use LingoAI. Not technical. Asks "has any normal business actually signed up?" Short, blunt, grounded.' },
   c_adeyemi: { type: 'Nigerian dev, cares about African language AI', voice: 'Igbo and Yoruba barely exist in any AI model — that\'s personal for him. Hopes LingoAI delivers but isn\'t naive. Infrastructure cost realist. Warm but will call out BS.' },
   l_zhang:   { type: 'Chinese ML engineer, data sovereignty angle', voice: 'data control is a real issue in his context. Wary of centralised cloud, interested in Solid protocol. Technical but asks whether any of this actually works at scale yet.' },
 
@@ -71,9 +71,9 @@ const PERSONAS = {
   luna_p:    { type: 'DeFi yield strategist',      voice: 'yield-first mindset. Always risk-adjusted. Practical about protocol risks. Drops APY numbers naturally.' },
   whale_sam: { type: 'on-chain analyst',           voice: 'data-driven. Everything is on-chain evidence. References wallet flows and transaction patterns.' },
   d_volkov:  { type: 'Russian crypto veteran',     voice: 'escaped fiat system. Anti-bank. Privacy advocate. Multi-chain after being a Bitcoin maxi. Blunt.' },
-  c_fox:     { type: 'NFT-turned-DAO governance nerd', voice: 'started with NFTs, now obsessed with governance design. Sees community coordination as the real product.' },
+  c_fox:     { type: 'NFT collector who moved into AI projects', voice: 'got burnt on NFT speculation, now focused on AI projects with actual utility. Suspicious of hype, compares LingoAI to stuff that failed. Short punchy takes.' },
   a_singh:   { type: 'Indian crypto influencer',   voice: 'high energy. Practical about fees and speed. Solana ecosystem. References Indian retail market a lot.' },
-  t_nguy:    { type: 'institutional crypto (ex-Goldman)', voice: 'TradFi lens. Regulatory-aware. Speaks in risk and compliance terms. Measured. Doesn\'t hype.' },
+  t_nguy:    { type: 'ex-finance guy who holds $LINGOAI', voice: 'used to work in finance, now just a retail holder. Speaks plain english, not investment memos. Notices when things make sense vs when it\'s just narrative. Measured, casual, no jargon.' },
   p_obrien:  { type: 'Irish Ethereum validator',   voice: 'runs own nodes. Infrastructure-focused. Ethereum faithful but open-minded. Practical about validator economics.' },
   k_yilmaz:  { type: 'Turkish DeFi user (survived 80% inflation)', voice: 'crypto as economic survival, not investment. Stablecoin-focused. Real urgency. Personal.' },
   m_rossi:   { type: 'Italian DeFi veteran',       voice: 'seen multiple protocol blowups. Risk-aware. "I\'ve been rekt before" energy. Practical not pessimistic.' },
@@ -631,20 +631,24 @@ AVAILABLE PERSONAS (pick 5-6, then write their messages):
 ${personaCatalogue}
 
 MESSAGE RULES (violations are auto-deleted):
-- Vary lengths: include at least 2 micro reactions (1-5 words: "gm", "facts", "nah", "this") + 2 short (1 sentence) + 2-3 medium (2 sentences)
+- Vary lengths STRICTLY: at least 2 MICRO (1-5 words max: "gm", "facts", "nah", "lol this", "wait what") + 2 SHORT (1 sentence) + 2-3 MEDIUM (2 sentences max). Do NOT make every message a paragraph.
 - First person only — NEVER "r_hassan is looking at..." (third-person narration)
 - Community members: say "LingoAI needs to" NOT "we need to" / "let's focus" (team talk = deleted)
 - For events: speak as ATTENDEES asking questions, NOT organizers announcing plans
 - NOT everyone agrees — someone pushes back, asks a hard question, or changes subject
 - No topic loops — don't end every message with the same conclusion
 - No @mentions, no name tags, lowercase, contractions
-- Topics: LingoAI and AI only — no DeFi, L2, NFTs, meme coins
+- Topics: LingoAI and AI only — no DeFi, L2, NFTs, meme coins, DAO governance
+- BANNED PHRASES (auto-deleted): "asymmetric bet", "priced in", "risk/reward", "investment thesis", "procurement cycle", "enterprise adoption", "token-weighted", "DAO governance", "B2B sales", "valuation", "compliance terms", "regulatory framework"
 
 GOOD example (length variety, natural drift, real skepticism):
 gm → anyone seen the solid protocol actually deployed at scale → not really. cool concept tho → tim berners-lee has been pushing it for years but adoption is rough → lingoai using it feels ambitious. who's running the nodes → that's my question too → depends whether the hardware ships tbh
 
-BAD (everything long, same rhythm, loops to same conclusion, team talk):
-"yeah i agree but we need to see real use cases..." × 4 messages
+BAD (avoid these):
+- Every message is 3+ sentences long — NO, include "facts", "lol", "wait really?" micro reactions
+- Investment talk: "asymmetric bet", "priced in", "risk/reward ratio" — NO, speak as a holder not a trader
+- DAO governance: "token-weighted voting", "plutocracy" — NO, this community isn't a DAO design forum
+- Team talk: "we need to", "let's focus", "we'll touch on" — NO, you are community members not staff
 
 Return ONLY a JSON array — topic first, then messages:
 {
@@ -835,7 +839,7 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
 
   // ── Hard filters ─────────────────────────────────────────────────────────────────────
   const agentIdPattern  = new RegExp('^(' + Object.keys(PERSONAS).join('|') + ')\\b', 'i');
-  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool)\b/i;
+  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool|DAO\s+governance|token.?weighted|plutocracy|procurement\s+cycle|B2B\s+sales|enterprise.?adoption|governance.?design|asymmetric\s+bet|risk.?reward\s+ratio|thesis|priced?\s+in|valuation\s+prices)\b/i;
   const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)|(we'll|we will|we're going to|we're gonna)\s+(likely|probably|touch|cover|discuss|focus|dive|address|explore)|\bwe're\s+(genuinely|really|actually)\s+(hoping|concerned|trying|looking)/i;
 
   let msgs = rawMsgs.filter(m => {
