@@ -144,7 +144,10 @@ const THEMES = [
 // ── Telegram helper ─────────────────────────────────────────────────────────────────────────────────
 
 async function tgCall(env, method, body = {}) {
-  if (!env.TELEGRAM_BOT_TOKEN) return null;
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    if (env.KV) env.KV.put('lingo_tg_err', 'TELEGRAM_BOT_TOKEN not set', { expirationTtl: 3600 }).catch(() => {});
+    return null;
+  }
   try {
     const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
       method: 'POST',
@@ -152,8 +155,14 @@ async function tgCall(env, method, body = {}) {
       body: JSON.stringify(body),
     });
     const d = await r.json();
+    if (!d.ok && env.KV) {
+      env.KV.put('lingo_tg_err', `${method} ${r.status}: ${JSON.stringify(d).slice(0, 300)}`, { expirationTtl: 3600 }).catch(() => {});
+    }
     return d.ok ? d.result : null;
-  } catch { return null; }
+  } catch (e) {
+    if (env.KV) env.KV.put('lingo_tg_err', `${method} exception: ${e?.message || e}`, { expirationTtl: 3600 }).catch(() => {});
+    return null;
+  }
 }
 
 async function sleep(ms) {
@@ -975,9 +984,9 @@ async function _runLingoPosterInner(env, { skipSleep = false } = {}) {
     batchMsgIds.push(tgMsgId);
     if (tgMsgId) {
       msgTrackEntries[String(tgMsgId)] = { topic, agent: item.agent, ts: now };
+      posted++;  // only count actual TG successes
     }
     newEntries.push({ msg: item.msg, ts: now });
-    posted++;
     if (!skipSleep && posted < msgs.length) await sleep(45000 + Math.random() * 45000); // 45-90s organic pacing
   }
 
@@ -1163,6 +1172,7 @@ export async function lingoStatus(env) {
   const openaiErr   = await env.KV.get('lingo_openai_err');
   const xaiErr      = await env.KV.get('lingo_xai_err');
   const cfaiErr     = await env.KV.get('lingo_cfai_err');
+  const tgErr       = await env.KV.get('lingo_tg_err');
   const lastError   = await env.KV.get('lingo_last_error');
   const writerRaw   = await env.KV.get('lingo_writer_raw');
   const overseerRaw = await env.KV.get(KV_OVERSEER);
@@ -1215,6 +1225,7 @@ export async function lingoStatus(env) {
     } : null,
     last_5_topics: recent.slice(-5).map(r => r.seed),
     last_error:    lastError || null,
+    tg_error:      tgErr || null,
     ai_errors:     { groq: groqErr || null, openai: openaiErr || null, xai: xaiErr || null, cf_ai: cfaiErr || null },
     writer_debug:  writerRaw ? JSON.parse(writerRaw) : null,
     posted_history: { stored: histSize, capacity: 70, dedup_window: 'last 70 messages' },
