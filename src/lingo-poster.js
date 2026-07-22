@@ -651,6 +651,8 @@ MESSAGE RULES (violations are auto-deleted):
 - BANNED PHRASES (auto-deleted): "asymmetric bet", "priced in", "risk/reward", "investment thesis", "procurement cycle", "enterprise adoption", "token-weighted", "DAO governance", "B2B sales", "valuation", "compliance terms", "regulatory framework"
 - NEVER mention competitor AI models (Claude, GPT-4, GPT-4o, ChatGPT, Gemini, Mistral, Llama) as personal tools to use — this is a LingoAI community, not a general AI tools chat. Comparing LingoAI to $TAO/$FET/$OCEAN is fine; recommending GPT-4o for your daily tasks is NOT.
 - NEVER use deep hardware engineering jargon: "dynamic voltage frequency scaling", "DVFS", "edge compute architecture specs", "latency benchmarks" — speak as a curious community member, not an IC engineer
+- NEVER address or name other personas using their agent ID (c_wei, v_silva, r_hassan, etc.) inside the message text — people in group chats don't call each other by database IDs. React to what was said, don't tag who said it.
+- NEVER use organizer/admin report language: "we're seeing more uptake", "we're observing increased submissions", "we're getting traction" — you are a community MEMBER, not a project team member reporting metrics
 
 GOOD example — EXACTLY this rhythm (micro + short + medium + micro + short + medium + short):
 gm → anyone seen the solid protocol actually deployed at scale → not really. cool concept tho → tim berners-lee has been pushing it for years but adoption is rough → lingoai using it feels ambitious. who's running the nodes → that's my question too → depends whether the hardware ships tbh
@@ -860,11 +862,12 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
   const rawMsgs = direction.messages || [];
 
   // ── Hard filters ─────────────────────────────────────────────────────────────────────
-  const agentIdPattern  = new RegExp('^(' + Object.keys(PERSONAS).join('|') + ')\\b', 'i');
-  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool|DAO\s+governance|token.?weighted|plutocracy|procurement\s+cycle|B2B\s+sales|enterprise.?adoption|governance.?design|asymmetric\s+bet|risk.?reward\s+ratio|investment\s+thesis|priced?\s+in|valuation\s+prices)\b/i;
+  // Match agent IDs ANYWHERE in the message (not just start) — catches "just ship it, c_wei" mid-message leaks
+  const agentIdPattern  = new RegExp('\\b(' + Object.keys(PERSONAS).join('|') + ')\\b', 'i');
+  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool|DAO\s+governance|token.?weighted|plutocracy|procurement\s+cycle|B2B\s+sales|business.?to.?business|enterprise.?adoption|widespread\s+adoption|governance.?design|asymmetric\s+bet|risk.?reward\s+ratio|investment\s+thesis|priced?\s+in|valuation\s+prices)\b/i;
   // Competitor AI model tool-use talk — ban "GPT-4o for X", "Claude 3.5 for X", "Gemini for X" etc inside a LingoAI group
   const competitorModelPattern = /\b(GPT-?4o?|gpt-?3\.?5|ChatGPT|claude\s+[23]\.\d|claude\s+opus|claude\s+sonnet|claude\s+haiku|gemini\s+(pro|flash|for|ultra)|gemini\s+\d|mistral\s+for|llama\s+\d+\s+for)\b/i;
-  const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)|(we'll|we will|we're going to|we're gonna)\s+(likely|probably|touch|cover|discuss|focus|dive|address|explore)|\bwe're\s+(genuinely|really|actually)\s+(hoping|concerned|trying|looking)/i;
+  const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)|(we'll|we will|we're going to|we're gonna)\s+(likely|probably|touch|cover|discuss|focus|dive|address|explore)|\bwe're\s+(genuinely|really|actually|seeing|getting|observing|noticing)\s+/i;
 
   let msgs = rawMsgs.filter(m => {
     const t = m.msg?.trim() || '';
