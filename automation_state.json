@@ -757,10 +757,6 @@
   ],
   "agent_log": [
     {
-      "at": "2026-07-15T12:50:19.901595+00:00",
-      "msg": "[MASTER_CTRL BLOCKED] AI system unavailable for custom task. NO orders placed \u2014 rule-based cannot process specific quantities. Refill maintenance only. Restore AI credentials to place custom orders."
-    },
-    {
       "at": "2026-07-15T14:43:06.598926+00:00",
       "msg": "[MASTER_LATERAL] Brief injected for task: You are the Master AI Agent Orchestra. Run your monitoring cycle:\n\n1. Use parall"
     },
@@ -955,6 +951,10 @@
     {
       "at": "2026-07-17T06:10:17.240658+00:00",
       "msg": "[ticket-queued] Escalation ticket queued for order #61723696 \u2014 awaiting GitHub Actions mode=tickets"
+    },
+    {
+      "at": "2026-07-22T06:08:38.199749+00:00",
+      "msg": "[ticket-queued] Refill ticket queued for order #61649992 (svc#10877, start=0, remains=0)"
     }
   ],
   "pending_posts": [],
@@ -993,6 +993,13 @@
       "message": "Hello,\n\nI would like to request early/expedited delivery for order #61723696.\n\nOrder #61723696 is currently in Pending status. Could you please prioritize this order and ensure it starts as soon as possible?\n\nThank you for your assistance.",
       "type": "escalation",
       "queued_at": "2026-07-17T06:10:17.240647+00:00"
+    },
+    "61649992": {
+      "order_id": "61649992",
+      "subject": "Junior - Orders [ Refill Request for Order #61649992 ]",
+      "message": "Hello,\n\nOrder #61649992 has completed but the service was not fully delivered as expected. start_count was 0 and remains is 0.\n\nOrder details:\n  - Order: #61649992\n  - Service: svc#10877\n  - Quantity: 100\n  - Link: https://t.me/LingoAI_tmaBot?start=Njk2NzczMDQyNQ\n\nPlease issue a refill or re-delivery for this order.\n\nThank you.",
+      "type": "refill",
+      "queued_at": "2026-07-22T06:08:38.199689+00:00"
     }
   }
 }
