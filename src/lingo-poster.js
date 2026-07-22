@@ -300,7 +300,16 @@ async function callRaw(env, prompt, opts = {}) {
 function parseJSON(raw) {
   const m = raw.match(/[\[{][\s\S]*[\]}]/);
   if (!m) return null;
-  try { return JSON.parse(m[0]); } catch { return null; }
+  let s = m[0];
+  try { return JSON.parse(s); } catch {}
+  // Auto-repair common AI JSON bugs before giving up
+  try {
+    // Fix missing comma between string end and next key: ?"  "agent" → ?", "agent"
+    s = s.replace(/"(\s+)"(\w)/g, '", "$2');
+    // Fix trailing commas before closing brackets
+    s = s.replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(s);
+  } catch { return null; }
 }
 
 // Jaccard-style word overlap on words longer than 3 chars — used for duplicate detection
