@@ -49,7 +49,7 @@ const PERSONAS = {
   j_kim:     { type: 'Korean $LINGOAI holder',              voice: 'bought because major AI ignores Korean/Asian scripts. Cares about the mission personally. Occasionally frustrated at slow progress. Thoughtful and measured.' },
   v_silva:   { type: 'Brazilian LanguageDAO participant',   voice: 'personal stake in linguistic diversity — not abstract for her. Can get emotional about it but also asks whether the DAO actually works in practice. Lowercase enthusiasm, real frustrations.' },
   a_turner:  { type: 'ex-Bittensor contributor who switched to LingoAI', voice: 'compares architectures instinctively. Not uncritical of LingoAI — notices where Bittensor solved things better. Skeptic who found a reason to switch, not a convert.' },
-  y_tanaka:  { type: 'hardware engineer who pre-ordered LingoPOD', voice: 'deep on device specs, latency, edge compute. Interested but has real doubts about hardware timelines. Asks pointed questions about power consumption and supply chain.' },
+  y_tanaka:  { type: 'early adopter who pre-ordered LingoPOD', voice: 'not a hardware engineer — just a curious early adopter who spent money on the device. Asks practical questions: will it actually ship, how long does the battery last, is setup easy. Skeptical but hopeful. No deep-tech jargon.' },
   r_hassan:  { type: 'skeptical $LINGOAI holder who works in business', voice: 'works in a normal company, wonders if real companies will ever actually use LingoAI. Not technical. Asks "has any normal business actually signed up?" Short, blunt, grounded.' },
   c_adeyemi: { type: 'Nigerian dev, cares about African language AI', voice: 'Igbo and Yoruba barely exist in any AI model — that\'s personal for him. Hopes LingoAI delivers but isn\'t naive. Infrastructure cost realist. Warm but will call out BS.' },
   l_zhang:   { type: 'Chinese ML engineer, data sovereignty angle', voice: 'data control is a real issue in his context. Wary of centralised cloud, interested in Solid protocol. Technical but asks whether any of this actually works at scale yet.' },
@@ -649,9 +649,13 @@ MESSAGE RULES (violations are auto-deleted):
 - No @mentions, no name tags, lowercase, contractions
 - Topics: LingoAI and AI only — no DeFi, L2, NFTs, meme coins, DAO governance
 - BANNED PHRASES (auto-deleted): "asymmetric bet", "priced in", "risk/reward", "investment thesis", "procurement cycle", "enterprise adoption", "token-weighted", "DAO governance", "B2B sales", "valuation", "compliance terms", "regulatory framework"
+- NEVER mention competitor AI models (Claude, GPT-4, GPT-4o, ChatGPT, Gemini, Mistral, Llama) as personal tools to use — this is a LingoAI community, not a general AI tools chat. Comparing LingoAI to $TAO/$FET/$OCEAN is fine; recommending GPT-4o for your daily tasks is NOT.
+- NEVER use deep hardware engineering jargon: "dynamic voltage frequency scaling", "DVFS", "edge compute architecture specs", "latency benchmarks" — speak as a curious community member, not an IC engineer
 
-GOOD example (length variety, natural drift, real skepticism):
+GOOD example — EXACTLY this rhythm (micro + short + medium + micro + short + medium + short):
 gm → anyone seen the solid protocol actually deployed at scale → not really. cool concept tho → tim berners-lee has been pushing it for years but adoption is rough → lingoai using it feels ambitious. who's running the nodes → that's my question too → depends whether the hardware ships tbh
+
+COUNT YOUR MESSAGES BEFORE RETURNING: must have at least 2 messages ≤ 5 words. If all 7 are long sentences, you FAILED the format rule.
 
 BAD (avoid these):
 - Every message is 3+ sentences long — NO, include "facts", "lol", "wait really?" micro reactions
@@ -848,7 +852,9 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
 
   // ── Hard filters ─────────────────────────────────────────────────────────────────────
   const agentIdPattern  = new RegExp('^(' + Object.keys(PERSONAS).join('|') + ')\\b', 'i');
-  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool|DAO\s+governance|token.?weighted|plutocracy|procurement\s+cycle|B2B\s+sales|enterprise.?adoption|governance.?design|asymmetric\s+bet|risk.?reward\s+ratio|thesis|priced?\s+in|valuation\s+prices)\b/i;
+  const offTopicPattern = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool|DAO\s+governance|token.?weighted|plutocracy|procurement\s+cycle|B2B\s+sales|enterprise.?adoption|governance.?design|asymmetric\s+bet|risk.?reward\s+ratio|investment\s+thesis|priced?\s+in|valuation\s+prices)\b/i;
+  // Competitor AI model tool-use talk — ban "GPT-4o for X", "Claude 3.5 for X", "Gemini for X" etc inside a LingoAI group
+  const competitorModelPattern = /\b(GPT-?4o?|gpt-?3\.?5|ChatGPT|claude\s+[23]\.\d|claude\s+opus|claude\s+sonnet|claude\s+haiku|gemini\s+(pro|flash|for|ultra)|gemini\s+\d|mistral\s+for|llama\s+\d+\s+for)\b/i;
   const teamSpeakPattern = /(we need to|let's focus|we should|before we can|let's get)\s+(get|fix|focus|build|improve|sort|make|ensure|see|have|consider|think about)|(we'll|we will|we're going to|we're gonna)\s+(likely|probably|touch|cover|discuss|focus|dive|address|explore)|\bwe're\s+(genuinely|really|actually)\s+(hoping|concerned|trying|looking)/i;
 
   let msgs = rawMsgs.filter(m => {
@@ -858,6 +864,7 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
     if (/^(hey guys|hi all|hello everyone)/i.test(t)) return false;
     if (agentIdPattern.test(t)) return false;
     if (offTopicPattern.test(t)) return false;
+    if (competitorModelPattern.test(t)) return false;
     if (/\bfor us\b/i.test(t) && /\bdev\b/i.test(t)) return false;
     if (teamSpeakPattern.test(t)) return false;
     return true;
