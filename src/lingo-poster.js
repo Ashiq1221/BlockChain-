@@ -845,7 +845,16 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
   const direction = await conversationDirectorWriter(env, sessionCtx, overseerCtx, sourceCtx, rlCtx, postedHistory);
 
   if (!direction) {
-    return { msgs: [], turns: [], topic: 'unknown', topic2: null, agents: [], session_run: 1, raw_count: 0, final_count: 0 };
+    // AI parse failure — serve from static fallback directly (filtered + deduped)
+    const fallbackOffTopic    = /\b(DeFi|defi|layer.?2|L2s?|arbitrum|optimism|zkSync|polygon|NFTs?|meme.?coin|altcoin|stablecoin|yield.?farm|liquidity.?pool|DAO\s+governance|token.?weighted|plutocracy|procurement\s+cycle|B2B\s+sales|investment\s+thesis|asymmetric\s+bet|priced?\s+in)\b/i;
+    const fallbackCompetitor  = /\b(GPT-?4o?|gpt-?3\.?5|ChatGPT|claude\s+[23]\.\d|claude\s+opus|claude\s+sonnet|claude\s+haiku|gemini\s+(pro|flash|for|ultra)|gemini\s+\d)\b/i;
+    const pool = STATIC_FALLBACK
+      .filter(m => !fallbackOffTopic.test(m.msg) && !fallbackCompetitor.test(m.msg))
+      .filter(m => !postedHistory.some(h => wordSimilarity(h.msg, m.msg) > 0.30))
+      .sort(() => Math.random() - 0.5)
+      .slice(0, count);
+    if (env.KV) env.KV.put('lingo_last_error', 'DirectorWriter parse failure — served static fallback', { expirationTtl: 3600 }).catch(() => {});
+    return { msgs: pool.map(m => ({ msg: m.msg, agent: 'fallback' })), turns: [], topic: 'LingoAI discussion', topic2: null, agents: [], session_run: 1, raw_count: 0, final_count: pool.length };
   }
 
   const rawMsgs = direction.messages || [];
@@ -886,9 +895,10 @@ Topic ideas: ${THEMES.slice(0, 12).map(t => t.topic).join(' · ')}`;
   // ── Agent 3: Uniqueness Guardian (max 2 rewrites) ─────────────────────────────────────
   msgs = await uniquenessGuardian(env, msgs, direction.topic, postedHistory, count);
 
-  // Pad with static fallback if short (no AI rewrite — just use them as-is to stay fast)
+  // Pad with static fallback if short (apply same filters as AI msgs — no bypassing)
   if (msgs.length < count) {
     const pool = STATIC_FALLBACK
+      .filter(m => !offTopicPattern.test(m.msg) && !competitorModelPattern.test(m.msg) && !teamSpeakPattern.test(m.msg))
       .filter(m => !postedHistory.some(h => wordSimilarity(h.msg, m.msg) > 0.30))
       .sort(() => Math.random() - 0.5);
     for (const fbMsg of pool) {
@@ -1273,51 +1283,37 @@ export async function lingoStatus(env) {
 // ── Static fallback (diverse across all 4 categories — used when AI fails) ────
 
 const STATIC_FALLBACK = [
-  // lingo
-  { cat: 'lingo', msg: 'Just read the LingoAI whitepaper. The "no token burn" model actually makes more sense than I expected — the utility sinks replace burns entirely.' },
-  { cat: 'lingo', msg: 'LingoRAG + MetaGraph for language ontologies is genuinely different from every other AI project I\'ve seen. This isn\'t GPT wrapper #5000.' },
-  { cat: 'lingo', msg: '95% dark data unlocked = the entire addressable market for $LINGOAI just waiting to be captured. Timing is perfect.' },
-  { cat: 'lingo', msg: 'LingoPOD as a DePIN node that pays you to collect real-world data while running your personal AI on-device. The hardware moat is real.' },
-  { cat: 'lingo', msg: 'B2B procurement escrow keeps a constant % of supply locked in active business transactions. That\'s structural, not speculative.' },
-  { cat: 'lingo', msg: 'MetaGraph eliminates hallucinations through knowledge graph structure + staked verification. Enterprises terrified of LLM errors will pay a premium for this.' },
-  { cat: 'lingo', msg: 'As someone from a country where our language is ignored by all major AI models, LingoAI feels personal. LanguageDAO is the right model.' },
-  { cat: 'lingo', msg: 'Fixed supply + infinite data value growth = token price must appreciate. That\'s the mathematical core of the $LINGOAI thesis.' },
-  { cat: 'lingo', msg: 'ReviewDAO with staked collateral for data quality is exactly the right incentive design. Bad data gets slashed. Quality compounds.' },
-  { cat: 'lingo', msg: 'When all the hardware bonds hit at LingoPOD launch, circulating supply is going to drop hard. Watch the float carefully.' },
+  // ── LingoAI community takes (varied lengths) ──────────────────────────────
+  { cat: 'lingo', msg: 'dark data is such a weird term tbh' },
+  { cat: 'lingo', msg: 'the no-burn model actually makes sense once you understand the utility sinks. took me a while' },
+  { cat: 'lingo', msg: 'waiting on my lingopod. hope it ships this year' },
+  { cat: 'lingo', msg: 'lingopod as a data node running ai on-device is a genuinely different idea. most projects just promise an app' },
+  { cat: 'lingo', msg: 'languagedao is underrated' },
+  { cat: 'lingo', msg: 'igbo and yoruba barely exist in any AI model. that\'s the actual problem lingoai is trying to fix' },
+  { cat: 'lingo', msg: 'the reviewdao concept makes sense — staking on data quality. curious how you stop people gaming it though' },
+  { cat: 'lingo', msg: 'metagraph + lingorag is a mouthful but it\'s basically a knowledge layer sitting on top of llm output' },
+  { cat: 'lingo', msg: 'when does the hardware ship tho' },
+  { cat: 'lingo', msg: 'solid protocol for personal data pods is the right idea. adoption is the question, always' },
+  { cat: 'lingo', msg: '100b fixed cap, no burns. value supposed to come from demand not deflation. different approach' },
+  { cat: 'lingo', msg: 'proof-of-human to stop sybil attacks on the data network — that part actually matters a lot' },
+  { cat: 'lingo', msg: 'not sure any real company has actually signed up to use lingoai data yet. that\'s my main question' },
+  { cat: 'lingo', msg: 'the lingoai vs bittensor comparison is interesting. different architecture assumptions' },
+  { cat: 'lingo', msg: 'gm' },
 
-  // ai
-  { cat: 'ai', msg: 'Claude 3.5 Sonnet for coding, GPT-4o for general tasks, Gemini for long context. At this point we\'re all running different models for different jobs lol' },
-  { cat: 'ai', msg: 'Honestly the open source models have closed the gap way faster than anyone predicted. Llama 3.3 70B is competitive with GPT-4 from a year ago.' },
-  { cat: 'ai', msg: 'The hallucination problem isn\'t going away with scale. It\'s a data quality issue. Models trained on garbage confidently output garbage.' },
-  { cat: 'ai', msg: 'On-device AI is going to be massive. Your phone running a capable LLM locally with your personal data never leaving your device — that\'s the future.' },
-  { cat: 'ai', msg: 'AI agents that can actually browse, code, and take actions autonomously — we\'re not there yet but 2025 is moving fast. Watch the agent frameworks.' },
-  { cat: 'ai', msg: 'EU AI Act is going to hit US AI companies harder than people realize. The compliance overhead for "high risk" systems is brutal.' },
-  { cat: 'ai', msg: 'Cursor changed how I code. I don\'t use an IDE without AI completion anymore. The productivity delta is too real to ignore.' },
-  { cat: 'ai', msg: 'The multimodal stuff (vision + voice + video) is impressive in demos but still inconsistent in production. We\'re in the "impressive prototype" phase.' },
-  { cat: 'ai', msg: 'AI replacing jobs debate: it\'s not about replacing jobs, it\'s about one person doing the work of five. That\'s what companies are quietly figuring out.' },
-  { cat: 'ai', msg: 'Long context windows solved one problem but created another — models still lose coherence past a certain point. Context != understanding.' },
-
-  // web3
-  { cat: 'web3', msg: 'Base TVL growth this year has been wild. Coinbase quietly building the most accessible L2 while everyone debates Arbitrum vs Optimism.' },
-  { cat: 'web3', msg: 'DePIN is the narrative I\'m most bullish on right now. Physical infrastructure + token incentives + real utility. Helium proved the model works.' },
-  { cat: 'web3', msg: 'Real World Assets on-chain is moving faster than most people realize. Tokenized treasuries already doing billions in volume. This is early.' },
-  { cat: 'web3', msg: 'DAO governance participation is the biggest unsolved problem in Web3. Token-weighted voting consistently produces plutocracy. We need better models.' },
-  { cat: 'web3', msg: 'NFTs aren\'t dead — they\'re just not JPEGs anymore. Gaming items, ticketing, IP licensing. The use cases are finally getting real.' },
-  { cat: 'web3', msg: 'DeFi yields came back. If you know where to look, there\'s still 15-20% APY on stablecoins with manageable risk. Not 2021 numbers but not nothing.' },
-  { cat: 'web3', msg: 'Your seed phrase IS your money. One phishing click away from losing everything. Use hardware wallets. Don\'t connect to sketchy dApps. Stay paranoid.' },
-  { cat: 'web3', msg: 'Solana developer experience has genuinely improved. Still prefer EVM for the ecosystem but Solana TPS and fees make a strong argument for certain use cases.' },
-  { cat: 'web3', msg: 'USDC vs USDT risk profile is very different. USDC has regulatory clarity, USDT has Tether\'s reserves question. Know what you\'re holding.' },
-  { cat: 'web3', msg: 'Web3 gaming is finally building actual games first, token economies second. That\'s the right order. The P2E model where the game IS the extraction failed.' },
-
-  // trending
-  { cat: 'trending', msg: '$TAO is interesting but the valuation already prices in a lot of the AI data narrative. $LINGOAI might be the more asymmetric bet on the same thesis.' },
-  { cat: 'trending', msg: 'BlackRock tokenizing everything tells you where this goes. When the largest asset manager on earth is building on-chain, the direction is set.' },
-  { cat: 'trending', msg: 'AI agents with their own crypto wallets executing DeFi strategies autonomously — this is already happening. The agent economy is not hypothetical.' },
-  { cat: 'trending', msg: 'Altcoin season rotation signal: BTC dominance dropping + ETH/BTC ratio rising = alts getting the liquidity next. Watch the dominance chart.' },
-  { cat: 'trending', msg: 'Polymarket being right about almost everything before mainstream media catches on is wild. Prediction markets are genuinely useful information aggregators.' },
-  { cat: 'trending', msg: 'Meme coins aren\'t going away. They\'re community coordination mechanisms with speculation layered on top. DOGE proved the cultural staying power.' },
-  { cat: 'trending', msg: 'CBDC vs crypto: governments want programmable money that they control. That\'s literally the opposite of what Bitcoin was built to prevent.' },
-  { cat: 'trending', msg: 'For on-chain alpha: Nansen for wallet tracking, Dune for custom queries, DefiLlama for TVL, Coinglass for futures data. That\'s the stack.' },
-  { cat: 'trending', msg: 'The AI crypto sector ($FET, $OCEAN, $RNDR, $TAO) is repricing relative to the broader AI stock rally. Convergence trade is real.' },
-  { cat: 'trending', msg: 'Bear market DCA thesis: accumulate the projects with real revenue, real users, and teams that shipped through the last bear. Filter is simple. Execution isn\'t.' },
+  // ── AI + data quality (varied lengths) ────────────────────────────────────
+  { cat: 'ai', msg: 'hallucination problem is a data problem' },
+  { cat: 'ai', msg: 'on-device ai matters for privacy. your data doesn\'t need to leave your device for inference' },
+  { cat: 'ai', msg: 'the dark data thing clicks when you realize most useful info — call recordings, private docs, internal wikis — never trained any public model' },
+  { cat: 'ai', msg: 'open source models are catching up fast but they still need better training data to close the remaining gap' },
+  { cat: 'ai', msg: 'who actually owns the data that trained these models' },
+  { cat: 'ai', msg: 'minority languages barely exist in any model. tokenization for non-latin scripts is still genuinely bad' },
+  { cat: 'ai', msg: 'ai agents need structured, clean, retrievable context to work properly. that\'s basically what a data layer is supposed to provide' },
+  { cat: 'ai', msg: '95% dark data isn\'t marketing. most useful data really is locked in places no model can reach' },
+  { cat: 'ai', msg: 'solid protocol. anyone actually using it in production?' },
+  { cat: 'ai', msg: 'context windows got huge but models still lose the thread. bigger window doesn\'t mean better understanding' },
+  { cat: 'ai', msg: 'facts' },
+  { cat: 'ai', msg: 'multilingual ai is harder than people think. it\'s not just translation, it\'s how the model represents the concepts underneath' },
+  { cat: 'ai', msg: 'data quality problem is real. garbage in, garbage out — applies at every scale' },
+  { cat: 'ai', msg: 'the gap between ai demos and production reliability is still huge. demos always work' },
+  { cat: 'ai', msg: 'nah' },
 ];
