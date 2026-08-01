@@ -71,6 +71,7 @@
   "https://job-boards.greenhouse.io/okx/jobs/7799585003",
   "https://job-boards.greenhouse.io/okx/jobs/7809204003",
   "https://job-boards.greenhouse.io/okx/jobs/7812572003",
+  "https://job-boards.greenhouse.io/okx/jobs/7813272003",
   "https://job-boards.greenhouse.io/orderly/jobs/5253336008",
   "https://job-boards.greenhouse.io/securitize/jobs/4299793009",
   "https://job-boards.greenhouse.io/shakepay/jobs/4712824005",
@@ -82,6 +83,7 @@
   "https://jobs.ashbyhq.com/Morpho/267819ec-bdd1-47ab-bbe2-7c04ae527f22",
   "https://jobs.ashbyhq.com/Morpho/cc334581-7c86-4f87-a418-32905c2482cb",
   "https://jobs.ashbyhq.com/Polymarket/6010bab5-8446-4834-a484-18e6a893230b",
+  "https://jobs.ashbyhq.com/Polymarket/face70ab-860c-44c3-bc92-2c9784dd31a1",
   "https://jobs.ashbyhq.com/Render/46584e6a-7116-4376-ad67-f9cad10c0c7d",
   "https://jobs.ashbyhq.com/Safe/288f7083-1bb1-4d6e-b6a3-1833d80727d3",
   "https://jobs.ashbyhq.com/Sardine/58054c69-7b32-4334-acba-eca28971848e",
@@ -94,12 +96,14 @@
   "https://jobs.ashbyhq.com/fomo-labs/682df2eb-29c9-4083-80d9-7db573ba98e4",
   "https://jobs.ashbyhq.com/jane/3aa00837-4187-4135-9c7a-446f87f19ead",
   "https://jobs.ashbyhq.com/kraken.com/079cfa7d-e997-4230-ab0b-6415e40ce174",
+  "https://jobs.ashbyhq.com/kraken.com/d6d4cda0-81c5-4b88-9af5-f3bc1d48e1bc",
   "https://jobs.ashbyhq.com/nexus.xyz/e6877f82-5d71-4a52-a131-c09dd7b148dd",
   "https://jobs.ashbyhq.com/notion/c45b0b2a-0634-4cda-8b9b-ea6427093915",
   "https://jobs.ashbyhq.com/notion/e3e0c9e9-4c9a-4390-b713-27d465bce2f1",
   "https://jobs.ashbyhq.com/notion/f3faba46-776a-4938-8c9b-5aebb495aa39",
   "https://jobs.ashbyhq.com/optimum/ee988161-eea5-4ef5-a16c-ec93b541a29e",
   "https://jobs.ashbyhq.com/paxos/efe6cbb7-ee04-4dab-9bfe-579f50783a90",
+  "https://jobs.ashbyhq.com/rain/0ef85bfc-257f-4627-b779-903f07b399d6",
   "https://jobs.ashbyhq.com/rain/6354380b-0370-48e0-9639-bd1427e8de56",
   "https://jobs.ashbyhq.com/ramp/03e2d4e1-73ad-4f09-a058-2eb9ce34c2bc",
   "https://jobs.ashbyhq.com/ramp/6a7e382f-240a-4952-b9e5-7fe2b3856bc9",
@@ -131,6 +135,7 @@
   "https://jobs.lever.co/gauntlet/762133af-1796-4f50-a5ef-aa3628e5148e",
   "https://jobs.lever.co/moonpay/5632b89c-554c-4423-8f29-7f1eae0937e5",
   "https://jobs.lever.co/neon/a053e021-e712-453c-9f8b-2e3194f5e7e9",
+  "https://jobs.lever.co/neon/ee18b562-5412-454a-b506-41e0fe992741",
   "https://jobs.polychain.capital/companies/lattica/jobs/86934401-head-of-growth",
   "https://jobs.solana.com/companies/sempo/jobs/85023531-salesb2b-sales-manager-sempo",
   "https://my.linkedin.com/jobs/view/customer-support-specialist-at-bit-official-4442032615",
@@ -191,5 +196,5 @@
   "https://yellowcard.bamboohr.com/careers/399"
  ],
  "submitted": [],
- "runs": 119
+ "runs": 120
 }
