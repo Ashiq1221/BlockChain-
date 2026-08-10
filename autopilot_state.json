@@ -1,6 +1,8 @@
 {
  "seen": [
+  "http://Blockchain.com/",
   "http://Coins.ph/",
+  "http://Copper.co/",
   "http://CryptoGroups.com/Jobs",
   "http://Decent.xyz/",
   "http://Gate.io/",
@@ -8,6 +10,7 @@
   "http://vibetrade.fun/",
   "https://ats.rippling.com/perle/jobs/2108cc3c-768b-4535-8e6e-a14651c0405c",
   "https://ats.rippling.com/perle/jobs/a6b80e78-46e9-48e3-a740-1c7b78b7e696",
+  "https://boards.greenhouse.io/blockchain/jobs/8066886",
   "https://boards.greenhouse.io/coinbase/jobs/8064916",
   "https://boards.greenhouse.io/coinbase/jobs/8080028",
   "https://boards.greenhouse.io/embed/job_app?for=gemini&amp;token=8039471&amp;gh_jid=8039471",
@@ -68,6 +71,7 @@
   "https://job-boards.eu.greenhouse.io/bybit/jobs/4908939101",
   "https://job-boards.eu.greenhouse.io/bybit/jobs/4925803101",
   "https://job-boards.eu.greenhouse.io/bybit/jobs/4944372101",
+  "https://job-boards.eu.greenhouse.io/copperco/jobs/4944215101",
   "https://job-boards.greenhouse.io/alpaca/jobs/6104809004",
   "https://job-boards.greenhouse.io/alpaca/jobs/6113939004",
   "https://job-boards.greenhouse.io/dvtrading/jobs/4710258005",
@@ -193,6 +197,7 @@
   "https://stripe.com/jobs/search?gh_jid=8059299",
   "https://stripe.com/jobs/search?gh_jid=8066953",
   "https://stripe.com/jobs/search?gh_jid=8078131",
+  "https://stripe.com/jobs/search?gh_jid=8082149",
   "https://tokkalabs.hire.trakstar.com/jobs/fk0z7hj/",
   "https://tplus.cx/get-involved#role-4-details",
   "https://uk.linkedin.com/jobs/view/content-marketing-lead-payments-fintech-at-merge-4434294307",
@@ -235,5 +240,5 @@
   "https://yellowcard.bamboohr.com/careers/399"
  ],
  "submitted": [],
- "runs": 157
+ "runs": 158
 }
